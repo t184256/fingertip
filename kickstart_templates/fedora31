@@ -1,0 +1,31 @@
+authselect --passalgo=sha512 --useshadow
+autopart
+bootloader --timeout=0
+cmdline
+keyboard us
+lang en_US
+rootpw fingertip
+timezone UTC --isUtc --nontp
+zerombr
+
+firewall --disabled
+#network --device link --hostname={HOSTNAME}
+network --hostname={HOSTNAME}
+sshkey --username root '{SSH_PUBKEY}'
+
+%packages --excludeWeakdeps
+@Core --nodefaults
+openssh-server
+%end
+
+%post --erroronfail
+sed -i 's|\blocalhost\b|{HOSTNAME} localhost|' /etc/hosts
+sed -i 's|^\[main\]$|[main]\nproxy={PROXY}\ndeltarpm=0|' /etc/dnf/dnf.conf
+sed -i 's|^metalink=|#metalink=|' /etc/yum.repos.d/*
+sed -i 's|^#baseurl=|baseurl=|' /etc/yum.repos.d/*
+sed -i 's|^baseurl=https://|baseurl=http://|' /etc/yum.repos.d/*
+dnf clean all
+fstrim -av
+%end
+
+poweroff
