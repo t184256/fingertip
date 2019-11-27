@@ -134,6 +134,7 @@ class QEMUFeatures:
     def compress_image(self):
         assert not self.live
         image = os.path.join(self.vm.path, 'image.qcow2')
+        log.info(f'compressing {image}')
         subprocess.run(['qemu-img', 'convert', '-c', '-O', 'qcow2',
                         image, image + '-tmp'], check=True)
         os.rename(image + '-tmp', image)

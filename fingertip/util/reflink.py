@@ -16,9 +16,7 @@ def always(src, dst):
 
 
 def auto(src, dst):
-    log.warn(f'reflinking {src} -> {dst}')
     subprocess.run(['cp', '--reflink=auto', src, dst], check=True)
-    log.warn('done')
 
 
 def is_supported(dirpath):

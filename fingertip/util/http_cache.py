@@ -33,7 +33,7 @@ class HTTPCache:
     def fetch(self, url, force_protocol=None, always=False):
         cached_path = self.path_by_url(url, force_protocol=force_protocol)
         if not os.path.exists(cached_path) and not self.offline or always:
-            log.info(f'fetching: {url}')
+            log.debug(f'fetching: {url}')
             try:
                 with path.wip(cached_path, makedirs=True) as wip:
                     urllib.request.urlretrieve(url, wip)
@@ -74,6 +74,9 @@ class HTTPCache:
                     except ConnectionResetError:
                         log.warn(f'Connection reset for GET {self.path}')
                     log.debug(f'GET served: {self.path}')
+
+                def log_message(self, format, *args):
+                    return
 
             httpd = ThreadingHTTPServer((host, port), Handler)
             _, self.port = httpd.socket.getsockname()
