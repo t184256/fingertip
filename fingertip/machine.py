@@ -48,7 +48,7 @@ class Machine:
         log.debug(f'firing {hook_type} hooks')
         for hook in self._hooks[hook_type]:
             log.debug(f'hook {hook_type} {hook}')
-            hook(*args, **kwargs)
+            hook(self, *args, **kwargs)
 
     def save(self, to=None):
         log.debug(f'save to={to}')

@@ -27,32 +27,66 @@ def create_image(path, size):
                    check=True)
 
 
+def _load(vm):
+    log.debug('load_vm')
+
+    vm.http_cache = fingertip.util.http_cache.HTTPCache()
+    vm.http_cache.internal_ip = CACHE_INTERNAL_IP
+    vm.http_cache.internal_port = CACHE_INTERNAL_PORT
+    vm.http_cache.internal_url = CACHE_INTERNAL_URL
+
+
+def _up(vm):
+    if vm.qemu.live:
+        vm.qemu.run()
+
+
+def _down(vm):
+    if vm.qemu.live:
+        log.debug(f'SAVE_LIVE {vm.qemu.monitor}, {vm.qemu.monitor._sock}')
+        vm.qemu.monitor.pause()
+        vm.qemu.monitor.checkpoint()
+        vm.qemu.monitor.commit()
+        vm.qemu.monitor.quit()
+        vm.qemu._go_down()
+
+
+def _save(vm):
+    vm.http_cache = None
+
+
+def _clone(vm, parent, to_path):
+    vm.qemu._image_to_clone = os.path.join(parent.path, 'image.qcow2')
+
+
+def _disrupt(vm):
+    if vm.qemu.live:
+        vm.qemu.vm.ssh.invalidate()
+
+
 def main(arch='x86_64', ram_size='1G', disk_size='20G',
          custom_args=[], guest_forwards=[]):
     assert arch == 'x86_64'
     # FIXME: -tmp
     m = fingertip.machine.Machine()
     m.arch = arch
-    m.qemu = QEMUFeatures(m, ram_size, disk_size, custom_args)
+    m.qemu = QEMUNamespacedFeatures(m, ram_size, disk_size, custom_args)
+    m.hook(load=_load, up=_up, down=_down, save=_save, clone=_clone,
+           disrupt=_disrupt)
+    _load(m)
+    create_image(os.path.join(m.path, 'image.qcow2'), disk_size)
     return m
 
 
-class QEMUFeatures:
+class QEMUNamespacedFeatures:
     def __init__(self, vm, ram_size, disk_size, custom_args):
         self.vm = vm
         self.live = False
         self.ram_size, self.disk_size = ram_size, disk_size
         self.custom_args = custom_args
         self._image_to_clone = None
-        create_image(os.path.join(vm.path, 'image.qcow2'), disk_size)
-
-        vm.hook(load=self._load,
-                up=self._up,
-                down=self._down,
-                save=self._save,
-                disrupt=self._disrupt,
-                clone=self._clone)
-        self._load()
+        self._qemu = f'qemu-system-{self.vm.arch}'
+        self._mode = 'pexpect'
 
     def run(self, load='tip', guest_forwards=[], extra_args=[]):
         run_args = ['-loadvm', load] if load else []
@@ -83,41 +117,16 @@ class QEMUFeatures:
         run_args += ['-m', self.ram_size]
 
         args = QEMU_COMMON_ARGS + self.custom_args + run_args + extra_args
-        self.vm.console = pexpect.spawn(f'qemu-system-{self.vm.arch}', args,
-                                        echo=False, timeout=None,
-                                        encoding='utf-8', logfile=sys.stdout)
-        self.live = True
-
-    def _load(self):
-        log.debug('load_vm')
-
-        self.vm.http_cache = fingertip.util.http_cache.HTTPCache()
-        self.vm.http_cache.internal_ip = CACHE_INTERNAL_IP
-        self.vm.http_cache.internal_port = CACHE_INTERNAL_PORT
-        self.vm.http_cache.internal_url = CACHE_INTERNAL_URL
-
-    def _up(self):
-        if self.live:
-            self.run()
-
-    def _down(self):
-        if self.live:
-            log.debug(f'SAVE_LIVE {self.monitor}, {self.monitor._sock}')
-            self.monitor.pause()
-            self.monitor.checkpoint()
-            self.monitor.commit()
-            self.monitor.quit()
+        if self._mode == 'pexpect':
+            self.vm.console = pexpect.spawn(self._qemu, args, echo=False,
+                                            timeout=None, encoding='utf-8',
+                                            logfile=sys.stdout)
+            self.live = True
+        elif self._mode == 'direct':
+            subprocess.run([self._qemu, '-serial', 'mon:stdio'] + args,
+                           check=True)
+            self.live = False
             self._go_down()
-
-    def _save(self):
-        self.vm.http_cache = None
-
-    def _clone(self, parent, to_path):
-        self._image_to_clone = os.path.join(parent.path, 'image.qcow2')
-
-    def _disrupt(self):
-        if self.live:
-            self.vm.ssh.invalidate()
 
     def wait(self):
         self.vm.console.expect(pexpect.EOF)
