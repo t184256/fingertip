@@ -178,7 +178,10 @@ def build(first_step, *args, **kwargs):
     first_mpath = path.machines(first_tag)
     if not os.path.exists(first_mpath):
         first_func = load_step(first_step, *args, **kwargs)
-        first_func(*args, **kwargs).save(to=first_mpath)
+        first = first_func(*args, **kwargs)
+        if not first:
+            return
+        first.save(to=first_mpath)
     return clone_and_load(first_mpath)
 
 
