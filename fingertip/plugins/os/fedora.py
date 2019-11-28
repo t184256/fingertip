@@ -48,11 +48,20 @@ def main(m=None, version=31):
         m.qemu.run(load=None)  # cold boot
         HOSTNAME = 'fedora31'
         ROOT_PASSWORD = 'fingertip'
-        m.prompt = f'[root@{HOSTNAME} ~]#'
+        m.prompt = f'[root@{HOSTNAME} ~]# '
         m.console.expect(f'{HOSTNAME} login: ')
         m.console.sendline('root')
         m.console.expect('Password: ')
         m.console.sendline(ROOT_PASSWORD)
         m.console.expect_exact(m.prompt)
         log.info('Fedora installation finished')
-    return m
+
+        m.hook(unseal=unseal)
+
+        return m
+
+
+def unseal(m):
+    with m:
+        m.ssh('systemctl restart NetworkManager')
+        return m

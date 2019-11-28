@@ -11,7 +11,7 @@ from fingertip.util import log, temp, path
 
 
 class Machine:
-    def __init__(self, save_to=None, sealed=False, expire_in=7*24*3600):
+    def __init__(self, save_to=None, sealed=True, expire_in=7*24*3600):
         self._hooks = collections.defaultdict(list)
         os.makedirs(path.MACHINES, exist_ok=True)
         self.path = temp.disappearing_dir(path.MACHINES)
@@ -105,6 +105,11 @@ class Machine:
             return clone_and_load(new_mpath, save_to=end_goal)
         else:  # transient step
             return clone_and_load(os.path.dirname(self.path))
+
+    def unseal(self):
+        if self.sealed:
+            self.sealed = False
+            self._exec_hooks('unseal')
 
 
 def _load_from_path(data_dir_path):
