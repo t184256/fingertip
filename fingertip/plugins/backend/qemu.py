@@ -112,7 +112,8 @@ class QEMUNamespacedFeatures:
                          os.path.join(self.vm.path, 'image.qcow2'))
             self._image_to_clone = None
         image = os.path.join(self.vm.path, 'image.qcow2')
-        run_args += ['-drive', f'file={image},cache=unsafe,if=virtio']
+        run_args += ['-drive',
+                     f'file={image},cache=unsafe,if=virtio,discard=unmap']
 
         run_args += ['-m', self.ram_size]
 
