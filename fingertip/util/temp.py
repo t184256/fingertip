@@ -18,6 +18,10 @@ from fingertip.util import log
 AUTOREMOVE_PREFIX = 'tmp-fingertip.'
 
 
+def unique_dir(dstdir=None, hint=''):  # defaults to /tmp
+    return tempfile.mkdtemp(prefix=('.' + hint + '.'), dir=dstdir)
+
+
 def remove(*paths):
     for path in paths:
         assert AUTOREMOVE_PREFIX in path
