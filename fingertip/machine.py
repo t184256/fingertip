@@ -11,11 +11,12 @@ from fingertip.util import log, temp, path
 
 
 class Machine:
-    def __init__(self, save_to=None, sealed=True, expire_in=7*24*3600):
+    def __init__(self, sealed=True, expire_in=7*24*3600):
         self._hooks = collections.defaultdict(list)
         os.makedirs(path.MACHINES, exist_ok=True)
         self.path = temp.disappearing_dir(path.MACHINES)
-        self._save_to = save_to
+        self._parent_path = path.MACHINES
+        self._link_to = None
         # States: loaded -> spun_up -> spun_down -> saved/dropped
         self._state = 'spun_down'
         self._up_counter = 0
@@ -37,8 +38,8 @@ class Machine:
         if not self._up_counter:
             self._exec_hooks('down')
             self._state = 'spun_down'
-            if not exc_type and self._save_to:
-                self.save()
+            if not exc_type and self._link_to:
+                self._finalize()
 
     def hook(self, **kwargs):
         for hook_type, hook in kwargs.items():
@@ -46,31 +47,40 @@ class Machine:
 
     def _exec_hooks(self, hook_type, *args, in_reverse=False, **kwargs):
         log.debug(f'firing {hook_type} hooks')
-        for hook in self._hooks[hook_type]:
+        hooks = self._hooks[hook_type]
+        for hook in hooks if not in_reverse else hooks[::-1]:
             log.debug(f'hook {hook_type} {hook}')
             hook(self, *args, **kwargs)
 
-    def save(self, to=None):
-        log.debug(f'save to={to}')
-        self._save_to = self._save_to or to
-        if self._save_to:
-            assert self._state == 'spun_down'
+    def _finalize(self, link_to=None, name_hint=None):
+        log.debug(f'finalize name_hint={name_hint}, link_to={link_to}')
+        if link_to and self._state == 'spun_down':
             self._exec_hooks('save', in_reverse=True)
-            log.debug(f'saving to temp {self.path}')
-            prev_path = self.path
-            self.path = to
+            temp_path = self.path
+            self.path = temp.unique_dir(self._parent_path, hint=name_hint)
+            log.debug(f'saving to temp {temp_path}')
             self._state = 'saving'
-            with open(os.path.join(prev_path, 'machine.pickle'), 'wb') as f:
+            with open(os.path.join(temp_path, 'machine.pickle'), 'wb') as f:
                 pickle.dump(self, f)
-            log.debug(f'moving to {to}')
-            os.rename(prev_path, self.path)
+            log.debug(f'moving {temp_path} to {self.path}')
+            os.rename(temp_path, self.path)
             self._state == 'saved'
-            return to
+            link_from = self.path
         else:
             assert self._state in ('spun_down', 'loaded')
             log.warn(f'forget it, discarding {self.path}')
             temp.remove(self.path)
+            link_from = self._parent_path
             self._state = 'dropped'
+        if (link_from and link_to and
+                os.path.realpath(link_to) != os.path.realpath(link_from)):
+            log.debug(f'linking {link_from} to {link_to}')
+            if os.path.lexists(link_to):
+                if os.path.exists(link_to):
+                    log.abort(f'Refusing to overwrite {link_to}, try again?')
+                os.unlink(link_to)
+            os.symlink(link_from, link_to)
+            return link_to
 
     def apply(self, step, *args, **kwargs):
         func = load_step(step, *args, **kwargs)
@@ -90,21 +100,22 @@ class Machine:
 
         # Could there already be a cached result?
         log.debug(f'PATH {self.path} {tag}')
-        new_mpath = os.path.join(os.path.dirname(self.path), tag)
-        end_goal = self._save_to
+        new_mpath = os.path.join(self._parent_path, tag)
+        end_goal = self._link_to
         if os.path.exists(new_mpath):
-            # Sweet, scratch this instance and use a cached result
-            log.info(f'reusing {step}')
-            self.save(to=None)
-            return clone_and_load(new_mpath, save_to=end_goal)
-        # Loaded instance not spun up, step not cached: perform step and cache
+            # sweet, scratch this instance and fast-forward to a cached result
+            log.info(f'reusing {step} @ {new_mpath}')
+            self._finalize()
+            return clone_and_load(new_mpath, link_to=end_goal)
+        # loaded instance not spun up, step not cached: perform step and cache
         log.info(f'building (and, possibly, caching) {step}')
         m = func(self, *args, **kwargs)
-        if m:
-            m.save(to=new_mpath)
-            return clone_and_load(new_mpath, save_to=end_goal)
+        if m:  # normal step, rebase to its result
+            m._finalize(link_to=new_mpath, name_hint=tag)
+            return clone_and_load(new_mpath, link_to=end_goal)
         else:  # transient step
-            return clone_and_load(os.path.dirname(self.path))
+            m._finalize()
+            return clone_and_load(self._parent_path, link_to=end_goal)
 
     def unseal(self):
         if self.sealed:
@@ -119,22 +130,25 @@ def _load_from_path(data_dir_path):
     assert m._state == 'saving'
     m._state == 'loading'
     assert m.path == data_dir_path
+    assert m._parent_path == os.path.dirname(data_dir_path)
     m._exec_hooks('load')
     m._state = 'loaded'
     return m
 
 
-def clone_and_load(from_path, save_to=None):
-    log.debug(f'clone {from_path} {save_to}')
+def clone_and_load(from_path, link_to=None, name_hint=None):
+    log.debug(f'clone {from_path} {link_to}')
     if from_path is None:  # TODO: remove later
         log.abort(f'from_path == None')
-    temp_path = temp.disappearing_dir(from_path)
+    temp_path = temp.disappearing_dir(from_path, hint=name_hint)
     log.debug(f'temp = {temp_path}')
     os.makedirs(temp_path, exist_ok=True)
     with open(os.path.join(from_path, 'machine.pickle'), 'rb') as f:
         m = pickle.load(f)
     m._exec_hooks('clone', m, temp_path)
-    m._save_to, m.path = save_to, temp_path
+    m._parent_path = from_path
+    m.path = temp_path
+    m._link_to = link_to
     with open(os.path.join(m.path, 'machine.pickle'), 'wb') as f:
         pickle.dump(m, f)
     return _load_from_path(temp_path)
@@ -181,7 +195,7 @@ def build(first_step, *args, **kwargs):
         first = first_func(*args, **kwargs)
         if not first:
             return
-        first.save(to=first_mpath)
+        first._finalize(link_to=first_mpath, name_hint=first_tag)
     return clone_and_load(first_mpath)
 
 
