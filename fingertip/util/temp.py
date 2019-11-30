@@ -15,12 +15,12 @@ import tempfile
 from fingertip.util import log
 
 
-TEMP_PREFIX = 'tmp-fingertip.'
+AUTOREMOVE_PREFIX = 'tmp-fingertip.'
 
 
 def remove(*paths):
     for path in paths:
-        assert TEMP_PREFIX in path
+        assert AUTOREMOVE_PREFIX in path
         try:
             if not os.path.isdir(path) or os.path.islink(path):
                 try:
@@ -34,16 +34,16 @@ def remove(*paths):
 
 
 def disappearing_file(dstdir=None, hint=''):  # defaults to /tmp
-    prefix = TEMP_PREFIX + hint + '.' if hint else TEMP_PREFIX
+    prefix = AUTOREMOVE_PREFIX + hint + '.' if hint else AUTOREMOVE_PREFIX
     _, temp_file_path = tempfile.mkstemp(prefix=prefix, dir=dstdir)
-    assert TEMP_PREFIX in temp_file_path
+    assert AUTOREMOVE_PREFIX in temp_file_path
     atexit.register(lambda: remove(temp_file_path))
     return temp_file_path
 
 
 def disappearing_dir(dstdir=None, hint=''):  # defaults to /tmp
-    prefix = TEMP_PREFIX + hint + '.' if hint else TEMP_PREFIX
+    prefix = AUTOREMOVE_PREFIX + hint + '.' if hint else AUTOREMOVE_PREFIX
     temp_dir_path = tempfile.mkdtemp(prefix=prefix, dir=dstdir)
-    assert TEMP_PREFIX in temp_dir_path
+    assert AUTOREMOVE_PREFIX in temp_dir_path
     atexit.register(lambda: remove(temp_dir_path))
     return temp_dir_path
