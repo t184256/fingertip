@@ -114,7 +114,6 @@ class Machine:
             m._finalize(link_to=new_mpath, name_hint=tag)
             return clone_and_load(new_mpath, link_to=end_goal)
         else:  # transient step
-            m._finalize()
             return clone_and_load(self._parent_path, link_to=end_goal)
 
     def unseal(self):
