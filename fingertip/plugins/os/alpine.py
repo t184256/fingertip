@@ -12,12 +12,7 @@ ISO = MIRROR + '/v3.10/releases/x86_64/alpine-virt-3.10.3-x86_64.iso'
 REPO = MIRROR + '/v3.10/main/'
 
 
-def main(m=None):
-    m = m or fingertip.build('backend.qemu', ram_size='128M')
-
-    with open(path.fingertip('ssh_key', 'fingertip.pub')) as f:
-        ssh_pubkey = f.read().strip()
-
+def install(m):
     path_to_iso = m.http_cache.fetch(ISO)
 
     with m:
@@ -51,11 +46,22 @@ def main(m=None):
         m.console.expect_exact('Erase the above disk(s) and continue? [y/N]:')
         m.console.sendline('y')
         m.console.expect_exact(m.prompt)
+
+        m.console.sendline('fstrim -v /')
+        m.console.expect_exact(m.prompt)
+
         m.console.sendline('poweroff')
 
         m.qemu.wait()
         m.qemu.compress_image()
+        return m
 
+
+def first_boot(m):
+    with open(path.fingertip('ssh_key', 'fingertip.pub')) as f:
+        ssh_pubkey = f.read().strip()
+
+    with m:
         m.qemu.run(load=None)
         m.console.expect_exact(f'{m.hostname} login: ')
         m.console.sendline('root')
@@ -69,6 +75,11 @@ def main(m=None):
         m.hook(unseal=unseal)
 
         return m
+
+
+def main(m=None):
+    m = m or fingertip.build('backend.qemu', ram_size='128M')
+    return m.apply(install).apply(first_boot)
 
 
 def unseal(m):
