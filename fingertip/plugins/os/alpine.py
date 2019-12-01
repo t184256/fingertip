@@ -39,7 +39,7 @@ def install(m):
         m.console.sendline(f'setup-apkrepos {REPO}')
         m.console.expect_exact(m.prompt)
 
-        m.console.sendline('setup-sshd -c dropbear')
+        m.console.sendline('setup-sshd -c openssh')
         m.console.expect_exact(m.prompt)
 
         m.console.sendline('setup-disk -m sys /dev/vda')
