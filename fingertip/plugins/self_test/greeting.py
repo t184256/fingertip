@@ -11,6 +11,4 @@ def make_greeting(m, greeting='Hello!'):
 
 def main(m, greeting='Hello!'):
     with m.apply(make_greeting, greeting=greeting) as m:
-        m.console.sendline(f"cat .greeting")
-        m.console.expect_exact(greeting)
-        m.console.expect_exact(m.prompt)
+        assert m.ssh('cat .greeting').strip() == greeting
