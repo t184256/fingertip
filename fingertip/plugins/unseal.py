@@ -1,4 +1,5 @@
 def main(m):
-    with m:
-        m.unseal()
-        return m
+    if m.sealed:
+        with m:
+            m.unseal()
+            return m
