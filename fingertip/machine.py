@@ -25,10 +25,12 @@ class Machine:
 
     def __enter__(self):
         log.debug(f'state={self._state}')
-        assert (self._state == 'loaded' or
+        assert (self._state == 'loaded' and not self._up_counter or
                 self._state == 'spun_up' and self._up_counter)
-        self._exec_hooks('up')
-        self._state = 'spun_up'
+        if not self._up_counter:
+            assert self._state == 'loaded'
+            self._exec_hooks('up')
+            self._state = 'spun_up'
         self._up_counter += 1
         return self
 
@@ -36,7 +38,7 @@ class Machine:
         assert self._state == 'spun_up'
         self._up_counter -= 1
         if not self._up_counter:
-            self._exec_hooks('down')
+            self._exec_hooks('down')  # TODO: distinguish down/abort?
             self._state = 'spun_down'
             if not exc_type and self._link_to:
                 self._finalize()
