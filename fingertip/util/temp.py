@@ -19,6 +19,7 @@ AUTOREMOVE_PREFIX = 'tmp-fingertip.'
 
 
 def unique_dir(dstdir=None, hint=''):  # defaults to /tmp
+    hint = hint if len(hint) <= 20 else hint[:20-2] + '..'
     return tempfile.mkdtemp(prefix=('.' + hint + '.'), dir=dstdir)
 
 

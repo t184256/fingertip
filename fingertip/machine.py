@@ -7,7 +7,7 @@ import os
 import pickle
 import time
 
-from fingertip.util import log, temp, path
+from fingertip.util import log, temp, path, weak_hash
 
 
 class Machine:
@@ -140,7 +140,7 @@ def _load_from_path(data_dir_path):
     assert m._state == 'saving'
     m._state == 'loading'
     assert m.path == data_dir_path
-    assert m._parent_path == os.path.dirname(data_dir_path)
+    assert m._parent_path == os.path.realpath(os.path.dirname(data_dir_path))
     m._exec_hooks('load')
     m._state = 'loaded'
     return m
@@ -156,7 +156,7 @@ def clone_and_load(from_path, link_to=None, name_hint=None):
     with open(os.path.join(from_path, 'machine.pickle'), 'rb') as f:
         m = pickle.load(f)
     m._exec_hooks('clone', m, temp_path)
-    m._parent_path = from_path
+    m._parent_path = os.path.realpath(from_path)
     m.path = temp_path
     m._link_to = link_to
     with open(os.path.join(m.path, 'machine.pickle'), 'wb') as f:
@@ -191,8 +191,10 @@ def autotag(something, *args, **kwargs):
             name = name[:len('__main__')]
     args_str = ':'.join([f'{a}' for a in args] +
                         [f'{k}={v}' for k, v in sorted(kwargs.items())])
-    log.info(f'{name}:{args_str}' if args_str else name)
-    return f'{name}:{args_str}' if args_str else name
+    if args_str and (' ' in args_str or len(args_str) > 20):
+        args_str = '::' + weak_hash.weak_hash(args_str)
+    tag = f'{name}:{args_str}' if args_str else name
+    return tag
 
 
 def build(first_step, *args, **kwargs):
