@@ -11,7 +11,7 @@ from fingertip.util import log, path
 FEDORA_MIRROR = 'http://download.fedoraproject.org/pub/fedora'
 
 
-def main(m=None, version=31):
+def install_in_qemu(m=None, version=31):
     m = m or fingertip.machine.build('backend.qemu')
     FEDORA_URL = FEDORA_MIRROR + f'/linux/releases/{version}/Server/x86_64/os'
     original_ram_size = m.qemu.ram_size
@@ -61,7 +61,31 @@ def main(m=None, version=31):
         return m
 
 
+def main(m=None):
+    m = m or fingertip.build('backend.qemu')
+    if hasattr(m, 'qemu'):
+        return m.apply(install_in_qemu)
+    elif hasattr(m, 'container'):
+        return m.apply(m.container.from_image, 'fedora')
+    raise NotImplementedError()
+
+
 def unseal(m):
     with m:
         m.ssh('systemctl restart NetworkManager')
         return m
+
+
+def enable_repo(m, name, url, disabled=False):
+    import textwrap
+    with m:
+        m.ssh(textwrap.dedent(f'''
+            set -uex
+            cat > /etc/yum.repos.d/{name}.repo <<EOF
+            [{name}]
+            baseurl = {url}
+            enabled = {1 if not disabled else 0}
+            gpgcheck = 0
+            name = {name}
+            EOF'''))
+    return m

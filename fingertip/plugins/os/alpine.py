@@ -79,7 +79,11 @@ def first_boot(m):
 
 def main(m=None):
     m = m or fingertip.build('backend.qemu', ram_size='128M')
-    return m.apply(install).apply(first_boot)
+    if hasattr(m, 'qemu'):
+        return m.apply(install).apply(first_boot)
+    else:
+        # podman-criu: https://github.com/checkpoint-restore/criu/issues/596
+        raise NotImplementedError()
 
 
 def unseal(m):
