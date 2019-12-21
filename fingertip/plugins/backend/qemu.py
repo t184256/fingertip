@@ -19,7 +19,9 @@ from fingertip.util import free_port, log, path, reflink
 CACHE_INTERNAL_IP, CACHE_INTERNAL_PORT = '10.0.2.244', 8080
 CACHE_INTERNAL_URL = f'http://{CACHE_INTERNAL_IP}:{CACHE_INTERNAL_PORT}'
 # TODO: add a way to customize smp
-QEMU_COMMON_ARGS = ['-enable-kvm', '-cpu', 'host', '-smp', '4', '-nographic']
+QEMU_COMMON_ARGS = ['-enable-kvm', '-cpu', 'host', '-smp', '4', '-nographic',
+                    '-object', 'rng-random,id=rng0,filename=/dev/urandom',
+                    '-device', 'virtio-rng-pci,rng=rng0']
 
 
 def create_image(path, size):
