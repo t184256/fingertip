@@ -51,6 +51,13 @@ def _down(vm):
         vm.qemu._go_down()
 
 
+def _drop(vm):
+    if vm.qemu.live:
+        log.debug(f'DROP {vm.qemu.monitor}, {vm.qemu.monitor._sock}')
+        vm.qemu.monitor.quit()
+        vm.qemu._go_down()
+
+
 def _save(vm):
     vm.http_cache = None
 
@@ -71,8 +78,8 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
     m = fingertip.machine.Machine()
     m.arch = arch
     m.qemu = QEMUNamespacedFeatures(m, ram_size, disk_size, custom_args)
-    m.hook(load=_load, up=_up, down=_down, save=_save, clone=_clone,
-           disrupt=_disrupt)
+    m.hook(load=_load, up=_up, down=_down, drop=_drop, save=_save,
+           clone=_clone, disrupt=_disrupt)
     _load(m)
     create_image(os.path.join(m.path, 'image.qcow2'), disk_size)
     return m

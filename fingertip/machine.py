@@ -19,9 +19,14 @@ class Machine:
         self._link_to = None
         # States: loaded -> spun_up -> spun_down -> saved/dropped
         self._state = 'spun_down'
+        self._transient = False
         self._up_counter = 0
         self.sealed = sealed
         self.expiration = Expiration(expire_in)
+
+    def transient(self):
+        self._transient = True
+        return self
 
     def __enter__(self):
         log.debug(f'state={self._state}')
@@ -38,8 +43,12 @@ class Machine:
         assert self._state == 'spun_up'
         self._up_counter -= 1
         if not self._up_counter:
-            self._exec_hooks('down')  # TODO: distinguish down/abort?
-            self._state = 'spun_down'
+            if not self._transient:
+                self._exec_hooks('down', in_reverse=True)
+                self._state = 'spun_down'
+            else:
+                self._exec_hooks('drop', in_reverse=True)
+                self._state = 'dropped'
             if not exc_type and self._link_to:
                 self._finalize()
 
@@ -55,7 +64,7 @@ class Machine:
             hook(self, *args, **kwargs)
 
     def _finalize(self, link_to=None, name_hint=None):
-        log.debug(f'finalize name_hint={name_hint}, link_to={link_to}')
+        log.debug(f'finalize hint={name_hint} link_to={link_to} {self._state}')
         if link_to and self._state == 'spun_down':
             self._exec_hooks('save', in_reverse=True)
             temp_path = self.path
@@ -69,7 +78,7 @@ class Machine:
             self._state == 'saved'
             link_from = self.path
         else:
-            assert self._state in ('spun_down', 'loaded')
+            assert self._state in ('spun_down', 'loaded', 'dropped')
             log.warn(f'forget it, discarding {self.path}')
             temp.remove(self.path)
             link_from = self._parent_path
@@ -110,7 +119,7 @@ class Machine:
             self._finalize()
             return clone_and_load(new_mpath, link_to=end_goal)
         # loaded instance not spun up, step not cached: perform step and cache
-        log.info(f'building (and, possibly, caching) {step}')
+        log.info(f'building (and, possibly, caching) {tag}')
         m = func(self, *args, **kwargs)
         if m:  # normal step, rebase to its result
             m._finalize(link_to=new_mpath, name_hint=tag)

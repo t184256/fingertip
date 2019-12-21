@@ -10,10 +10,11 @@ def main(m):
 
     m = m.apply('unseal')
 
-    m.qemu._mode = 'direct'
     log.warn('^A x (could be ^A^A x in screen) or power off to exit.')
     log.warn("Here's a fake prompt to ease your mind:")
     sys.stdout.write(m.prompt)
     sys.stdout.flush()
-    with m:
+
+    m.qemu._mode = 'direct'
+    with m.transient():
         sys.exit(0)
