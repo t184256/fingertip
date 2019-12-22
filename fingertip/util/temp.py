@@ -9,13 +9,24 @@ Helper functions for fingertip: working with self-destructing tempfiles.
 
 import atexit
 import os
+import signal
 import shutil
+import sys
 import tempfile
 
 from fingertip.util import log
 
 
 AUTOREMOVE_PREFIX = 'tmp-fingertip.'
+
+
+# TODO: hacky and unclean
+def terminate_child(num, frame):
+    print('caught SIGTERM, cleaning up...')
+    sys.exit(1)  # fire atexit hooks
+
+
+signal.signal(signal.SIGTERM, terminate_child)
 
 
 def unique_dir(dstdir=None, hint=''):  # defaults to /tmp
@@ -26,6 +37,7 @@ def unique_dir(dstdir=None, hint=''):  # defaults to /tmp
 def remove(*paths):
     for path in paths:
         assert AUTOREMOVE_PREFIX in path
+        log.debug(f'cleaning up {path}')
         try:
             if not os.path.isdir(path) or os.path.islink(path):
                 try:
