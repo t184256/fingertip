@@ -27,7 +27,7 @@ $ git clone https://github.com/t184256/fingertip
 
 Install the dependencies (adjust accordingly):
 ``` bash
-$ sudo <your package manager> install qemu python3-coloredlogs python3-paramiko python3-pexpect python3-xdg
+$ sudo <your package manager> install qemu python3-coloredlogs python3-paramiko python3-pexpect python3-xdg python3-CacheControl python3-lockfile python3-requests python3-requests-mock
 ```
 
 If you don't want your SSD to wear out prematurely,

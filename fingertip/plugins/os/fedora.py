@@ -2,7 +2,6 @@
 # Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
 
 import os
-import tempfile
 
 import fingertip.machine
 from fingertip.util import log, path
@@ -25,24 +24,22 @@ def install_in_qemu(m=None, version=31):
             ks_text = f.read().format(HOSTNAME=f'fedora{version}',
                                       SSH_PUBKEY=ssh_pubkey,
                                       PROXY=m.http_cache.internal_url)
-        with tempfile.NamedTemporaryFile() as ks_file:
-            ks_file.write(ks_text.encode())
-            ks_file.flush()
-            cached_ks_file = m.http_cache.fetch('file://' + ks_file.name,
-                                                always=True)
-        ks_url = m.http_cache.proxied_url(cached_ks_file)
-        kernel = m.http_cache.fetch(f'{FEDORA_URL}/isolinux/vmlinuz')
-        initrd = m.http_cache.fetch(f'{FEDORA_URL}/isolinux/initrd.img')
-        extra_args = ['-kernel', kernel, '-initrd', initrd, '-append',
-                      f'ks={ks_url} inst.ksstrict console=ttyS0 inst.notmux '
-                      f'proxy={m.http_cache.internal_url} '
-                      f'inst.proxy={m.http_cache.internal_url} '
-                      f'inst.repo={FEDORA_URL}']
+        m.http_cache.mock('http://ks', text=ks_text)
+        log.info(f'fetching kernel: {FEDORA_URL}/isolinux/vmlinuz')
+        kernel = os.path.join(m.path, 'kernel')
+        m.http_cache.fetch(f'{FEDORA_URL}/isolinux/vmlinuz', kernel)
+        log.info(f'fetching initrd: {FEDORA_URL}/isolinux/initrd.img')
+        initrd = os.path.join(m.path, 'initrd')
+        m.http_cache.fetch(f'{FEDORA_URL}/isolinux/initrd.img', initrd)
+        append = ('ks=http://ks inst.ksstrict console=ttyS0 inst.notmux '
+                  f'proxy={m.http_cache.internal_url} ' +
+                  f'inst.proxy={m.http_cache.internal_url} ' +
+                  f'inst.repo={FEDORA_URL}')
+        extra_args = ['-kernel', kernel, '-initrd', initrd, '-append', append]
 
         m.qemu.run(load=None, extra_args=extra_args)
         m.console.expect('Storing configuration files and kickstarts')
         m.qemu.wait()
-        os.unlink(cached_ks_file)
         m.qemu.compress_image()
         m.qemu.ram = original_ram_size
         m.qemu.run(load=None)  # cold boot

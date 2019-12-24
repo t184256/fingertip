@@ -1,7 +1,7 @@
 # Licensed under GNU General Public License v3 or later, see COPYING.
 # Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
 
-import types
+import os
 
 import fingertip
 from fingertip.util import path
@@ -13,10 +13,11 @@ REPO = MIRROR + '/v3.10/main/'
 
 
 def install(m):
-    path_to_iso = m.http_cache.fetch(ISO)
+    iso_file = os.path.join(m.path, os.path.basename(ISO))
+    m.http_cache.fetch(ISO, iso_file)
 
     with m:
-        m.qemu.run(load=None, extra_args=['-cdrom', path_to_iso])
+        m.qemu.run(load=None, extra_args=['-cdrom', iso_file])
         m.console.expect_exact('localhost login: ')
         m.console.sendline('root')
         m.console.expect_exact('localhost:~# ')
