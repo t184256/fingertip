@@ -3,12 +3,12 @@
 
 import collections
 import functools
-import importlib
 import os
 import pickle
 import time
 
-from fingertip.util import lock, log, temp, path, weak_hash
+from fingertip import step_loader
+from fingertip.util import lock, log, temp, path
 
 
 def transient(func):
@@ -106,20 +106,19 @@ class Machine:
             return link_to
 
     def apply(self, step, *args, **kwargs):
-        func = load_step(step, *args, **kwargs)
+        func, tag = step_loader.func_and_autotag(step, *args, **kwargs)
         log.debug(f'apply {self.path} {step} {func} {args} {kwargs}')
         if self._state == 'spun_up':
             log.debug(f'applying to unclean')
             return func(self, *args, **kwargs)
         elif self._state == 'loaded':
             log.debug(f'applying to clean')
-            return self._cache_aware_apply(step, func, *args, **kwargs)
+            return self._cache_aware_apply(step, tag, func, *args, **kwargs)
         else:
             log.abort(f'apply to state={self._state}')
 
-    def _cache_aware_apply(self, step, func, *args, **kwargs):
+    def _cache_aware_apply(self, step, tag, func, *args, **kwargs):
         assert self._state == 'loaded'
-        tag = autotag(step, *args, **kwargs)
 
         # Could there already be a cached result?
         log.debug(f'PATH {self.path} {tag}')
@@ -184,55 +183,21 @@ def clone_and_load(from_path, link_to=None, name_hint=None):
     return _load_from_path(temp_path)
 
 
-def load_step(smth, *args, **kwargs):
-    if isinstance(smth, str):
-        # try to import abc.xyz as (import fingertip.plugins.abc.xyz).main
-        try:
-            module = importlib.import_module('fingertip.plugins.' + smth)
-            return module.main
-        except (ModuleNotFoundError, AttributeError):
-            # try to import abc.xyz as (import fingertip.plugins.abc).xyz
-            modname, funcname = smth.rsplit('.', 1)
-            module = importlib.import_module('fingertip.plugins.' + modname)
-            smth = getattr(module, funcname)
-    return smth
-
-
-def autotag(something, *args, **kwargs):
-    log.info(f'autotag in: {something} {args} {kwargs}')
-    # take args into account later
-    if isinstance(something, str):
-        name = something
-    else:
-        name = something.__module__ + '.' + something.__qualname__
-        assert name.startswith('fingertip.plugins.')
-        name = name[len('fingertip.plugins.'):]
-        if name.endswith('.__main__'):
-            name = name[:len('__main__')]
-    args_str = ':'.join([f'{a}' for a in args] +
-                        [f'{k}={v}' for k, v in sorted(kwargs.items())])
-    if args_str and (' ' in args_str or len(args_str) > 20):
-        args_str = '::' + weak_hash.weak_hash(args_str)
-    tag = f'{name}:{args_str}' if args_str else name
-    return tag
-
-
 def build(first_step, *args, **kwargs):
-    first_tag = autotag(first_step, *args, **kwargs)
+    func, tag = step_loader.func_and_autotag(first_step, *args, **kwargs)
 
     # Could there already be a cached result?
-    first_mpath = path.machines(first_tag)
-    lock_path = path.machines('.' + first_tag + '-lock')
-    log.info(f'acquiring lock for {first_tag}...')
-    first_func = load_step(first_step, *args, **kwargs)
-    do_lock = not hasattr(first_func, 'transient')
+    mpath = path.machines(tag)
+    lock_path = path.machines('.' + tag + '-lock')
+    log.info(f'acquiring lock for {tag}...')
+    do_lock = not hasattr(func, 'transient')
     with lock.MaybeLock(lock_path, lock=do_lock):
-        if not os.path.exists(first_mpath):
-            first = first_func(*args, **kwargs)
+        if not os.path.exists(mpath):
+            first = func(*args, **kwargs)
             if first is None:
                 return
-            first._finalize(link_to=first_mpath, name_hint=first_tag)
-    return clone_and_load(first_mpath)
+            first._finalize(link_to=mpath, name_hint=tag)
+    return clone_and_load(mpath)
 
 
 class Expiration:
