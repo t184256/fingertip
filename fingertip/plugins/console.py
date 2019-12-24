@@ -1,9 +1,10 @@
 import sys
 
-
+import fingertip
 from fingertip.util import log
 
 
+@fingertip.transient
 def main(m):
     assert hasattr(m, 'qemu')
     assert not m._up_counter
@@ -17,4 +18,4 @@ def main(m):
 
     m.qemu._mode = 'direct'
     with m.transient():
-        sys.exit(0)
+        sys.exit(0)  # will happen only when qemu exits

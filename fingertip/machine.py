@@ -2,12 +2,24 @@
 # Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
 
 import collections
+import functools
 import importlib
 import os
 import pickle
 import time
 
-from fingertip.util import log, temp, path, weak_hash
+from fingertip.util import lock, log, temp, path, weak_hash
+
+
+def transient(func):
+    func.transient = True
+
+    @functools.wraps(func)
+    def wrapper(*a, **kwa):
+        r = func(*a, **kwa)
+        assert r is None
+
+    return wrapper
 
 
 class Machine:
@@ -16,7 +28,7 @@ class Machine:
         os.makedirs(path.MACHINES, exist_ok=True)
         self.path = temp.disappearing_dir(path.MACHINES)
         self._parent_path = path.MACHINES
-        self._link_to = None
+        self._link_to = None  # what are we building?
         # States: loaded -> spun_up -> spun_down -> saved/dropped
         self._state = 'spun_down'
         self._transient = False
@@ -79,7 +91,7 @@ class Machine:
             link_from = self.path
         else:
             assert self._state in ('spun_down', 'loaded', 'dropped')
-            log.warn(f'forget it, discarding {self.path}')
+            log.info(f'discarding {self.path}')
             temp.remove(self.path)
             link_from = self._parent_path
             self._state = 'dropped'
@@ -113,19 +125,27 @@ class Machine:
         log.debug(f'PATH {self.path} {tag}')
         new_mpath = os.path.join(self._parent_path, tag)
         end_goal = self._link_to
-        if os.path.exists(new_mpath):
-            # sweet, scratch this instance and fast-forward to a cached result
-            log.info(f'reusing {step} @ {new_mpath}')
-            self._finalize()
-            return clone_and_load(new_mpath, link_to=end_goal)
-        # loaded instance not spun up, step not cached: perform step and cache
-        log.info(f'building (and, possibly, caching) {tag}')
-        m = func(self, *args, **kwargs)
-        if m:  # normal step, rebase to its result
-            m._finalize(link_to=new_mpath, name_hint=tag)
-            return clone_and_load(new_mpath, link_to=end_goal)
-        else:  # transient step
-            return clone_and_load(self._parent_path, link_to=end_goal)
+
+        lock_path = os.path.join(self._parent_path, '.' + tag + '-lock')
+        do_lock = not hasattr(func, 'transient')
+        if do_lock:
+            log.info(f'acquiring lock for {tag}...')
+        with lock.MaybeLock(lock_path, lock=do_lock):
+            if os.path.exists(new_mpath):
+                # sweet, scratch this instance, fast-forward to cached result
+                log.info(f'reusing {step} @ {new_mpath}')
+                self._finalize()
+                clone_from_path = new_mpath
+            else:
+                # loaded, not spun up, step not cached: perform step, cache
+                log.info(f'building (and, possibly, caching) {tag}')
+                m = func(self, *args, **kwargs)
+                if m and not m._transient:  # normal step, rebase to its result
+                    m._finalize(link_to=new_mpath, name_hint=tag)
+                    clone_from_path = new_mpath
+                else:  # transient step
+                    clone_from_path = self._parent_path
+        return clone_and_load(clone_from_path, link_to=end_goal)
 
     def unseal(self):
         if self.sealed:
@@ -202,12 +222,16 @@ def build(first_step, *args, **kwargs):
 
     # Could there already be a cached result?
     first_mpath = path.machines(first_tag)
-    if not os.path.exists(first_mpath):
-        first_func = load_step(first_step, *args, **kwargs)
-        first = first_func(*args, **kwargs)
-        if not first:
-            return
-        first._finalize(link_to=first_mpath, name_hint=first_tag)
+    lock_path = path.machines('.' + first_tag + '-lock')
+    log.info(f'acquiring lock for {first_tag}...')
+    first_func = load_step(first_step, *args, **kwargs)
+    do_lock = not hasattr(first_func, 'transient')
+    with lock.MaybeLock(lock_path, lock=do_lock):
+        if not os.path.exists(first_mpath):
+            first = first_func(*args, **kwargs)
+            if first is None:
+                return
+            first._finalize(link_to=first_mpath, name_hint=first_tag)
     return clone_and_load(first_mpath)
 
 

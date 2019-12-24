@@ -20,9 +20,13 @@ let
   };
 in
 (python36.withPackages (ps: with ps; [
+  cachecontrol
   coloredlogs
+  fasteners
   #fsmonitor
   paramiko
   pexpect
   pyxdg
+  requests
+  requests-mock
 ])).env

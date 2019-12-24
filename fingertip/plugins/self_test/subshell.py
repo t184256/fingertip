@@ -1,6 +1,8 @@
 # Licensed under GNU General Public License v3 or later, see COPYING.
 # Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
 
+import fingertip
+
 
 def setup(m, greeting='Hello!'):
     with m:
@@ -11,6 +13,7 @@ def setup(m, greeting='Hello!'):
         return m
 
 
+@fingertip.transient
 def main(m, greeting='Hello!'):
     with m.apply(setup, greeting=greeting).transient() as m:
         m.console.sendline('')

@@ -27,7 +27,7 @@ $ git clone https://github.com/t184256/fingertip
 
 Install the dependencies (adjust accordingly):
 ``` bash
-$ sudo <your package manager> install qemu python3-coloredlogs python3-paramiko python3-pexpect python3-xdg python3-CacheControl python3-lockfile python3-requests python3-requests-mock
+$ sudo <your package manager> install qemu python3-coloredlogs python3-paramiko python3-pexpect python3-xdg python3-CacheControl python3-requests python3-requests-mock python3-fasteners
 ```
 
 If you don't want your SSD to wear out prematurely,
@@ -82,8 +82,10 @@ def make_greeting(m, greeting='Hello!'):                      # take a machine
         return m                                              # cache result
 
 
+@fingertip.transient                                          # do not lock
 def main(m, greeting='Hello!'):                               # take a machine
-    with m.apply(make_greeting, greeting=greeting) as m:      # modify, start
+    m = m.apply(make_greeting, greeting=greeting):            # modify
+    with m.transient():                                       # start
         m.console.sendline(f"cat .greeting")                  # execute command
         m.console.expect_exact(greeting)                      # get output
         m.console.expect_exact(m.prompt)                      # wait for prompt
@@ -103,7 +105,9 @@ Here's what can happen inside such a function:
   spun up using a `with` block (`with m as m`).
   All custom modifications of the machine must live inside that block!
 * Return the machine if the result should be cached and used for the next steps.
-  Not returning one will undo all the changes (not available on some backends).
+  Not returning one will undo all the changes (not available on all backends).
+  If you don't intend to save the result, also 1) decorate the function with
+  `@fingertip.transient` and 2) use `.transient()` with `with`.
 
 The first function in the chain (or the one used in `build`)
 will not get a machine as the first argument.

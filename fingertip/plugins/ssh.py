@@ -1,15 +1,16 @@
 import subprocess
 
-
+import fingertip
 from fingertip.util import log
 
 
+@fingertip.transient
 def main(m, cmd=None):
     assert not m._up_counter
 
     m = m.apply('unseal')
 
-    with m.transient():
+    with m.transient() as m:
         log.info(f'waiting for the SSH server to be up...')
         if cmd is None:
             m.ssh('true')
