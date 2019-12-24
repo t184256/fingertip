@@ -5,9 +5,8 @@ import collections
 import functools
 import os
 import pickle
-import time
 
-from fingertip import step_loader
+from fingertip import step_loader, expiration
 from fingertip.util import lock, log, temp, path
 
 
@@ -34,7 +33,7 @@ class Machine:
         self._transient = False
         self._up_counter = 0
         self.sealed = sealed
-        self.expiration = Expiration(expire_in)
+        self.expiration = expiration.Expiration(expire_in)
 
     def transient(self):
         self._transient = True
@@ -198,11 +197,3 @@ def build(first_step, *args, **kwargs):
                 return
             first._finalize(link_to=mpath, name_hint=tag)
     return clone_and_load(mpath)
-
-
-class Expiration:
-    def __init__(self, expire_in):
-        self.time = time.time() + expire_in
-
-    def limit(self, interval):
-        self.time = min(self.time, time.time() + interval)
