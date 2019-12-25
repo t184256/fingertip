@@ -15,7 +15,7 @@ import pexpect
 # TODO: http proxy for container itself
 import fingertip.machine
 import fingertip.util.http_cache
-from fingertip.util import log, reflink, weak_hash
+from fingertip.util import log, reflink, repeatedly, weak_hash
 
 
 def podman(*args, check=True, **kwargs):
@@ -113,18 +113,15 @@ def _up(m):
                               logfile=sys.stdout)
 
 
-def _detach(m, retries=10):
-    while retries:
-        try:
-            time.sleep(.1)  # HACK, FIXME
-            m.console.sendcontrol('p')
-            time.sleep(.001)  # HACK
-            m.console.sendcontrol('q')
-            m.console.expect(pexpect.EOF, timeout=.1)
-            break
-        except pexpect.exceptions.TIMEOUT:
-            log.warn('detach timeout, retrying')
-            retries -= 1
+def _detach(m, retries=10, timeout=1/32):
+    def dtch():
+        time.sleep(.1)  # HACK, FIXME
+        m.console.sendcontrol('p')
+        time.sleep(.001)  # HACK
+        m.console.sendcontrol('q')
+        m.console.expect(pexpect.EOF, timeout=.1)
+    repeatedly.keep_trying(dtch, pexpect.exceptions.TIMEOUT,
+                           retries=retries, timeout=timeout)
     m.console.wait()
 
 

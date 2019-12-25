@@ -13,7 +13,7 @@ import pexpect
 
 import fingertip.machine
 import fingertip.util.http_cache
-from fingertip.util import free_port, log, path, reflink
+from fingertip.util import free_port, log, path, reflink, repeatedly
 
 
 CACHE_INTERNAL_IP, CACHE_INTERNAL_PORT = '10.0.2.244', 8080
@@ -182,16 +182,10 @@ class Monitor:
     def _connect(self, retries=12, timeout=1/32):
         if self._sock is None:
             self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            while retries:
-                try:
-                    self._sock.connect(('127.0.0.1', self.port))
-                    break
-                except ConnectionRefusedError:
-                    retries -= 1
-                    if not retries:
-                        raise
-                    time.sleep(timeout)
-                    timeout *= 2
+            repeatedly.keep_trying(
+                lambda: self._sock.connect(('127.0.0.1', self.port)),
+                ConnectionRefusedError, retries=retries, timeout=timeout
+            )
             log.debug(f'negotiation')
             server_greeting = self._recv()
             assert 'QMP' in server_greeting
@@ -293,18 +287,14 @@ class SSH:
         if self._transport is None:
             log.debug('waiting for the VM to spin up and offer SSH...')
             pkey = paramiko.ECDSAKey.from_private_key_file(self.key)
-            while True:
-                try:
-                    transport = paramiko.Transport((self.host, self.port))
-                    transport.start_client()
-                    break
-                except paramiko.ssh_exception.SSHException as ex:
-                    retries -= 1
-                    if not retries:
-                        raise
-                    log.debug(f'timeout {timeout}, {ex}, {retries}')
-                    time.sleep(timeout)
-                    timeout *= 2
+            transport = repeatedly.keep_trying(
+                lambda: paramiko.Transport((self.host, self.port)),
+                paramiko.ssh_exception.SSHException,
+                retries=retries, timeout=timeout
+            )
+            repeatedly.keep_trying(lambda: transport.start_client(),
+                                   paramiko.ssh_exception.SSHException,
+                                   retries=retries, timeout=timeout)
             transport.auth_publickey('root', pkey)
             self._transport = transport
             log.debug(f'{self._transport}')
