@@ -2,7 +2,7 @@
 set -uex
 
 FINGERTIP='/usr/bin/python3 .'
-BASES=('backend.podman-criu centos' 'os.fedora' 'os.alpine')
+BASES=('backend.podman-criu centos' os.alpine os.fedora)
 TESTS=(
 	self_test.greeting
 	self_test.prompts
@@ -21,3 +21,6 @@ for BASE in "${BASES[@]}"; do
 		$FINGERTIP $BASE + $TEST
 	done
 done
+
+$FINGERTIP os.alpine + ssh 'apk add htop'
+$FINGERTIP os.fedora + ssh 'dnf -y install htop'
