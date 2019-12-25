@@ -13,7 +13,7 @@ TESTS=(
 
 for BASE in "${BASES[@]}"; do
 	for TEST in "${TESTS[@]}"; do
-		[[ $TEST = self_test.greetings && $BASE = os.fedora ]] \
+		[[ $TEST = self_test.prompts && $BASE = os.fedora ]] \
 			&& continue  # takes too long
 		[[ $TEST = 'ssh true' && $BASE =~ backend.podman-criu* ]] \
 			&& continue  # doesn't have ssh
