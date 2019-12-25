@@ -133,11 +133,6 @@ class Machine:
                     clone_from_path = self._parent_path
         return clone_and_load(clone_from_path, link_to=end_goal)
 
-    def unseal(self):
-        if self.sealed:
-            self.sealed = False
-            self.hooks.unseal(self)
-
 
 def _load_from_path(data_dir_path):
     log.debug(f'load from {data_dir_path}')
