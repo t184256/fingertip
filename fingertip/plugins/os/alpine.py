@@ -12,11 +12,11 @@ ISO = MIRROR + '/v3.10/releases/x86_64/alpine-virt-3.10.3-x86_64.iso'
 REPO = MIRROR + '/v3.10/main/'
 
 
-def install(m):
-    iso_file = os.path.join(m.path, os.path.basename(ISO))
-    m.http_cache.fetch(ISO, iso_file)
+def install(p):
+    with p.advance() as m:
+        iso_file = os.path.join(m.path, os.path.basename(ISO))
+        m.http_cache.fetch(ISO, iso_file)
 
-    with m:
         m.qemu.run(load=None, extra_args=['-cdrom', iso_file])
         m.console.expect_exact('localhost login: ')
         m.console.sendline('root')
@@ -55,14 +55,14 @@ def install(m):
 
         m.qemu.wait()
         m.qemu.compress_image()
-        return m
+    return m
 
 
-def first_boot(m):
+def first_boot(p):
     with open(path.fingertip('ssh_key', 'fingertip.pub')) as f:
         ssh_pubkey = f.read().strip()
 
-    with m:
+    with p.advance() as m:
         m.qemu.run(load=None)
         m.console.expect_exact(f'{m.hostname} login: ')
         m.console.sendline('root')
@@ -74,20 +74,19 @@ def first_boot(m):
         m.console.expect_exact(m.prompt)
 
         m.hooks(unseal=unseal)
+    return m
 
-        return m
 
-
-def main(m=None):
-    m = m or fingertip.build('backend.qemu', ram_size='128M')
-    if hasattr(m, 'qemu'):
-        return m.apply(install).apply(first_boot)
+def main(p=None):
+    p = p or fingertip.build('backend.qemu', ram_size='128M')
+    if hasattr(p, 'qemu'):
+        return p.apply(install).apply(first_boot)
     else:
         # podman-criu: https://github.com/checkpoint-restore/criu/issues/596
         raise NotImplementedError()
 
 
-def unseal(m):
-    with m:
+def unseal(p):
+    with p.advance() as m:
         m.ssh('/etc/init.d/networking restart')
-        return m
+    return m

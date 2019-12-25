@@ -1,7 +1,6 @@
 # Licensed under GNU General Public License v3 or later, see COPYING.
 # Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
 
-import functools
 import os
 import pickle
 
@@ -9,51 +8,59 @@ from fingertip import step_loader, expiration
 from fingertip.util import hooks, lock, log, temp, path
 
 
-def transient(func):
+def transient(func):  # the effect should be reverted later, if possible
     func.transient = True
-
-    @functools.wraps(func)
-    def wrapper(*a, **kwa):
-        r = func(*a, **kwa)
-        assert r is None
-
-    return wrapper
+    return func
 
 
-class Machine:
-    def __init__(self, sealed=True, expire_in=7*24*3600):
+def terminal(func):  # the effect must be reverted or it must be the final one
+    func.terminal = True
+    return func
+
+
+class UnsaveableMachine:
+    def __init__(self, sealed=True):
         self.hooks = hooks.HookManager()
         os.makedirs(path.MACHINES, exist_ok=True)
         self.path = temp.disappearing_dir(path.MACHINES)
-        self._parent_path = path.MACHINES
-        self._link_to = None  # what are we building?
-        # States: loaded -> spun_up -> spun_down -> saved/dropped
-        self._state = 'spun_down'
-        self._transient = False
+        # States: initial -> (spun_down <-> spun_up) -> finalized|dropped
+        #            ^--------------------------------------/
+        self._state = 'initial'
+        self._terminal = False  # if true, no graceful shutdown and no spin_up
         self._up_counter = 0
         self.sealed = sealed
-        self.expiration = expiration.Expiration(expire_in)
 
-    def transient(self):
-        self._transient = True
+    def advance(self):  # these machines cannot fork, only continue evolving
+        assert not self._terminal
+        if self._state == 'finalized':
+            self._state = 'initial'
         return self
 
+    def terminal(self):  # this must be the last stage, there'll be no cleanup
+        r = self.advance()
+        r._terminal = True
+        return r
+
+    def _should_be_dropped_ungracefully(self):
+        return self._terminal
+
     def __enter__(self):
-        log.debug(f'state={self._state}')
-        assert (self._state == 'loaded' and not self._up_counter or
+        log.debug(f'enter state={self._state}')
+        assert (self._state == 'initial' and not self._up_counter or
+                self._state == 'spun_down' and not self._up_counter or
                 self._state == 'spun_up' and self._up_counter)
         if not self._up_counter:
-            assert self._state == 'loaded'
             self.hooks.up(self)
             self._state = 'spun_up'
         self._up_counter += 1
         return self
 
     def __exit__(self, exc_type, *_):
+        log.debug('exit')
         assert self._state == 'spun_up'
         self._up_counter -= 1
         if not self._up_counter:
-            if not self._transient:
+            if not self._should_be_dropped_ungracefully():
                 self.hooks.down.in_reverse(self)
                 self._state = 'spun_down'
             else:
@@ -61,6 +68,12 @@ class Machine:
                 self._state = 'dropped'
             if not exc_type and self._link_to:
                 self._finalize()
+
+    def _finalize(self):
+        os.shutil.rmtree(self.path)
+
+    def apply(self):
+
 
     def _finalize(self, link_to=None, name_hint=None):
         log.debug(f'finalize hint={name_hint} link_to={link_to} {self._state}')
