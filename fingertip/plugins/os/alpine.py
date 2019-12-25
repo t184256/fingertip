@@ -89,9 +89,5 @@ def main(m=None):
 
 def unseal(m):
     with m:
-        m.console.sendline(f'unset http_proxy https_proxy ftp_proxy')
-        m.console.expect_exact(m.prompt)
-        m.ssh('rm /etc/profile.d/proxy.sh')
-        m.ssh('/sbin/setup-proxy none || true')
         m.ssh('/etc/init.d/networking restart')
         return m
