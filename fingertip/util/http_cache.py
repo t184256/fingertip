@@ -16,9 +16,12 @@ import cachecontrol.caches
 from fingertip.util import path, log
 
 
+OFFLINE = os.getenv('FINGERTIP_OFFLINE', '0') != '0'
 BIG = 2**30  # too big for caching
-STRIP_HEADERS = ('TE', 'Transfer-Encoding', 'Keep-Alive', 'Trailer', 'Upgrade',
-                 'Connection', 'Range', 'Host', 'Accept')
+STRIP_IF_OFFLINE = ('Cache-Control', 'Pragma')
+STRIP_ALWAYS = ('TE', 'Transfer-Encoding', 'Keep-Alive', 'Trailer', 'Upgrade',
+                'Connection', 'Range', 'Host', 'Accept')
+STRIP_HEADERS = STRIP_ALWAYS + STRIP_IF_OFFLINE if OFFLINE else STRIP_ALWAYS
 
 
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
@@ -50,7 +53,8 @@ class HTTPCache:
                     log.debug(f'{k}: {v}')
 
                 try:
-                    if meth == 'GET':  # direct streaming might be required...
+                    if meth == 'GET' and not OFFLINE:
+                        # direct streaming might be required...
                         preview = sess.head(uri, headers=headers)
                         direct = None
                         if int(preview.headers.get('Content-Length', 0)) > BIG:
@@ -157,5 +161,5 @@ def c_r_offline(self, request):
     return resp
 
 
-if os.getenv('FINGERTIP_OFFLINE', '0') != '0':
+if OFFLINE:
     cachecontrol.controller.CacheController.cached_request = c_r_offline
