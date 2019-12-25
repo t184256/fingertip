@@ -53,7 +53,7 @@ def install_in_qemu(m=None, version=31):
         m.console.expect_exact(m.prompt)
         log.info('Fedora installation finished')
 
-        m.hook(unseal=unseal)
+        m.hooks(unseal=unseal)
 
         return m
 

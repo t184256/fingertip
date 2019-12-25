@@ -1,13 +1,12 @@
 # Licensed under GNU General Public License v3 or later, see COPYING.
 # Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
 
-import collections
 import functools
 import os
 import pickle
 
 from fingertip import step_loader, expiration
-from fingertip.util import lock, log, temp, path
+from fingertip.util import hooks, lock, log, temp, path
 
 
 def transient(func):
@@ -23,7 +22,7 @@ def transient(func):
 
 class Machine:
     def __init__(self, sealed=True, expire_in=7*24*3600):
-        self._hooks = collections.defaultdict(list)
+        self.hooks = hooks.HookManager()
         os.makedirs(path.MACHINES, exist_ok=True)
         self.path = temp.disappearing_dir(path.MACHINES)
         self._parent_path = path.MACHINES
@@ -45,7 +44,7 @@ class Machine:
                 self._state == 'spun_up' and self._up_counter)
         if not self._up_counter:
             assert self._state == 'loaded'
-            self._exec_hooks('up')
+            self.hooks.up(self)
             self._state = 'spun_up'
         self._up_counter += 1
         return self
@@ -55,29 +54,18 @@ class Machine:
         self._up_counter -= 1
         if not self._up_counter:
             if not self._transient:
-                self._exec_hooks('down', in_reverse=True)
+                self.hooks.down.in_reverse(self)
                 self._state = 'spun_down'
             else:
-                self._exec_hooks('drop', in_reverse=True)
+                self.hooks.drop.in_reverse(self)
                 self._state = 'dropped'
             if not exc_type and self._link_to:
                 self._finalize()
 
-    def hook(self, **kwargs):
-        for hook_type, hook in kwargs.items():
-            self._hooks[hook_type].append(hook)
-
-    def _exec_hooks(self, hook_type, *args, in_reverse=False, **kwargs):
-        log.debug(f'firing {hook_type} hooks')
-        hooks = self._hooks[hook_type]
-        for hook in hooks if not in_reverse else hooks[::-1]:
-            log.debug(f'hook {hook_type} {hook}')
-            hook(self, *args, **kwargs)
-
     def _finalize(self, link_to=None, name_hint=None):
         log.debug(f'finalize hint={name_hint} link_to={link_to} {self._state}')
         if link_to and self._state == 'spun_down':
-            self._exec_hooks('save', in_reverse=True)
+            self.hooks.save.in_reverse(self)
             temp_path = self.path
             self.path = temp.unique_dir(self._parent_path, hint=name_hint)
             log.debug(f'saving to temp {temp_path}')
@@ -148,7 +136,7 @@ class Machine:
     def unseal(self):
         if self.sealed:
             self.sealed = False
-            self._exec_hooks('unseal')
+            self.hooks.unseal(self)
 
 
 def _load_from_path(data_dir_path):
@@ -159,7 +147,7 @@ def _load_from_path(data_dir_path):
     m._state == 'loading'
     assert m.path == data_dir_path
     assert m._parent_path == os.path.realpath(os.path.dirname(data_dir_path))
-    m._exec_hooks('load')
+    m.hooks.load(m)
     m._state = 'loaded'
     return m
 
@@ -173,7 +161,7 @@ def clone_and_load(from_path, link_to=None, name_hint=None):
     os.makedirs(temp_path, exist_ok=True)
     with open(os.path.join(from_path, 'machine.pickle'), 'rb') as f:
         m = pickle.load(f)
-    m._exec_hooks('clone', m, temp_path)
+    m.hooks.clone(m, temp_path)
     m._parent_path = os.path.realpath(from_path)
     m.path = temp_path
     m._link_to = link_to

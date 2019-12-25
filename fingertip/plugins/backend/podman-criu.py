@@ -33,8 +33,8 @@ def base():
     m = fingertip.machine.Machine(sealed=False)  # TODO: seal
     m.container = ContainerNamespacedFeatures(m)
     m.container.from_image = from_image
-    m.hook(load=_load, up=_up, down=_down, drop=_drop, save=_save,
-           clone=_clone)
+    m.hooks(load=_load, up=_up, down=_down, drop=_drop, save=_save,
+            clone=_clone)
     return m
 
 
@@ -159,9 +159,9 @@ def _save(m):
     pass
 
 
-def _clone(m, parent, to):
+def _clone(m, to):
     if not hasattr(m.container, 'starting_image'):  # no starting image yet
         return
-    log.debug(f'{parent} {to}')
-    reflink.auto(os.path.join(parent.path, 'snapshot.tar'),
+    log.debug(f'{m} {to}')
+    reflink.auto(os.path.join(m.path, 'snapshot.tar'),
                  os.path.join(to, 'snapshot.tar'))

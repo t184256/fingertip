@@ -65,8 +65,8 @@ def _save(vm):
     vm.http_cache = None
 
 
-def _clone(vm, parent, to_path):
-    vm.qemu._image_to_clone = os.path.join(parent.path, 'image.qcow2')
+def _clone(parent, to_path):
+    parent.qemu._image_to_clone = os.path.join(parent.path, 'image.qcow2')
 
 
 def _disrupt(vm):
@@ -81,8 +81,8 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
     m = fingertip.machine.Machine()
     m.arch = arch
     m.qemu = QEMUNamespacedFeatures(m, ram_size, disk_size, custom_args)
-    m.hook(load=_load, up=_up, down=_down, drop=_drop, save=_save,
-           clone=_clone, disrupt=_disrupt)
+    m.hooks(load=_load, up=_up, down=_down, drop=_drop, save=_save,
+            clone=_clone, disrupt=_disrupt)
     _load(m)
     create_image(os.path.join(m.path, 'image.qcow2'), disk_size)
     return m
@@ -257,10 +257,10 @@ class Monitor:
         assert set(r.keys()) == {'timestamp', 'event'}
         assert r['event'] == 'STOP'
         self._expect({'return': {}})
-        self.vm._exec_hooks('disrupt')
+        self.vm.hooks.disrupt(self.vm)
 
     def quit(self):
-        self.vm._exec_hooks('disrupt')
+        self.vm.hooks.disrupt(self.vm)
         self._execute('quit')
         self._expect({'return': {}})
         self._disconnect()

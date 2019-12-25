@@ -73,7 +73,7 @@ def first_boot(m):
         m.console.sendline(f'echo "{ssh_pubkey}" >> .ssh/authorized_keys')
         m.console.expect_exact(m.prompt)
 
-        m.hook(unseal=unseal)
+        m.hooks(unseal=unseal)
 
         return m
 
