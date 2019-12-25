@@ -55,6 +55,8 @@ def install_in_qemu(m=None, version=31):
 
         m.hooks(unseal=unseal)
 
+        m.fedora = version
+
         return m
 
 
