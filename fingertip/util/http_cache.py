@@ -1,8 +1,10 @@
 # Licensed under GNU General Public License v3 or later, see COPYING.
 # Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
 
+import hashlib
 import http.server
 import os
+import shutil
 import socketserver
 import threading
 
@@ -12,6 +14,11 @@ import cachecontrol
 import cachecontrol.caches
 
 from fingertip.util import path, log
+
+
+BIG = 2**30  # too big for caching
+STRIP_HEADERS = ('TE', 'Transfer-Encoding', 'Keep-Alive', 'Trailer', 'Upgrade',
+                 'Connection', 'Range', 'Host', 'Accept')
 
 
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
@@ -27,27 +34,55 @@ class HTTPCache:
         class Handler(http.server.SimpleHTTPRequestHandler):
             protocol_version = 'HTTP/1.1'
 
-            def _serve(self, uri, meth='GET'):
+            def _status_and_headers(self, status_code, headers):
+                self.send_response(status_code)
+                for k, v in headers.items():
+                    self.send_header(k, v)
+                self.end_headers()
+
+            def _serve(self, uri, headers, meth='GET'):
+                sess = http_cache._get_requests_session()
+
+                headers = {k: v for k, v in headers.items() if
+                           not (k in STRIP_HEADERS or k.startswith('Proxy-'))}
                 log.debug(f'{meth} {uri}')
+                for k, v in headers.items():
+                    log.debug(f'{k}: {v}')
+
                 try:
-                    sess = http_cache._get_requests_session()
+                    if meth == 'GET':  # direct streaming might be required...
+                        preview = sess.head(uri, headers=headers)
+                        direct = None
+                        if int(preview.headers.get('Content-Length', 0)) > BIG:
+                            direct = f'file bigger than {BIG}'
+                        if direct:
+                            # Don't cache, don't reencode, stream it as is
+                            log.warn(f'streaming {uri} directly ({direct})')
+                            r = requests.get(uri, headers=headers, stream=True)
+                            self._status_and_headers(r.status_code, r.headers)
+                            self.copyfile(r.raw, self.wfile)
+                            return
+
+                    # fetch with caching
                     m_func = getattr(sess, meth.lower())
-                    r = m_func(uri if '://' in uri else 'http://self' + uri)
-                    self.send_response(r.status_code)
-                    for k, v in r.headers.items():
-                        self.send_header(k, v)
-                    self.end_headers()
+                    r = m_func(uri if '://' in uri else 'http://self' + uri,
+                               headers=headers)
+                    data, length = r.content, int(r.headers['Content-Length'])
+                    if len(data) != length:
+                        data = hack_around_unpacking(uri, headers, data)
+                    assert len(data) == length
+                    self._status_and_headers(r.status_code, r.headers)
                     if meth == 'GET':
-                        self.wfile.write(r.content)
-                    log.debug(f'{meth} served: {self.path}')
+                        self.wfile.write(data)
+                    log.debug(f'{meth} served: {uri} {length}')
                 except ConnectionResetError:
-                    log.warn(f'Connection reset for {meth} {self.path}')
+                    log.warn(f'Connection reset for {meth} {uri}')
 
             def do_HEAD(self):
-                self._serve(uri=self.path, meth='HEAD')
+                self._serve(uri=self.path, headers=self.headers, meth='HEAD')
 
             def do_GET(self):
-                self._serve(uri=self.path, meth='GET')
+                self._serve(uri=self.path, headers=self.headers, meth='GET')
 
             def log_message(self, format, *args):  # supress existing logging
                 return
@@ -56,9 +91,12 @@ class HTTPCache:
         _, self.port = httpd.socket.getsockname()
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
 
-    def _get_requests_session(self):
-        cache = cachecontrol.caches.FileCache(path.DOWNLOADS)
-        sess = cachecontrol.CacheControl(requests.Session(), cache=cache)
+    def _get_requests_session(self, direct=False):
+        if not direct:
+            cache = cachecontrol.caches.FileCache(path.downloads('cache'))
+            sess = cachecontrol.CacheControl(requests.Session(), cache=cache)
+        else:
+            sess = requests.Session()
         for uri, kwargs in self._mocks:
             adapter = requests_mock.Adapter()
             adapter.register_uri('HEAD', uri, **kwargs)
@@ -83,6 +121,22 @@ class HTTPCache:
         """
         content_length = {'Content-Length': str(len(text.encode()))}
         self._mocks.append((uri, {'text': text, 'headers': content_length}))
+
+
+# Hack around requests uncompressing Content-Encoding: gzip
+
+
+def hack_around_unpacking(uri, headers, wrong_content):
+    log.warn(f're-fetching correct content for {uri}')
+    r = requests.get(uri, headers=headers, stream=True)
+    h = hashlib.sha256(wrong_content).hexdigest()
+    cachefile = path.downloads('fixups', h, makedirs=True)
+    if not os.path.exists(cachefile):
+        with path.wip(cachefile) as wip:
+            with open(wip, 'wb') as f:
+                shutil.copyfileobj(r.raw, f)
+    with open(cachefile, 'rb') as f:
+        return f.read()
 
 
 # Fully offline cache utilization functionality
