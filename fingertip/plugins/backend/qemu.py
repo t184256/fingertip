@@ -13,7 +13,7 @@ import pexpect
 
 import fingertip.machine
 import fingertip.util.http_cache
-from fingertip.util import free_port, log, path, reflink, repeatedly
+from fingertip.util import free_port, log, path, reflink, repeatedly, temp
 
 
 CACHE_INTERNAL_IP, CACHE_INTERNAL_PORT = '10.0.2.244', 8080
@@ -117,17 +117,20 @@ class QEMUNamespacedFeatures:
                               [f'guestfwd=tcp:{ip}:{port}-cmd:{cmd}'
                                for ip, port, cmd in guest_forwards])]
 
-        if self._image_to_clone:
-            reflink.auto(self._image_to_clone,
-                         os.path.join(self.vm.path, 'image.qcow2'))
-            self._image_to_clone = None
         image = os.path.join(self.vm.path, 'image.qcow2')
+        if self._image_to_clone:
+            required_space = os.path.getsize(self._image_to_clone) + 2**30
+            if self.vm._transient and temp.has_space(required_space):
+                image = temp.disappearing_file(hint='fingertip-qemu')
+            reflink.auto(self._image_to_clone, image)
+            self._image_to_clone = None
         run_args += ['-drive',
                      f'file={image},cache=unsafe,if=virtio,discard=unmap']
 
         run_args += ['-m', self.ram_size]
 
         args = QEMU_COMMON_ARGS + self.custom_args + run_args + extra_args
+        log.debug(' '.join(args))
         if self._mode == 'pexpect':
             self.vm.console = pexpect.spawn(self._qemu, args, echo=False,
                                             timeout=None, encoding='utf-8',

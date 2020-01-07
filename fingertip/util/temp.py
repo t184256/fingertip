@@ -5,7 +5,7 @@
 Helper functions for fingertip: working with self-destructing tempfiles.
 """
 
-# TODO: check that is has enough usage to justify it, prettify if so
+# TODO: replace with python3-tempdir
 
 import atexit
 import os
@@ -64,3 +64,16 @@ def disappearing_dir(dstdir=None, hint=''):  # defaults to /tmp
     assert AUTOREMOVE_PREFIX in temp_dir_path
     atexit.register(lambda: remove(temp_dir_path))
     return temp_dir_path
+
+
+def has_space(how_much='2G', reserve_fraction=.3, where='/tmp'):
+    for suffix, power in {'G': 30, 'M': 20, 'K': 10}.items():
+        if isinstance(how_much, str) and how_much.endswith(suffix):
+            how_much = float(how_much[:-1]) * 2 ** power
+            break
+    total, _, free = shutil.disk_usage(where)
+    if not free >= how_much:
+        log.warn(f'{where} does not have {how_much} of free space')
+    if not free >= total * reserve_fraction:
+        log.warn(f'{where} is {(1 - reserve_fraction)*100:d}% full')
+    return free >= how_much and free >= total * reserve_fraction
