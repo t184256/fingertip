@@ -75,5 +75,5 @@ def has_space(how_much='2G', reserve_fraction=.3, where='/tmp'):
     if not free >= how_much:
         log.warn(f'{where} does not have {how_much} of free space')
     if not free >= total * reserve_fraction:
-        log.warn(f'{where} is {(1 - reserve_fraction)*100:d}% full')
+        log.warn(f'{where} is {int((1 - reserve_fraction) * 100)}% full')
     return free >= how_much and free >= total * reserve_fraction
