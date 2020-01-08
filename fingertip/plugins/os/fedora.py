@@ -41,7 +41,7 @@ def install_in_qemu(m=None, version=31):
         m.console.expect('Storing configuration files and kickstarts')
         m.qemu.wait()
         m.qemu.compress_image()
-        m.qemu.ram = original_ram_size
+        m.qemu.ram_size = original_ram_size
         m.qemu.run(load=None)  # cold boot
         HOSTNAME = 'fedora31'
         ROOT_PASSWORD = 'fingertip'
