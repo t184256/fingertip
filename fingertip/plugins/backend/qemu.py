@@ -79,6 +79,7 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
     assert arch == 'x86_64'
     # FIXME: -tmp
     m = fingertip.machine.Machine()
+    m.backend = 'qemu'
     m.arch = arch
     m.qemu = QEMUNamespacedFeatures(m, ram_size, disk_size, custom_args)
     m.hooks(load=_load, up=_up, down=_down, drop=_drop, save=_save,

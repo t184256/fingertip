@@ -31,6 +31,7 @@ def copy_ownership(p1, p2):
 
 def base():
     m = fingertip.machine.Machine(sealed=False)  # TODO: seal
+    m.backend = 'podman-criu'
     m.container = ContainerNamespacedFeatures(m)
     m.container.from_image = from_image
     m.hooks(load=_load, up=_up, down=_down, drop=_drop, save=_save,
