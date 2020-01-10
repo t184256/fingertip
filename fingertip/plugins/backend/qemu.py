@@ -296,14 +296,17 @@ class SSH:
         if self._transport is None:
             log.debug('waiting for the VM to spin up and offer SSH...')
             pkey = paramiko.ECDSAKey.from_private_key_file(self.key)
+
+            def connect():
+                t = paramiko.Transport((self.host, self.port))
+                t.start_client()
+                return t
+
             transport = repeatedly.keep_trying(
-                lambda: paramiko.Transport((self.host, self.port)),
+                connect,
                 paramiko.ssh_exception.SSHException,
                 retries=retries, timeout=timeout
             )
-            repeatedly.keep_trying(lambda: transport.start_client(),
-                                   paramiko.ssh_exception.SSHException,
-                                   retries=retries, timeout=timeout)
             transport.auth_publickey('root', pkey)
             self._transport = transport
             log.debug(f'{self._transport}')
