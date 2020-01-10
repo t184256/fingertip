@@ -81,6 +81,8 @@ class HTTPCache:
                     log.debug(f'{meth} served: {uri} {length}')
                 except ConnectionResetError:
                     log.warn(f'Connection reset for {meth} {uri}')
+                except requests.exceptions.ConnectionError:
+                    log.warn(f'Connection error for {meth} {uri}')
 
             def do_HEAD(self):
                 self._serve(uri=self.path, headers=self.headers, meth='HEAD')
