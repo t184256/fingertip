@@ -16,18 +16,24 @@ from fingertip.util import log, temp
 def _ansible(m, *args, check=True, cmd=('ansible', 'fingertip')):
     env = {**os.environ, 'ANSIBLE_HOST_KEY_CHECKING': 'False'}
     if hasattr(m, 'ssh'):
-        hostline = ' '.join(['fingertip',
-                             'ansible_connection=ssh',
-                             'ansible_user=root',
-                             'ansible_host=localhost',
-                             f'ansible_port={m.ssh.port}',
-                             f'ansible_ssh_private_key_file={m.ssh.key_file}'])
+        connection = 'ssh'  # TODO: compare with paramiko
+        prefix = ()
+        host = ['fingertip',
+                'ansible_connection=ssh',
+                'ansible_user=root',
+                'ansible_host=localhost',
+                f'ansible_port={m.ssh.port}',
+                f'ansible_ssh_private_key_file={m.ssh.key_file}']
+    elif m.backend == 'podman-criu':
+        connection = 'podman'
+        prefix = ('sudo', '-H')
+        host = ['fingertip', f'ansible_host={m.container.container_id}']
     else:
         raise NotImplementedError()
     inventory = temp.disappearing_file(hint='ansible-inventory')
     with open(inventory, 'w') as f:
-        f.write(hostline)
-    cmd = cmd + ('-i', inventory) + args
+        f.write(' '.join(host))
+    cmd = prefix + cmd + ('-i', inventory, '-c', connection) + args
     log.info(' '.join(cmd))
     return subprocess.run(cmd, env=env, check=check)
 
