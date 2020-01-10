@@ -5,8 +5,9 @@ from fingertip.util import log
 
 
 @fingertip.transient
-def main(m):
-    with m.apply('unseal').transient() as m:
+def main(m, no_unseal=False):
+    m = m if no_unseal else m.apply('unseal')
+    with m.transient() as m:
         log.info(f'waiting for the SSH server to be up...')
         m.ssh('true')
         log.info(f'starting interactive SSH session, {m.ssh.port}')
@@ -20,8 +21,10 @@ def main(m):
                         'root@127.0.0.1'])
 
 
-def exec(m, cmd):
-    with m.apply('unseal') as m:
+def exec(m, cmd, no_unseal=False, transient=False):
+    m = m if no_unseal else m.apply('unseal')
+    with m:
         log.info(f'waiting for the SSH server to be up...')
         m.ssh(cmd)
-    return m
+    if not transient:
+        return m
