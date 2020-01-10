@@ -139,7 +139,7 @@ def _load_from_path(data_dir_path):
     with open(os.path.join(data_dir_path, 'machine.pickle'), 'rb') as f:
         m = pickle.load(f)
     assert m._state == 'saving'
-    m._state == 'loading'
+    m._state = 'loading'
     assert m.path == data_dir_path
     assert m._parent_path == os.path.realpath(os.path.dirname(data_dir_path))
     m.hooks.load(m)
