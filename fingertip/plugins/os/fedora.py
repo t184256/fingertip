@@ -53,7 +53,7 @@ def install_in_qemu(m=None, version=31):
         m.console.expect_exact(m.prompt)
         log.info('Fedora installation finished')
 
-        m.hooks(unseal=unseal)
+        m.hooks(unseal=unseal, disable_cache=disable_proxy)
 
         m.fedora = version
 
@@ -87,4 +87,10 @@ def enable_repo(m, name, url, disabled=False):
             gpgcheck = 0
             name = {name}
             EOF'''))
+    return m
+
+
+def disable_proxy(m):
+    with m:
+        m.ssh('sed -i "s|^proxy=|#proxy=|" /etc/dnf/dnf.conf')
     return m
