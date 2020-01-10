@@ -7,13 +7,16 @@ from fingertip.util import log, weak_hash
 
 
 def func_and_autotag(smth, *args, **kwargs):
-    return load_step(smth, *args, **kwargs), autotag(smth, *args, **kwargs)
+    return load_step(smth), autotag(smth, *args, **kwargs)
 
 
-def load_step(smth, *args, **kwargs):
+def load_step(smth):
     if isinstance(smth, str):
-        # try to import abc.xyz as (import fingertip.plugins.abc.xyz).main
+        if smth.startswith('.'):  #
+            # this is for calling methods on objects, e.g. ... + .hooks.smth
+            return make_method_caller(smth.split('.')[1:])
         try:
+            # try to import abc.xyz as (import fingertip.plugins.abc.xyz).main
             module = importlib.import_module('fingertip.plugins.' + smth)
             return module.main
         except (ModuleNotFoundError, AttributeError):
@@ -26,9 +29,8 @@ def load_step(smth, *args, **kwargs):
 
 def autotag(something, *args, **kwargs):
     log.info(f'autotag in: {something} {args} {kwargs}')
-    # take args into account later
     if isinstance(something, str):
-        name = something
+        name = something if not something.startswith('.') else '_' + something
     else:
         name = something.__module__ + '.' + something.__qualname__
         assert name.startswith('fingertip.plugins.')
@@ -41,3 +43,14 @@ def autotag(something, *args, **kwargs):
         args_str = '::' + weak_hash.weak_hash(args_str)
     tag = f'{name}:{args_str}' if args_str else name
     return tag
+
+
+def make_method_caller(name_chain):
+    def method_caller(m, *args, **kwargs):
+        with m:
+            x = m
+            for name in name_chain:
+                x = getattr(x, name)
+            x(*args, **kwargs)
+        return m
+    return method_caller
