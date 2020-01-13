@@ -40,7 +40,11 @@ def _ansible(m, *args, check=True, cmd=('ansible', 'fingertip')):
 
 
 def main(m, module, *args, **kwargs):
-    module_args = args + tuple(f'{k}={v}' for k, v in kwargs.items())
+    def to_str(v):
+        if isinstance(v, bool):
+            return 'yes' if v else 'no'
+        return str(v)
+    module_args = args + tuple(f'{k}={to_str(v)}' for k, v in kwargs.items())
     with m:
         _ansible(m, '-m', module, '-a', ' '.join(module_args))
     return m

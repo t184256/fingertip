@@ -75,19 +75,10 @@ def unseal(m):
         return m
 
 
-def enable_repo(m, name, url, disabled=False):
-    import textwrap
-    with m:
-        m.ssh(textwrap.dedent(f'''
-            set -uex
-            cat > /etc/yum.repos.d/{name}.repo <<EOF
-            [{name}]
-            baseurl = {url}
-            enabled = {1 if not disabled else 0}
-            gpgcheck = 0
-            name = {name}
-            EOF'''))
-    return m
+def enable_repo(m, name, url, description=None, disabled=False):
+    return m.apply('ansible', 'yum_repository', name=name, baseurl=url,
+                   gpgcheck=False,  # TODO
+                   description=(description or name), enabled=(not disabled))
 
 
 def disable_proxy(m):
