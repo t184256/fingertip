@@ -82,8 +82,13 @@ def main(m=None):
     m = m or fingertip.build('backend.qemu', ram_size='128M')
     if hasattr(m, 'qemu'):
         return m.apply(install).apply(first_boot)
-    else:
+    elif hasattr(m, 'container'):
         # podman-criu: https://github.com/checkpoint-restore/criu/issues/596
+        m = m.apply(m.container.from_image, 'alpine')
+        with m:
+            m.hooks(ansible_prepare=ansible_prepare)
+        return m
+    else:
         raise NotImplementedError()
 
 
