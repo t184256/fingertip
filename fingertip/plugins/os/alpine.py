@@ -73,9 +73,9 @@ def first_boot(m):
         m.console.sendline(f'echo "{ssh_pubkey}" >> .ssh/authorized_keys')
         m.console.expect_exact(m.prompt)
 
-        m.hooks(unseal=unseal)
+        m.hooks(unseal=unseal, ansible_prepare=ansible_prepare)
 
-        return m
+    return m
 
 
 def main(m=None):
@@ -90,4 +90,21 @@ def main(m=None):
 def unseal(m):
     with m:
         m.ssh('/etc/init.d/networking restart')
-        return m
+    return m
+
+
+def disable_proxy(m):
+    with m:
+        m.ssh('setup-proxy none', nocheck=True)
+        m.console.sendline(f'unset http_proxy https_proxy ftp_proxy')
+        m.console.expect_exact(m.prompt)
+    return m
+
+
+def ansible_prepare(m):
+    if not hasattr(m, '_ansible_ready'):
+        with m:
+            m.console.sendline(f'apk add python3')  # TODO: use ssh + env vars
+            m.console.expect_exact(m.prompt)
+            m._ansible_ready = True
+    return m

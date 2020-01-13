@@ -126,7 +126,6 @@ def _detach(m, retries=10, timeout=1/32):
     m.console.wait()
 
 
-
 def _down(m):
     if not hasattr(m.container, 'starting_image'):  # no starting image yet
         return
@@ -163,3 +162,8 @@ def _clone(m, to):
     log.debug(f'{m} {to}')
     reflink.auto(os.path.join(m.path, 'snapshot.tar'),
                  os.path.join(to, 'snapshot.tar'))
+
+def exec(m, cmd):
+    with m:
+        m.container.exec(cmd)
+    return m

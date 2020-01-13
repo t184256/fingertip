@@ -14,6 +14,7 @@ from fingertip.util import log, temp
 
 
 def _ansible(m, *args, check=True, cmd=('ansible', 'fingertip')):
+    m.hooks.ansible_prepare(m)
     env = {**os.environ, 'ANSIBLE_HOST_KEY_CHECKING': 'False'}
     if hasattr(m, 'ssh'):
         connection = 'ssh'  # TODO: compare with paramiko
