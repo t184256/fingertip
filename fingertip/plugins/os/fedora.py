@@ -82,6 +82,5 @@ def enable_repo(m, name, url, description=None, disabled=False):
 
 
 def disable_proxy(m):
-    with m:
-        m.ssh('sed -i "s|^proxy=|#proxy=|" /etc/dnf/dnf.conf')
-    return m
+    return m.apply('ansible', 'ini_file', path='/etc/dnf/dnf.conf',
+                   section='main', option='proxy', state='absent')
