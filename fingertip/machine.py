@@ -3,7 +3,7 @@
 
 import functools
 import os
-import pickle
+import cloudpickle
 
 from fingertip import step_loader, expiration
 from fingertip.util import hooks, lock, log, temp, path
@@ -70,8 +70,8 @@ class Machine:
             self.path = temp.unique_dir(self._parent_path, hint=name_hint)
             log.debug(f'saving to temp {temp_path}')
             self._state = 'saving'
-            with open(os.path.join(temp_path, 'machine.pickle'), 'wb') as f:
-                pickle.dump(self, f)
+            with open(os.path.join(temp_path, 'machine.clpickle'), 'wb') as f:
+                cloudpickle.dump(self, f)
             log.debug(f'moving {temp_path} to {self.path}')
             os.rename(temp_path, self.path)
             self._state == 'saved'
@@ -136,8 +136,8 @@ class Machine:
 
 def _load_from_path(data_dir_path):
     log.debug(f'load from {data_dir_path}')
-    with open(os.path.join(data_dir_path, 'machine.pickle'), 'rb') as f:
-        m = pickle.load(f)
+    with open(os.path.join(data_dir_path, 'machine.clpickle'), 'rb') as f:
+        m = cloudpickle.load(f)
     assert m._state == 'saving'
     m._state = 'loading'
     assert m.path == data_dir_path
@@ -154,14 +154,14 @@ def clone_and_load(from_path, link_to=None, name_hint=None):
     temp_path = temp.disappearing_dir(from_path, hint=name_hint)
     log.debug(f'temp = {temp_path}')
     os.makedirs(temp_path, exist_ok=True)
-    with open(os.path.join(from_path, 'machine.pickle'), 'rb') as f:
-        m = pickle.load(f)
+    with open(os.path.join(from_path, 'machine.clpickle'), 'rb') as f:
+        m = cloudpickle.load(f)
     m.hooks.clone(m, temp_path)
     m._parent_path = os.path.realpath(from_path)
     m.path = temp_path
     m._link_to = link_to
-    with open(os.path.join(m.path, 'machine.pickle'), 'wb') as f:
-        pickle.dump(m, f)
+    with open(os.path.join(m.path, 'machine.clpickle'), 'wb') as f:
+        cloudpickle.dump(m, f)
     return _load_from_path(temp_path)
 
 

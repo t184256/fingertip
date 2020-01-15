@@ -21,6 +21,7 @@ let
 in
 (python36.withPackages (ps: with ps; [
   cachecontrol
+  cloudpickle
   coloredlogs
   fasteners
   #fsmonitor
