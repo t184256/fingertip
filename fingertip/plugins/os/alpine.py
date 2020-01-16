@@ -12,7 +12,25 @@ ISO = MIRROR + '/v3.10/releases/x86_64/alpine-virt-3.10.3-x86_64.iso'
 REPO = MIRROR + '/v3.10/main/'
 
 
-def install(m):
+def main(m=None):
+    m = m or fingertip.build('backend.qemu', ram_size='128M')
+    if hasattr(m, 'qemu'):
+        m = m.apply(install_in_qemu).apply(first_boot)
+    elif hasattr(m, 'container'):
+        # podman-criu: https://github.com/checkpoint-restore/criu/issues/596
+        m = m.apply(m.container.from_image, 'alpine')
+    else:
+        raise NotImplementedError()
+
+    with m:
+        def prepare():
+            m.exec('apk add python3')
+        m.hooks.ansible_prepare.append(prepare)
+        #m.hooks.ansible_prepare.append(lambda: m('apk add python3'))
+    return m
+
+
+def install_in_qemu(m):
     iso_file = os.path.join(m.path, os.path.basename(ISO))
     m.http_cache.fetch(ISO, iso_file)
 
@@ -55,6 +73,13 @@ def install(m):
 
         m.qemu.wait()
         m.qemu.compress_image()
+
+        def disable_proxy():
+            m.exec('setup-proxy none', nocheck=True)
+            m.console.sendline(f'unset http_proxy https_proxy ftp_proxy')
+            m.console.expect_exact(m.prompt)
+        m.hooks.disable_cache.append(disable_proxy)
+
         return m
 
 
@@ -73,43 +98,5 @@ def first_boot(m):
         m.console.sendline(f'echo "{ssh_pubkey}" >> .ssh/authorized_keys')
         m.console.expect_exact(m.prompt)
 
-        m.hooks(unseal=unseal, ansible_prepare=ansible_prepare)
-
-    return m
-
-
-def main(m=None):
-    m = m or fingertip.build('backend.qemu', ram_size='128M')
-    if hasattr(m, 'qemu'):
-        return m.apply(install).apply(first_boot)
-    elif hasattr(m, 'container'):
-        # podman-criu: https://github.com/checkpoint-restore/criu/issues/596
-        m = m.apply(m.container.from_image, 'alpine')
-        with m:
-            m.hooks(ansible_prepare=ansible_prepare)
-        return m
-    else:
-        raise NotImplementedError()
-
-
-def unseal(m):
-    with m:
-        m.ssh('/etc/init.d/networking restart')
-    return m
-
-
-def disable_proxy(m):
-    with m:
-        m.ssh('setup-proxy none', nocheck=True)
-        m.console.sendline(f'unset http_proxy https_proxy ftp_proxy')
-        m.console.expect_exact(m.prompt)
-    return m
-
-
-def ansible_prepare(m):
-    if not hasattr(m, '_ansible_ready'):
-        with m:
-            m.console.sendline(f'apk add python3')  # TODO: use ssh + env vars
-            m.console.expect_exact(m.prompt)
-            m._ansible_ready = True
+        m.hooks.unseal.append(lambda: m.exec('/etc/init.d/networking restart'))
     return m

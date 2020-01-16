@@ -3,8 +3,8 @@
 
 
 def main(m):
-    if m.sealed:
-        m.sealed = False
+    if m.sealed and m.hooks.unseal:
         with m:
-            m.hooks.unseal(m)
-            return m
+            m.hooks.unseal()
+            m.sealed = False
+    return m

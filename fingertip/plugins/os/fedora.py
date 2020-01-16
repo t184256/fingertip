@@ -10,8 +10,17 @@ from fingertip.util import log, path
 FEDORA_MIRROR = 'http://download.fedoraproject.org/pub/fedora'
 
 
-def install_in_qemu(m=None, version=31):
-    m = m or fingertip.machine.build('backend.qemu')
+def main(m=None, version=31):
+    m = m or fingertip.build('backend.qemu')
+    if hasattr(m, 'qemu'):
+        return m.apply(install_in_qemu, version=version)
+    elif hasattr(m, 'container'):
+        return m.apply(m.container.from_image, f'fedora:{version}')
+    else:
+        raise NotImplementedError()
+
+
+def install_in_qemu(m, version):
     FEDORA_URL = FEDORA_MIRROR + f'/linux/releases/{version}/Server/x86_64/os'
     original_ram_size = m.qemu.ram_size
 
@@ -53,34 +62,15 @@ def install_in_qemu(m=None, version=31):
         m.console.expect_exact(m.prompt)
         log.info('Fedora installation finished')
 
-        m.hooks(unseal=unseal, disable_cache=disable_proxy)
+        def disable_proxy():
+            return m.apply('ansible', 'ini_file', path='/etc/dnf/dnf.conf',
+                           section='main', option='proxy', state='absent')
+        m.hooks.disable_proxy.append(disable_proxy)
+
+        def unseal():
+            m.ssh('systemctl restart NetworkManager')
+        m.hooks.unseal.append(unseal)
 
         m.fedora = version
 
         return m
-
-
-def main(m=None):
-    m = m or fingertip.build('backend.qemu')
-    if hasattr(m, 'qemu'):
-        return m.apply(install_in_qemu)
-    elif hasattr(m, 'container'):
-        return m.apply(m.container.from_image, 'fedora')
-    raise NotImplementedError()
-
-
-def unseal(m):
-    with m:
-        m.ssh('systemctl restart NetworkManager')
-        return m
-
-
-def enable_repo(m, name, url, description=None, disabled=False):
-    return m.apply('ansible', 'yum_repository', name=name, baseurl=url,
-                   gpgcheck=False,  # TODO
-                   description=(description or name), enabled=(not disabled))
-
-
-def disable_proxy(m):
-    return m.apply('ansible', 'ini_file', path='/etc/dnf/dnf.conf',
-                   section='main', option='proxy', state='absent')

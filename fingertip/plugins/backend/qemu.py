@@ -25,55 +25,6 @@ QEMU_COMMON_ARGS = ['-enable-kvm', '-cpu', 'host,-vmx', '-smp', '4',
                     '-device', 'virtio-rng-pci,rng=rng0']
 
 
-def create_image(path, size):
-    subprocess.run(['qemu-img', 'create', '-f', 'qcow2', path, size],
-                   check=True)
-
-
-def _load(vm):
-    log.debug('load_vm')
-
-    vm.http_cache = fingertip.util.http_cache.HTTPCache()
-    vm.http_cache.internal_ip = CACHE_INTERNAL_IP
-    vm.http_cache.internal_port = CACHE_INTERNAL_PORT
-    vm.http_cache.internal_url = CACHE_INTERNAL_URL
-
-
-def _up(vm):
-    if vm.qemu.live:
-        vm.qemu.run()
-
-
-def _down(vm):
-    if vm.qemu.live:
-        log.debug(f'SAVE_LIVE {vm.qemu.monitor}, {vm.qemu.monitor._sock}')
-        vm.qemu.monitor.pause()
-        vm.qemu.monitor.checkpoint()
-        vm.qemu.monitor.commit()
-        vm.qemu.monitor.quit()
-        vm.qemu._go_down()
-
-
-def _drop(vm):
-    if vm.qemu.live:
-        log.debug(f'DROP {vm.qemu.monitor}, {vm.qemu.monitor._sock}')
-        vm.qemu.monitor.quit()
-        vm.qemu._go_down()
-
-
-def _save(vm):
-    vm.http_cache = None
-
-
-def _clone(parent, to_path):
-    parent.qemu._image_to_clone = os.path.join(parent.path, 'image.qcow2')
-
-
-def _disrupt(vm):
-    if vm.qemu.live:
-        vm.qemu.vm.ssh.invalidate()
-
-
 def main(arch='x86_64', ram_size='1G', disk_size='20G',
          custom_args=[], guest_forwards=[]):
     assert arch == 'x86_64'
@@ -82,10 +33,53 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
     m.backend = 'qemu'
     m.arch = arch
     m.qemu = QEMUNamespacedFeatures(m, ram_size, disk_size, custom_args)
-    m.hooks(load=_load, up=_up, down=_down, drop=_drop, save=_save,
-            clone=_clone, disrupt=_disrupt)
-    _load(m)
-    create_image(os.path.join(m.path, 'image.qcow2'), disk_size)
+
+    def load():
+        m.http_cache = fingertip.util.http_cache.HTTPCache()
+        m.http_cache.internal_ip = CACHE_INTERNAL_IP
+        m.http_cache.internal_port = CACHE_INTERNAL_PORT
+        m.http_cache.internal_url = CACHE_INTERNAL_URL
+    m.hooks.load.append(load)
+
+    def up():
+        if m.qemu.live:
+            m.qemu.run()
+    m.hooks.up.append(up)
+
+    def down():
+        if m.qemu.live:
+            log.debug(f'save_live {m.qemu.monitor}, {m.qemu.monitor._sock}')
+            m.qemu.monitor.pause()
+            m.qemu.monitor.checkpoint()
+            m.qemu.monitor.commit()
+            m.qemu.monitor.quit()
+            m.qemu._go_down()
+    m.hooks.down.append(down)
+
+    def drop():
+        if m.qemu.live:
+            log.debug(f'drop {m.qemu.monitor}, {m.qemu.monitor._sock}')
+            m.qemu.monitor.quit()
+            m.qemu._go_down()
+    m.hooks.drop.append(drop)
+
+    def save():
+        m.http_cache = None
+    m.hooks.save.append(save)
+
+    def clone(to_path):
+        m.qemu._image_to_clone = os.path.join(m.path, 'image.qcow2')
+    m.hooks.clone.append(clone)
+
+    def disrupt():
+        if m.qemu.live:
+            m.ssh.invalidate()
+    m.hooks.disrupt.append(disrupt)
+
+    load()
+    subprocess.run(['qemu-img', 'create', '-f', 'qcow2',
+                    os.path.join(m.path, 'image.qcow2'), disk_size],
+                   check=True)
     return m
 
 
@@ -108,6 +102,7 @@ class QEMUNamespacedFeatures:
 
         # TODO: extract SSH into a separate plugin?
         self.vm.ssh = SSH(key=path.fingertip('ssh_key', 'fingertip.paramiko'))
+        self.vm.exec = self.vm.ssh.__call__
         ssh_host_forward = f'hostfwd=tcp:127.0.0.1:{self.vm.ssh.port}-:22'
         cache_guest_forward = (CACHE_INTERNAL_IP, CACHE_INTERNAL_PORT,
                                f'nc 127.0.0.1 {self.vm.http_cache.port}')
@@ -160,6 +155,7 @@ class QEMUNamespacedFeatures:
         if self.live:
             self.vm.console = None
             self.vm.ssh.invalidate()
+            del self.vm.exec
 
     def compress_image(self):
         assert not self.live
@@ -261,10 +257,10 @@ class Monitor:
         assert set(r.keys()) == {'timestamp', 'event'}
         assert r['event'] == 'STOP'
         self._expect({'return': {}})
-        self.vm.hooks.disrupt(self.vm)
+        self.vm.hooks.disrupt()
 
     def quit(self):
-        self.vm.hooks.disrupt(self.vm)
+        self.vm.hooks.disrupt()
         self._execute('quit')
         self._expect({'return': {}})
         self._disconnect()

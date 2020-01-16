@@ -14,10 +14,6 @@ class HookSet(list):
 
 
 class _HookManager(collections.defaultdict):
-    def __call__(self, **kwargs):
-        for hook_type, hook in kwargs.items():
-            self[hook_type].append(hook)
-
     def __getattr__(self, hook_type):
         return self[hook_type]
 
@@ -28,9 +24,8 @@ def HookManager():
 
 # hooks = HookManager()
 
-# hooks(smth=func)
-# hooks['smth'] += func
-# hooks.smth += func
+# hooks['smth'].append(func)
+# hooks.smth.append(func)
 
 # hooks['smth']()
 # hooks.smth()

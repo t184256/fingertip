@@ -44,7 +44,7 @@ class Machine:
                 self._state == 'spun_up' and self._up_counter)
         if not self._up_counter:
             assert self._state == 'loaded'
-            self.hooks.up(self)
+            self.hooks.up()
             self._state = 'spun_up'
         self._up_counter += 1
         return self
@@ -54,10 +54,10 @@ class Machine:
         self._up_counter -= 1
         if not self._up_counter:
             if not self._transient:
-                self.hooks.down.in_reverse(self)
+                self.hooks.down.in_reverse()
                 self._state = 'spun_down'
             else:
-                self.hooks.drop.in_reverse(self)
+                self.hooks.drop.in_reverse()
                 self._state = 'dropped'
             if not exc_type and self._link_to:
                 self._finalize()
@@ -65,7 +65,7 @@ class Machine:
     def _finalize(self, link_to=None, name_hint=None):
         log.debug(f'finalize hint={name_hint} link_to={link_to} {self._state}')
         if link_to and self._state == 'spun_down':
-            self.hooks.save.in_reverse(self)
+            self.hooks.save.in_reverse()
             temp_path = self.path
             self.path = temp.unique_dir(self._parent_path, hint=name_hint)
             log.debug(f'saving to temp {temp_path}')
@@ -142,7 +142,7 @@ def _load_from_path(data_dir_path):
     m._state = 'loading'
     assert m.path == data_dir_path
     assert m._parent_path == os.path.realpath(os.path.dirname(data_dir_path))
-    m.hooks.load(m)
+    m.hooks.load()
     m._state = 'loaded'
     return m
 
@@ -156,7 +156,7 @@ def clone_and_load(from_path, link_to=None, name_hint=None):
     os.makedirs(temp_path, exist_ok=True)
     with open(os.path.join(from_path, 'machine.clpickle'), 'rb') as f:
         m = cloudpickle.load(f)
-    m.hooks.clone(m, temp_path)
+    m.hooks.clone(temp_path)
     m._parent_path = os.path.realpath(from_path)
     m.path = temp_path
     m._link_to = link_to

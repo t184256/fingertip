@@ -13,8 +13,15 @@ import subprocess
 from fingertip.util import log, temp
 
 
+def prepare(m):
+    if not hasattr(m, '_ansible_prepare') and m.hooks.ansible_prepare:
+        with m:
+            m.hooks.ansible_prepare()
+            m._ansible_prepare = True
+    return m
+
+
 def _ansible(m, *args, check=True, cmd=('ansible', 'fingertip')):
-    m.hooks.ansible_prepare(m)
     env = {**os.environ, 'ANSIBLE_HOST_KEY_CHECKING': 'False'}
     if hasattr(m, 'ssh'):
         connection = 'ssh'  # TODO: compare with paramiko
@@ -45,12 +52,12 @@ def main(m, module, *args, **kwargs):
             return 'yes' if v else 'no'
         return str(v)
     module_args = args + tuple(f'{k}={to_str(v)}' for k, v in kwargs.items())
-    with m:
+    with m.apply(prepare) as m:
         _ansible(m, '-m', module, '-a', ' '.join(module_args))
     return m
 
 
 def playbook(m, playbook_path):
-    with m:
+    with m.apply(prepare) as m:
         _ansible(m, playbook_path, cmd=('ansible-playbook',))
     return m
