@@ -5,7 +5,6 @@ import itertools
 import sys
 
 import fingertip.machine
-from fingertip.util import log, path
 
 
 def parse_kwarg(kwarg):
@@ -31,18 +30,6 @@ def main():
 
     for step_cmd, step_args, step_kwargs in rest_of_the_steps:
         m = m.apply(step_cmd, *step_args, **step_kwargs)
-
-    #   log.info(m.path)
-    #with fingertip.machine.build('backend.qemu', 'os.fedora') as m:
-    #   log.info(m.path)
-    #with fingertip.machine.build('os.fedora') as m:
-    #    log.info(m.path)
-    #fingertip.machine.build('os.fedora', 'self_test.console_greeting')
-    #     # m.console.sendline('dnf install -y htop')
-    #     # m.console.expect_exact(f'[root@fedora31 ~]#')
-
-    # m._save()
-    # m = fingertip.machine.clone(m.path, 'workdir/vm/fedora/1/2/3')
 
 
 if __name__ == '__main__':
