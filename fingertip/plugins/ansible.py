@@ -48,6 +48,8 @@ def _ansible(m, *args, check=True, cmd=('ansible', 'fingertip')):
 
 def main(m, module, *args, **kwargs):
     def to_str(v):
+        if isinstance(v, list) or isinstance(v, tuple):
+            return ','.join(v)
         if isinstance(v, bool):
             return 'yes' if v else 'no'
         return str(v)

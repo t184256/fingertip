@@ -5,6 +5,7 @@ import functools
 import os
 import cloudpickle
 
+import fingertip.exec
 from fingertip import step_loader, expiration
 from fingertip.util import hooks, lock, log, temp, path
 
@@ -33,6 +34,9 @@ class Machine:
         self._up_counter = 0
         self.sealed = sealed
         self.expiration = expiration.Expiration(expire_in)
+
+    def __call__(self, *args, **kwargs):  # a convenience method
+        return fingertip.exec.nice_exec(self, *args, **kwargs)
 
     def transient(self):
         self._transient = True

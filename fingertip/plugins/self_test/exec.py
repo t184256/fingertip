@@ -1,0 +1,71 @@
+# Licensed under GNU General Public License v3 or later, see COPYING.
+# Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
+
+import fingertip
+
+
+INDENTED_SCRIPT = '''
+    echo '
+    a
+    '
+'''
+
+
+SCRIPT_WITH_HEREDOCS = r'''
+ b=X
+ cat <<EOF
+  'a'
+  $b
+ EOF
+ cat <<\EOF
+  'a'
+  $b
+ EOF
+'''
+
+
+@fingertip.transient
+def main(m):
+    with m.transient():
+        assert m.exec('true')
+        assert m('true')
+        assert m('sh -c true')
+        assert m('sh', '-c', 'true', shell=False)
+
+        assert m(INDENTED_SCRIPT).out == '\na\n\n'
+        assert m(INDENTED_SCRIPT, dedent=False).out == '\n    a\n    \n'
+
+        assert m(SCRIPT_WITH_HEREDOCS).out == " 'a'\n X\n 'a'\n $b\n"
+
+        assert m.exec('echo', 'x', 'y', 'z').out == b'x y z\n'
+        assert m('echo x y z').out == 'x y z\n'
+        assert m('echo x y z', decode=False).out == b'x y z\n'
+
+        assert m.exec('echo', '""').out == b'""\n'
+        assert m('echo', '""', shell=False).out == '""\n'
+        assert m('echo ""').out == '\n'
+
+        # TODO: these won't work for SSH and ash
+        # assert m.exec('echo', "''").out == b"''\n"
+        # assert m('echo', "''", shell=False).out == "''\n"
+        # assert m("echo ''").out == '\n'
+
+        t = m('true')
+        assert t
+
+        f = m('false', check=False)
+        assert not f
+        ret, out, err = f
+        print(ret, out, err, f.outerr)
+        assert (ret, out, err) == (1, '', '')
+        assert f.outerr == ''
+
+        e = m('echo a; echo e >/dev/stderr; echo b; exit 3', check=False)
+        print()
+        print('outerr', repr(e.outerr))
+        print('out', repr(e.out))
+        print('err', repr(e.err))
+        assert e.retcode == 3
+        assert e.outerr in ('a\ne\nb\n', 'a\nb\ne\n')  # this is racy =/
+        assert e.out == 'a\nb\n'
+        assert e.err == 'e\n'

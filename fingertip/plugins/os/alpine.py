@@ -24,7 +24,7 @@ def main(m=None):
 
     with m:
         def prepare():
-            m.exec('apk add python3')
+            m('apk add python3')
         m.hooks.ansible_prepare.append(prepare)
         #m.hooks.ansible_prepare.append(lambda: m('apk add python3'))
     return m
@@ -75,7 +75,7 @@ def install_in_qemu(m):
         m.qemu.compress_image()
 
         def disable_proxy():
-            m.exec('setup-proxy none', nocheck=True)
+            m('setup-proxy none', check=False)
             m.console.sendline(f'unset http_proxy https_proxy ftp_proxy')
             m.console.expect_exact(m.prompt)
         m.hooks.disable_cache.append(disable_proxy)
@@ -98,5 +98,5 @@ def first_boot(m):
         m.console.sendline(f'echo "{ssh_pubkey}" >> .ssh/authorized_keys')
         m.console.expect_exact(m.prompt)
 
-        m.hooks.unseal.append(lambda: m.exec('/etc/init.d/networking restart'))
+        m.hooks.unseal.append(lambda: m('/etc/init.d/networking restart'))
     return m

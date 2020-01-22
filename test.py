@@ -10,7 +10,7 @@ BASES = dict(
     podman_ubuntu=lambda: (
         fingertip
         .build('backend.podman-criu', 'ubuntu')
-        .apply('.exec', 'apt update && apt install -y python')
+        .apply('exec', 'apt update && apt install -y python')
     ),
     qemu_alpine=lambda: (
         fingertip
@@ -25,7 +25,9 @@ TESTS = dict(
     uname=lambda m: m.apply('ansible', 'command', 'uname -a'),
     patch=lambda m: m.apply('ansible', 'package',
                             name='patch', state='present'),
-    xtrue=lambda m: m.apply('.exec', 'true'),
+    xtrue=lambda m: m.apply('exec', 'true'),
+    false=lambda m: m.apply('exec', 'false', no_check=True),
+    execs=lambda m: m.apply('self_test.exec'),
     greet=lambda m: m.apply('self_test.greeting'),
     prmpt=lambda m: m.apply('self_test.prompts'),
     subsh=lambda m: m.apply('self_test.subshell'),
@@ -44,5 +46,8 @@ for base_name, base in BASES.items():
     for test_name, test in TESTS.items():
         if (base_name, test_name) in SKIP:
             continue
+
+        print(f'# {base_name}: {test_name} ',
+              '#' * (80 - len(f'# {base_name}: {test_name} ')))
 
         test(base())

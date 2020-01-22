@@ -13,15 +13,18 @@ import pexpect
 # TODO: sealing
 # TODO: http proxy for podman
 # TODO: http proxy for container itself
+import fingertip.exec
 import fingertip.machine
 import fingertip.util.http_cache
 from fingertip.util import log, reflink, repeatedly, weak_hash
 
 
-def _podman(*args, check=True, **kwargs):
+def _podman(*args, func='run', **kwargs):
     log.info('podman ' + ' '.join(args))
-    return subprocess.run(('sudo', 'podman',) + args,
-                          check=check, **kwargs)
+    if func not in ('check_output', 'Popen'):
+        kwargs['check'] = True
+    func = getattr(subprocess, func)
+    return func(('sudo', 'podman',) + args, **kwargs)
 
 
 def _copy_ownership(p1, p2):
@@ -41,10 +44,11 @@ def _base():
         if not hasattr(m.container, 'starting_image'):  # no starting image yet
             return
         # need to load the initial image, checkpoint and create image.tar
-        c = (['sudo', 'podman', 'container', 'restore',
-              '-n', m.container.name,
-              '-i', os.path.join(m.path, 'snapshot.tar')])
-        m.container.container_id = subprocess.check_output(c).decode().strip()
+        m.container.container_id = _podman(
+                'container', 'restore', '-n', m.container.name,
+                '-i', os.path.join(m.path, 'snapshot.tar'),
+                func='check_output'
+        ).decode().strip()
         assert m.container.container_id
         log.debug(f'restore -> container_id = {m.container.container_id}')
         m.console = pexpect.spawn('sudo', ['podman', 'attach',
@@ -116,20 +120,22 @@ class ContainerNamespacedFeatures:
     def __init__(self, m):
         self._args = []
 
-    def exec(self, cmd, nocheck=False, shell=True):
-        if shell:
-            cmd = ['sh', '-c', cmd]
-        # TODO: stream
-        p = _podman('exec', '-it', self.container_id, *cmd,
-                    stderr=subprocess.STDOUT, stdout=subprocess.PIPE,
-                    check=False)
-        ret, out = p.returncode, p.stdout.decode()
-        log.info(f'podman exec output: {out.rstrip()}')
-        log.info(f'podman exec retcode: {ret}')
-        if nocheck:
-            return ret, out
-        assert ret == 0
-        return out
+    def exec(self, *cmd, shell=False):
+        cmd = ('sh', '-c', *cmd) if shell else cmd
+        p = _podman('exec', self.container_id, *cmd,
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    func='Popen')
+        out, err, outerr = fingertip.exec.stream_out_and_err(
+            p.stdout, p.stderr, sys.stdout.buffer
+        )
+        p.wait()
+        if p.returncode:  # HACK: ugly workaround for podman polluting stderr
+            m = (f'Error: non zero exit code: {p.returncode}:'
+                 ' OCI runtime error\n').encode()
+            if err.endswith(m) and outerr.endswith(m):
+                err = err[:-len(m)]
+                outerr = outerr[:-len(m)]
+        return fingertip.exec.ExecResult(p.returncode, out, err, outerr)
 
 
 def from_image(m=None, image=None, cmd=[]):
@@ -137,12 +143,11 @@ def from_image(m=None, image=None, cmd=[]):
     with m:
         m.container.name = 'fingertip_' + weak_hash.weak_hash(m.path)
         m.container.starting_image = image
-        cmd = (['sudo', 'podman', 'run', '-dit'] +
-               ['--name', m.container.name] +
-               m.container._args + [image] + cmd)
-        log.info(str(cmd))
-        time.sleep(10)
-        m.container.container_id = subprocess.check_output(cmd).decode().strip()
+        m.container.container_id = _podman(
+                'run', '-dit', '--name', m.container.name, *m.container._args,
+                image, *cmd,
+                func='check_output'
+        ).decode().strip()
         log.debug(f'run -> container_id = {m.container.container_id}')
         _podman('container', 'checkpoint', m.container.container_id,
                 '-e', os.path.join(m.path, 'snapshot.tar'))

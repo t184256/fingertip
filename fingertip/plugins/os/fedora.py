@@ -67,9 +67,8 @@ def install_in_qemu(m, version):
                            section='main', option='proxy', state='absent')
         m.hooks.disable_proxy.append(disable_proxy)
 
-        def unseal():
-            m.ssh('systemctl restart NetworkManager')
-        m.hooks.unseal.append(unseal)
+        m.hooks.unseal += [lambda: m('systemctl restart NetworkManager'),
+                           lambda: m('nm-online')]
 
         m.fedora = version
 

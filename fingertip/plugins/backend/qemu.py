@@ -3,10 +3,11 @@
 
 import json
 import os
-import sys
+import selectors
 import socket
 import stat
 import subprocess
+import sys
 
 import fasteners
 import pexpect
@@ -102,7 +103,7 @@ class QEMUNamespacedFeatures:
 
         # TODO: extract SSH into a separate plugin?
         self.vm.ssh = SSH(key=path.fingertip('ssh_key', 'fingertip.paramiko'))
-        self.vm.exec = self.vm.ssh.__call__
+        self.vm.exec = self.vm.ssh.exec
         ssh_host_forward = f'hostfwd=tcp:127.0.0.1:{self.vm.ssh.port}-:22'
         cache_guest_forward = (CACHE_INTERNAL_IP, CACHE_INTERNAL_PORT,
                                f'nc 127.0.0.1 {self.vm.http_cache.port}')
@@ -311,29 +312,36 @@ class SSH:
     def invalidate(self):
         self._transport = None
 
-    def __call__(self, cmd, nocheck=False, get_pty=False):
-        # TODO: get_pty unseals
+    def _stream_out_and_err(self, channel, stream_to=None):
+        sel = selectors.DefaultSelector()
+        sel.register(channel, selectors.EVENT_READ)
+        out, err, outerr = b'', b'', b''
+        while True:
+            sel.select()
+            if channel.recv_ready():
+                c = channel.recv(1)
+                out += c
+            elif channel.recv_stderr_ready():
+                c = channel.recv_stderr(1)
+                err += c
+            else:
+                return out, err, outerr
+            outerr += c
+            if stream_to:
+                stream_to.write(c)
+                if b'\n' in c:
+                    stream_to.flush()
+
+    def exec(self, *cmd, shell=False):
+        cmd = (' '.join(["'" + a.replace("'", r"\'") + "'" for a in cmd])
+               if not shell else cmd[0])
         self.connect()
         channel = self._transport.open_session()
-        if get_pty:
-            channel.get_pty(term=os.getenv('TERM'))
-        channel.set_combine_stderr(True)
         log.info(f'ssh command: {cmd}')
         channel.exec_command(cmd)
-        outerr = b''
-        while True:
-            r = channel.recv(1)
-            if not r:
-                break
-            sys.stdout.buffer.write(r)
-            sys.stdout.flush()
-            outerr += r
+        out, err, outerr = self._stream_out_and_err(channel, sys.stdout.buffer)
         retval = channel.recv_exit_status()
-        log.info(f'ssh retval: {retval}')
-        if nocheck:
-            return retval, outerr.decode()
-        assert(retval == 0)
-        return outerr.decode()
+        return fingertip.exec.ExecResult(retval, out, err, outerr)
 
     def upload(self, src, dst=None):  # may be unused
         import paramiko  # ... in parallel with VM spin-up

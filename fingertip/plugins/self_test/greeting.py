@@ -19,9 +19,4 @@ def make_greeting(m, greeting='Hello!'):
 @fingertip.transient
 def main(m, greeting='Hello!'):
     with m.apply(make_greeting, greeting=greeting).transient() as m:
-        if hasattr(m, 'ssh'):
-            assert m.ssh('cat .greeting').strip() == greeting
-        elif hasattr(m, 'container'):
-            assert m.container.exec('cat .greeting').strip() == greeting
-        else:
-            raise NotImplementedError()
+        assert m('cat .greeting').out.strip() == greeting
