@@ -27,7 +27,7 @@ class Machine:
         os.makedirs(path.MACHINES, exist_ok=True)
         self.path = temp.disappearing_dir(path.MACHINES)
         self._parent_path = path.MACHINES
-        self._link_to = None  # what are we building?
+        self._link_as = None  # what are we building?
         # States: loaded -> spun_up -> spun_down -> saved/dropped
         self._state = 'spun_down'
         self._transient = False
@@ -63,12 +63,12 @@ class Machine:
             else:
                 self.hooks.drop.in_reverse()
                 self._state = 'dropped'
-            if not exc_type and self._link_to:
+            if not exc_type and self._link_as:
                 self._finalize()
 
-    def _finalize(self, link_to=None, name_hint=None):
-        log.debug(f'finalize hint={name_hint} link_to={link_to} {self._state}')
-        if link_to and self._state == 'spun_down':
+    def _finalize(self, link_as=None, name_hint=None):
+        log.debug(f'finalize hint={name_hint} link_as={link_as} {self._state}')
+        if link_as and self._state == 'spun_down':
             self.hooks.save.in_reverse()
             temp_path = self.path
             self.path = temp.unique_dir(self._parent_path, hint=name_hint)
@@ -79,22 +79,22 @@ class Machine:
             log.debug(f'moving {temp_path} to {self.path}')
             os.rename(temp_path, self.path)
             self._state == 'saved'
-            link_from = self.path
+            link_this = self.path
         else:
             assert self._state in ('spun_down', 'loaded', 'dropped')
             log.info(f'discarding {self.path}')
             temp.remove(self.path)
-            link_from = self._parent_path
+            link_this = self._parent_path
             self._state = 'dropped'
-        if (link_from and link_to and
-                os.path.realpath(link_to) != os.path.realpath(link_from)):
-            log.debug(f'linking {link_from} to {link_to}')
-            if os.path.lexists(link_to):
-                if os.path.exists(link_to):
-                    log.abort(f'Refusing to overwrite {link_to}, try again?')
-                os.unlink(link_to)
-            os.symlink(link_from, link_to)
-            return link_to
+        if (link_this and link_as and
+                os.path.realpath(link_as) != os.path.realpath(link_this)):
+            log.debug(f'linking {link_this} to {link_as}')
+            if os.path.lexists(link_as):
+                if os.path.exists(link_as) and not needs_a_rebuild(link_as):
+                    log.abort(f'Refusing to overwrite fresh {link_as}')
+                os.unlink(link_as)
+            os.symlink(link_this, link_as)
+            return link_as
 
     def apply(self, step, *args, **kwargs):
         func, tag = step_loader.func_and_autotag(step, *args, **kwargs)
@@ -114,14 +114,14 @@ class Machine:
         # Could there already be a cached result?
         log.debug(f'PATH {self.path} {tag}')
         new_mpath = os.path.join(self._parent_path, tag)
-        end_goal = self._link_to
+        end_goal = self._link_as
 
         lock_path = os.path.join(self._parent_path, '.' + tag + '-lock')
         do_lock = not hasattr(func, 'transient')
         if do_lock:
             log.info(f'acquiring lock for {tag}...')
         with lock.MaybeLock(lock_path, lock=do_lock):
-            if os.path.exists(new_mpath):
+            if os.path.exists(new_mpath) and not needs_a_rebuild(new_mpath):
                 # sweet, scratch this instance, fast-forward to cached result
                 log.info(f'reusing {step} @ {new_mpath}')
                 self._finalize()
@@ -131,11 +131,11 @@ class Machine:
                 log.info(f'building (and, possibly, caching) {tag}')
                 m = func(self, *args, **kwargs)
                 if m and not m._transient:  # normal step, rebase to its result
-                    m._finalize(link_to=new_mpath, name_hint=tag)
+                    m._finalize(link_as=new_mpath, name_hint=tag)
                     clone_from_path = new_mpath
                 else:  # transient step
                     clone_from_path = self._parent_path
-        return clone_and_load(clone_from_path, link_to=end_goal)
+        return clone_and_load(clone_from_path, link_as=end_goal)
 
 
 def _load_from_path(data_dir_path):
@@ -151,8 +151,8 @@ def _load_from_path(data_dir_path):
     return m
 
 
-def clone_and_load(from_path, link_to=None, name_hint=None):
-    log.debug(f'clone {from_path} {link_to}')
+def clone_and_load(from_path, link_as=None, name_hint=None):
+    log.debug(f'clone {from_path} {link_as}')
     if from_path is None:  # TODO: remove later
         log.abort(f'from_path == None')
     temp_path = temp.disappearing_dir(from_path, hint=name_hint)
@@ -163,7 +163,7 @@ def clone_and_load(from_path, link_to=None, name_hint=None):
     m.hooks.clone(temp_path)
     m._parent_path = os.path.realpath(from_path)
     m.path = temp_path
-    m._link_to = link_to
+    m._link_as = link_as
     with open(os.path.join(m.path, 'machine.clpickle'), 'wb') as f:
         cloudpickle.dump(m, f)
     return _load_from_path(temp_path)
@@ -182,5 +182,22 @@ def build(first_step, *args, **kwargs):
             first = func(*args, **kwargs)
             if first is None:
                 return
-            first._finalize(link_to=mpath, name_hint=tag)
+            first._finalize(link_as=mpath, name_hint=tag)
     return clone_and_load(mpath)
+
+
+OFFLINE = os.getenv('FINGERTIP_OFFLINE', '0') != '0'
+
+
+def needs_a_rebuild(mpath):
+    with open(os.path.join(mpath, 'machine.clpickle'), 'rb') as f:
+        m = cloudpickle.load(f)
+    expired = m.expiration.is_expired()
+    if expired:
+        log.debug(f'{mpath} has expired at {m.expiration.pretty()}')
+    else:
+        log.debug(f'{mpath} is valid until {m.expiration.pretty()}')
+    if OFFLINE and expired:
+        log.warn(f'{mpath} expired at {m.expiration.pretty()}, '
+                 'but offline mode is enabled, so, reusing it')
+    return expired and not OFFLINE
