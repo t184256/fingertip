@@ -41,7 +41,8 @@ def _ansible(m, *args, check=True, cmd=('ansible', 'fingertip')):
     inventory = temp.disappearing_file(hint='ansible-inventory')
     with open(inventory, 'w') as f:
         f.write(' '.join(host))
-    cmd = prefix + cmd + ('-i', inventory, '-c', connection) + args
+    more_opts = ('-T', '120', '-i', inventory, '-c', connection)
+    cmd = prefix + cmd + more_opts + args
     log.info(' '.join(cmd))
     return subprocess.run(cmd, env=env, check=check)
 
