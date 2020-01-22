@@ -22,7 +22,7 @@ def transient(func):
 
 
 class Machine:
-    def __init__(self, sealed=True, expire_in=7*24*3600):
+    def __init__(self, sealed=True, expire_in='7d'):
         self.hooks = hooks.HookManager()
         os.makedirs(path.MACHINES, exist_ok=True)
         self.path = temp.disappearing_dir(path.MACHINES)

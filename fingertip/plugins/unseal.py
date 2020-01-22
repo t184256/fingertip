@@ -4,7 +4,7 @@
 
 def main(m):
     if m.sealed:
-        m.expiration.cap(4 * 3600)
+        m.expiration.cap('4h')
         m.sealed = False
         with m:
             m.hooks.unseal()
