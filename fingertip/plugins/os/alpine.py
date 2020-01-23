@@ -84,7 +84,8 @@ def install_in_qemu(m):
 
 
 def first_boot(m):
-    with open(path.fingertip('ssh_key', 'fingertip.pub')) as f:
+    ssh_key_fname = path.fingertip('ssh_key', 'fingertip.pub')
+    with open(ssh_key_fname) as f:
         ssh_pubkey = f.read().strip()
 
     with m:
@@ -97,6 +98,7 @@ def first_boot(m):
         m.console.expect_exact(m.prompt)
         m.console.sendline(f'echo "{ssh_pubkey}" >> .ssh/authorized_keys')
         m.console.expect_exact(m.prompt)
+        m.expiration.depend_on_a_file(ssh_key_fname)
 
         m.hooks.unseal.append(lambda: m('/etc/init.d/networking restart'))
     return m

@@ -74,6 +74,7 @@ class Machine:
             self.path = temp.unique_dir(self._parent_path, hint=name_hint)
             log.debug(f'saving to temp {temp_path}')
             self._state = 'saving'
+            self.expiration.depend_on_loaded_python_modules()
             with open(os.path.join(temp_path, 'machine.clpickle'), 'wb') as f:
                 cloudpickle.dump(self, f)
             log.debug(f'moving {temp_path} to {self.path}')
@@ -192,6 +193,8 @@ OFFLINE = os.getenv('FINGERTIP_OFFLINE', '0') != '0'
 def needs_a_rebuild(mpath):
     with open(os.path.join(mpath, 'machine.clpickle'), 'rb') as f:
         m = cloudpickle.load(f)
+    if not m.expiration.files_have_not_changed():
+        return True
     expired = m.expiration.is_expired()
     if expired:
         log.debug(f'{mpath} has expired at {m.expiration.pretty()}')

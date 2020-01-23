@@ -40,7 +40,7 @@ def autotag(something, *args, **kwargs):
     args_str = ':'.join([f'{a}' for a in args] +
                         [f'{k}={v}' for k, v in sorted(kwargs.items())])
     if args_str and (' ' in args_str or len(args_str) > 20):
-        args_str = '::' + weak_hash.weak_hash(args_str)
+        args_str = '::' + weak_hash.of_string(args_str)
     tag = f'{name}:{args_str}' if args_str else name
     return tag
 

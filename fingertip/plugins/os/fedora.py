@@ -26,13 +26,19 @@ def install_in_qemu(m, version):
 
     with m:
         m.qemu.ram_size = '2G'
-        with open(path.fingertip('ssh_key', 'fingertip.pub')) as f:
-            ssh_pubkey = f.read().strip()
 
-        with open(path.fingertip('kickstart_templates', 'fedora31')) as f:
+        ssh_key_fname = path.fingertip('ssh_key', 'fingertip.pub')
+        with open(ssh_key_fname) as f:
+            ssh_pubkey = f.read().strip()
+        m.expiration.depend_on_a_file(ssh_key_fname)
+
+        ks_fname = path.fingertip('kickstart_templates', f'fedora{version}')
+        with open(ks_fname) as f:
             ks_text = f.read().format(HOSTNAME=f'fedora{version}',
                                       SSH_PUBKEY=ssh_pubkey,
                                       PROXY=m.http_cache.internal_url)
+        m.expiration.depend_on_a_file(ks_fname)
+
         m.http_cache.mock('http://ks', text=ks_text)
         log.info(f'fetching kernel: {FEDORA_URL}/isolinux/vmlinuz')
         kernel = os.path.join(m.path, 'kernel')

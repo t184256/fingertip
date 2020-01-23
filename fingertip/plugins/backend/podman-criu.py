@@ -41,7 +41,7 @@ def _base():
 
     def up():
         log.debug('up')
-        m.container.name = 'fingertip_' + weak_hash.weak_hash(m.path)
+        m.container.name = 'fingertip_' + weak_hash.of_string(m.path)
         if not hasattr(m.container, 'starting_image'):  # no starting image yet
             return
         # need to load the initial image, checkpoint and create image.tar
@@ -142,7 +142,7 @@ class ContainerNamespacedFeatures:
 def from_image(m=None, image=None, cmd=[]):
     m = m or fingertip.build(main)
     with m:
-        m.container.name = 'fingertip_' + weak_hash.weak_hash(m.path)
+        m.container.name = 'fingertip_' + weak_hash.of_string(m.path)
         m.container.starting_image = image
         m.container.container_id = _podman(
                 'run', '-dit', '--name', m.container.name, *m.container._args,
