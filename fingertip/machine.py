@@ -178,7 +178,7 @@ def build(first_step, *args, **kwargs):
     log.info(f'acquiring lock for {tag}...')
     do_lock = not hasattr(func, 'transient')
     with lock.MaybeLock(lock_path, lock=do_lock):
-        if not os.path.exists(mpath):
+        if not os.path.exists(mpath) or needs_a_rebuild(mpath):
             first = func(*args, **kwargs)
             if first is None:
                 return
