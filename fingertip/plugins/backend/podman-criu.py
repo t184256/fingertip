@@ -172,10 +172,15 @@ def from_image(m=None, image=None, cmd=[]):
         _copy_ownership(m.log, m.path, os.path.join(m.path, 'snapshot.tar'))
         _podman(m.log, 'container', 'rm', m.container.container_id)
         m.hooks.up()
+        m.console.sendline(' echo TEST')
+        m.console.expect_exact('echo TEST\r\n')
+        m.console.expect_exact('TEST\r\n')
         m.console.sendline('')
         m.console.expect_exact('\r\n')
         m.console.sendline('')
         m.console.expect_exact('\r\n')
         m.prompt = m.console.before
         m.log.debug(f'm.prompt: "{m.prompt}"')
+        m.console.sendline('')
+        m.console.expect_exact(m.prompt)
         return m
