@@ -45,6 +45,7 @@ def _base():
     m = fingertip.machine.Machine('podman-criu', sealed=False, expire_in='4h')
     m.container = ContainerNamespacedFeatures(m)
     m.container.from_image = from_image
+    m._backend_mode = 'pexpect'
 
     def up():
         m.log.debug('up')
@@ -60,10 +61,15 @@ def _base():
         ).decode().strip()
         assert m.container.container_id
         m.log.debug(f'restore -> container_id = {m.container.container_id}')
-        pexp = m.log.pseudofile_powered(pexpect.spawn, logfile=logging.INFO)
-        m.console = pexp('sudo', ['podman', 'attach',
-                                  m.container.container_id],
-                         echo=False, timeout=None, encoding='utf-8')
+        if m._backend_mode == 'pexpect':
+            pexp = m.log.pseudofile_powered(pexpect.spawn,
+                                            logfile=logging.INFO)
+            m.console = pexp('sudo', ['podman', 'attach',
+                                      m.container.container_id],
+                             echo=False, timeout=None, encoding='utf-8')
+        elif m._backend_mode == 'direct':
+            subprocess.run(['sudo', 'podman', 'attach',
+                           m.container.container_id])
     m.hooks.up.append(up)
 
     def detach(retries=10, timeout=1/32):

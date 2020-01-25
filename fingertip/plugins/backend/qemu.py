@@ -34,6 +34,7 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
     m = fingertip.machine.Machine('qemu')
     m.arch = arch
     m.qemu = QEMUNamespacedFeatures(m, ram_size, disk_size, custom_args)
+    m._backend_mode = 'pexpect'
 
     def load():
         m.http_cache = fingertip.util.http_cache.HTTPCache()
@@ -93,7 +94,6 @@ class QEMUNamespacedFeatures:
         self.custom_args = custom_args
         self._image_to_clone = None
         self._qemu = f'qemu-system-{self.vm.arch}'
-        self._mode = 'pexpect'
 
     def run(self, load='tip', guest_forwards=[], extra_args=[]):
         run_args = ['-loadvm', load] if load else []
@@ -136,13 +136,13 @@ class QEMUNamespacedFeatures:
 
         args = QEMU_COMMON_ARGS + self.custom_args + run_args + extra_args
         self.vm.log.debug(' '.join(args))
-        if self._mode == 'pexpect':
+        if self.vm._backend_mode == 'pexpect':
             pexp = self.vm.log.pseudofile_powered(pexpect.spawn,
                                                   logfile=logging.INFO)
             self.vm.console = pexp(self._qemu, args, echo=False,
                                    timeout=None, encoding='utf-8')
             self.live = True
-        elif self._mode == 'direct':
+        elif self.vm._backend_mode == 'direct':
             subprocess.run([self._qemu, '-serial', 'mon:stdio'] + args,
                            check=True)
             self.live = False

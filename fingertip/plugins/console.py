@@ -4,18 +4,23 @@ import fingertip
 
 
 @fingertip.transient
-def main(m):
-    assert hasattr(m, 'qemu')
-    assert not m._up_counter
+def main(m, no_unseal=False):
+    if not no_unseal:
+        m = m.apply('unseal')
 
-    m = m.apply('unseal')
+    assert hasattr(m, '_backend_mode')
+    if hasattr(m, 'qemu'):
+        m.log.warning('^A x (could be ^A^A x in screen) or power off to exit.')
+        assert not m._up_counter
 
-    m.log.warning('^A x (could be ^A^A x in screen) or power off to exit.')
-    m.log.plain()
-    sys.stderr.flush()
-    sys.stderr.write(m.prompt)
-    sys.stderr.flush()
+        m.log.plain()
 
-    m.qemu._mode = 'direct'
+        sys.stderr.flush()
+        sys.stderr.write(m.prompt)
+        sys.stderr.flush()
+    else:
+        m.log.plain()
+
+    m._backend_mode = 'direct'
     with m.transient():
-        sys.exit(0)  # will happen only when qemu exits
+        sys.exit(0)  # will happen only the underlying process exits
