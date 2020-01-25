@@ -22,9 +22,10 @@ in
 (python36.withPackages (ps: with ps; [
   cachecontrol
   cloudpickle
-  coloredlogs
+  colorlog
   fasteners
   #fsmonitor
+  lockfile
   paramiko
   pexpect
   pyxdg

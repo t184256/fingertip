@@ -4,7 +4,7 @@
 import os
 
 import fingertip.machine
-from fingertip.util import log, path
+from fingertip.util import path
 
 
 FEDORA_MIRROR = 'http://download.fedoraproject.org/pub/fedora'
@@ -40,10 +40,10 @@ def install_in_qemu(m, version):
         m.expiration.depend_on_a_file(ks_fname)
 
         m.http_cache.mock('http://ks', text=ks_text)
-        log.info(f'fetching kernel: {FEDORA_URL}/isolinux/vmlinuz')
+        m.log.info(f'fetching kernel: {FEDORA_URL}/isolinux/vmlinuz')
         kernel = os.path.join(m.path, 'kernel')
         m.http_cache.fetch(f'{FEDORA_URL}/isolinux/vmlinuz', kernel)
-        log.info(f'fetching initrd: {FEDORA_URL}/isolinux/initrd.img')
+        m.log.info(f'fetching initrd: {FEDORA_URL}/isolinux/initrd.img')
         initrd = os.path.join(m.path, 'initrd')
         m.http_cache.fetch(f'{FEDORA_URL}/isolinux/initrd.img', initrd)
         append = ('ks=http://ks inst.ksstrict console=ttyS0 inst.notmux '
@@ -66,7 +66,7 @@ def install_in_qemu(m, version):
         m.console.expect('Password: ')
         m.console.sendline(ROOT_PASSWORD)
         m.console.expect_exact(m.prompt)
-        log.info('Fedora installation finished')
+        m.log.info('Fedora installation finished')
 
         def disable_proxy():
             return m.apply('ansible', 'ini_file', path='/etc/dnf/dnf.conf',

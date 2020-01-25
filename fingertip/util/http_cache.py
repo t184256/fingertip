@@ -78,11 +78,11 @@ class HTTPCache:
                     self._status_and_headers(r.status_code, r.headers)
                     if meth == 'GET':
                         self.wfile.write(data)
-                    log.debug(f'{meth} served: {uri} {length}')
+                    log.info(f'{meth} served: {uri} {length}')
                 except ConnectionResetError:
-                    log.warn(f'Connection reset for {meth} {uri}')
+                    log.warning(f'Connection reset for {meth} {uri}')
                 except requests.exceptions.ConnectionError:
-                    log.warn(f'Connection error for {meth} {uri}')
+                    log.warning(f'Connection error for {meth} {uri}')
 
             def do_HEAD(self):
                 self._serve(uri=self.path, headers=self.headers, meth='HEAD')
@@ -108,7 +108,6 @@ class HTTPCache:
             adapter.register_uri('HEAD', uri, **kwargs)
             adapter.register_uri('GET', uri, **kwargs)
             sess.mount(uri, adapter)
-        log.debug(f'session created {sess}')
         return sess
 
     def fetch(self, url, out_path):
@@ -133,7 +132,7 @@ class HTTPCache:
 
 
 def hack_around_unpacking(uri, headers, wrong_content):
-    log.warn(f're-fetching correct content for {uri}')
+    log.warning(f're-fetching correct content for {uri}')
     r = requests.get(uri, headers=headers, stream=True)
     h = hashlib.sha256(wrong_content).hexdigest()
     cachefile = path.downloads('fixups', h, makedirs=True)
@@ -159,7 +158,7 @@ def c_r_offline(self, request):
     if not resp:
         log.error(f'{cache_url} cache entry deserialization failed, ignored')
         return False
-    log.warn(f'Using {cache_url} from offline cache')
+    log.warning(f'Using {cache_url} from offline cache')
     return resp
 
 

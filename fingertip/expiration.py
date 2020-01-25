@@ -40,7 +40,7 @@ class Expiration:
             log.debug(f'checking that {path} has not changed...')
             if mtime != (os.stat(path).st_mtime):
                 if hash_ != weak_hash.of_file(path):
-                    log.warn(f'{path} has changed since')
+                    log.warning(f'{path} has changed')
                     return False
         return True
 

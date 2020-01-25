@@ -1,7 +1,6 @@
 import sys
 
 import fingertip
-from fingertip.util import log
 
 
 @fingertip.transient
@@ -11,10 +10,11 @@ def main(m):
 
     m = m.apply('unseal')
 
-    log.warn('^A x (could be ^A^A x in screen) or power off to exit.')
-    log.warn("Here's a fake prompt to ease your mind:")
-    sys.stdout.write(m.prompt)
-    sys.stdout.flush()
+    m.log.warning('^A x (could be ^A^A x in screen) or power off to exit.')
+    m.log.plain()
+    sys.stderr.flush()
+    sys.stderr.write(m.prompt)
+    sys.stderr.flush()
 
     m.qemu._mode = 'direct'
     with m.transient():

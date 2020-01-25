@@ -4,7 +4,8 @@
 import itertools
 import sys
 
-import fingertip.machine
+import fingertip
+import fingertip.util.log
 
 
 def parse_kwarg(kwarg):
@@ -20,6 +21,8 @@ def parse_subcmd(subcmd, *all_args):
 
 
 def main():
+    fingertip.util.log.nicer()
+
     args = sys.argv[1:]
     subcmds = [list(ws)
                for x, ws in itertools.groupby(args, lambda w: w != '+') if x]
@@ -30,6 +33,8 @@ def main():
 
     for step_cmd, step_args, step_kwargs in rest_of_the_steps:
         m = m.apply(step_cmd, *step_args, **step_kwargs)
+
+    fingertip.util.log.plain()
 
 
 if __name__ == '__main__':

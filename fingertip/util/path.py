@@ -15,6 +15,7 @@ FINGERTIP = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 CACHE = os.path.join(xdg.BaseDirectory.xdg_cache_home, 'fingertip')
 DOWNLOADS = os.path.join(CACHE, 'downloads')
 MACHINES = os.path.join(CACHE, 'machines')
+LOGS = os.path.join(CACHE, 'logs')
 
 
 def easy_accessor(root_path):
@@ -29,6 +30,7 @@ def easy_accessor(root_path):
 fingertip = easy_accessor(FINGERTIP)
 downloads = easy_accessor(DOWNLOADS)
 machines = easy_accessor(MACHINES)
+logs = easy_accessor(LOGS)
 
 
 @contextlib.contextmanager

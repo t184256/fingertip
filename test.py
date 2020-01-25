@@ -47,7 +47,6 @@ for base_name, base in BASES.items():
         if (base_name, test_name) in SKIP:
             continue
 
-        print(f'# {base_name}: {test_name} ',
-              '#' * (80 - len(f'# {base_name}: {test_name} ')))
+        print(f'{base_name}: {test_name}...')
 
         test(base())

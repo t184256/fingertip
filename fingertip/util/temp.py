@@ -37,7 +37,6 @@ def unique_dir(dstdir=None, hint=''):  # defaults to /tmp
 def remove(*paths):
     for path in paths:
         assert AUTOREMOVE_PREFIX in path
-        log.debug(f'cleaning up {path}')
         try:
             if not os.path.isdir(path) or os.path.islink(path):
                 try:
@@ -47,7 +46,7 @@ def remove(*paths):
             else:
                 shutil.rmtree(path, ignore_errors=True)
         except Exception as e:
-            log.warn(f'cleanup error for {path}: {e}')
+            log.warning(f'cleanup error for {path}: {e}')
 
 
 def disappearing_file(dstdir=None, hint=''):  # defaults to /tmp
@@ -73,7 +72,7 @@ def has_space(how_much='2G', reserve_fraction=.3, where='/tmp'):
             break
     total, _, free = shutil.disk_usage(where)
     if not free >= how_much:
-        log.warn(f'{where} does not have {how_much} of free space')
+        log.warning(f'{where} does not have {how_much} of free space')
     if not free >= total * reserve_fraction:
-        log.warn(f'{where} is {int((1 - reserve_fraction) * 100)}% full')
+        log.warning(f'{where} is {int((1 - reserve_fraction) * 100)}% full')
     return free >= how_much and free >= total * reserve_fraction

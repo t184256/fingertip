@@ -2,6 +2,7 @@
 # Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
 
 import json
+import logging
 import os
 import selectors
 import socket
@@ -30,8 +31,7 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
          custom_args=[], guest_forwards=[]):
     assert arch == 'x86_64'
     # FIXME: -tmp
-    m = fingertip.machine.Machine()
-    m.backend = 'qemu'
+    m = fingertip.machine.Machine('qemu')
     m.arch = arch
     m.qemu = QEMUNamespacedFeatures(m, ram_size, disk_size, custom_args)
 
@@ -49,7 +49,7 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
 
     def down():
         if m.qemu.live:
-            log.debug(f'save_live {m.qemu.monitor}, {m.qemu.monitor._sock}')
+            m.log.debug(f'save_live {m.qemu.monitor}, {m.qemu.monitor._sock}')
             m.qemu.monitor.pause()
             m.qemu.monitor.checkpoint()
             m.qemu.monitor.commit()
@@ -59,7 +59,7 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
 
     def drop():
         if m.qemu.live:
-            log.debug(f'drop {m.qemu.monitor}, {m.qemu.monitor._sock}')
+            m.log.debug(f'drop {m.qemu.monitor}, {m.qemu.monitor._sock}')
             m.qemu.monitor.quit()
             m.qemu._go_down()
     m.hooks.drop.append(drop)
@@ -78,9 +78,10 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
     m.hooks.disrupt.append(disrupt)
 
     load()
-    subprocess.run(['qemu-img', 'create', '-f', 'qcow2',
-                    os.path.join(m.path, 'image.qcow2'), disk_size],
-                   check=True)
+    run = m.log.pipe_powered(subprocess.run,
+                             stdout=logging.INFO, stderr=logging.ERROR)
+    run(['qemu-img', 'create', '-f', 'qcow2',
+         os.path.join(m.path, 'image.qcow2'), disk_size], check=True)
     return m
 
 
@@ -102,7 +103,8 @@ class QEMUNamespacedFeatures:
                               'server,nowait,nodelay')]
 
         # TODO: extract SSH into a separate plugin?
-        self.vm.ssh = SSH(key=path.fingertip('ssh_key', 'fingertip.paramiko'))
+        self.vm.ssh = SSH(self.vm,
+                          key=path.fingertip('ssh_key', 'fingertip.paramiko'))
         self.vm.exec = self.vm.ssh.exec
         ssh_host_forward = f'hostfwd=tcp:127.0.0.1:{self.vm.ssh.port}-:22'
         cache_guest_forward = (CACHE_INTERNAL_IP, CACHE_INTERNAL_PORT,
@@ -133,11 +135,12 @@ class QEMUNamespacedFeatures:
         run_args += ['-m', self.ram_size]
 
         args = QEMU_COMMON_ARGS + self.custom_args + run_args + extra_args
-        log.debug(' '.join(args))
+        self.vm.log.debug(' '.join(args))
         if self._mode == 'pexpect':
-            self.vm.console = pexpect.spawn(self._qemu, args, echo=False,
-                                            timeout=None, encoding='utf-8',
-                                            logfile=sys.stdout)
+            pexp = self.vm.log.pseudofile_powered(pexpect.spawn,
+                                                  logfile=logging.INFO)
+            self.vm.console = pexp(self._qemu, args, echo=False,
+                                   timeout=None, encoding='utf-8')
             self.live = True
         elif self._mode == 'direct':
             subprocess.run([self._qemu, '-serial', 'mon:stdio'] + args,
@@ -161,9 +164,11 @@ class QEMUNamespacedFeatures:
     def compress_image(self):
         assert not self.live
         image = os.path.join(self.vm.path, 'image.qcow2')
-        log.info(f'compressing {image}')
-        subprocess.run(['qemu-img', 'convert', '-c', '-O', 'qcow2',
-                        image, image + '-tmp'], check=True)
+        self.vm.log.info(f'compressing {image}')
+        run = self.vm.log.pipe_powered(subprocess.run, stdout=logging.INFO,
+                                       stderr=logging.ERROR)
+        run(['qemu-img', 'convert', '-c', '-Oqcow2', image, image + '-tmp'],
+            check=True)
         os.rename(image + '-tmp', image)
 
 
@@ -183,7 +188,7 @@ class Monitor:
     def __init__(self, vm, port=None):
         self.vm = vm
         self.port = port or free_port.find()
-        log.debug(f'monitor port {self.port}')
+        self.vm.log.debug(f'monitor port {self.port}')
         self._sock = None
 
     def _connect(self, retries=12, timeout=1/32):
@@ -193,7 +198,7 @@ class Monitor:
                 lambda: self._sock.connect(('127.0.0.1', self.port)),
                 ConnectionRefusedError, retries=retries, timeout=timeout
             )
-            log.debug(f'negotiation')
+            self.vm.log.debug(f'negotiation')
             server_greeting = self._recv()
             assert 'QMP' in server_greeting
             self._execute('qmp_capabilities')
@@ -216,7 +221,7 @@ class Monitor:
 
     def _execute(self, cmd, retries=12, timeout=1/32, **kwargs):
         self._connect(retries, timeout)
-        log.debug(f'executing: {cmd} {kwargs}')
+        self.vm.log.debug(f'executing: {cmd} {kwargs}')
         if not kwargs:
             self._send({'execute': cmd})
         else:
@@ -233,14 +238,14 @@ class Monitor:
         if 'Error while writing VM state: No space left on device' in r:
             raise NotEnoughSpaceForSnapshotException(r)
         elif r:
-            log.error(r)
+            self.vm.log.error(r)
             raise UnknownVMException(r)
         return r
 
     def _expect(self, what=None):
         reply = self._recv()
-        log.debug(f'expecting: {what}')
-        log.debug(f'received: {reply}')
+        self.vm.log.debug(f'expecting: {what}')
+        self.vm.log.debug(f'received: {reply}')
         if what is not None:
             assert reply == what
         return reply
@@ -283,16 +288,17 @@ class Monitor:
 
 
 class SSH:
-    def __init__(self, key, host='127.0.0.1', port=None):
+    def __init__(self, m, key, host='127.0.0.1', port=None):
         self.host, self.key = host, key
         self.port = port or free_port.find()
-        log.debug(f'ssh port {self.port}')
+        self.m = m
+        self.m.log.debug(f'ssh port {self.port}')
         self._transport = None
 
     def connect(self, retries=12, timeout=1/32):
         import paramiko  # ... in parallel with VM spin-up
         if self._transport is None:
-            log.debug('waiting for the VM to spin up and offer SSH...')
+            self.m.log.debug('waiting for the VM to spin up and offer SSH...')
             pkey = paramiko.ECDSAKey.from_private_key_file(self.key)
 
             def connect():
@@ -307,41 +313,46 @@ class SSH:
             )
             transport.auth_publickey('root', pkey)
             self._transport = transport
-            log.debug(f'{self._transport}')
+            self.m.log.debug(f'{self._transport}')
 
     def invalidate(self):
         self._transport = None
 
-    def _stream_out_and_err(self, channel, stream_to=None):
+    def _stream_out_and_err(self, channel):
         sel = selectors.DefaultSelector()
         sel.register(channel, selectors.EVENT_READ)
-        out, err, outerr = b'', b'', b''
+        out, err, out_line, err_line = b'', b'', b'', b''
         while True:
             sel.select()
             if channel.recv_ready():
                 c = channel.recv(1)
                 out += c
+                if c == b'\n':
+                    self.m.log.info(log.strip_control_sequences(out_line))
+                    out_line = b''
+                else:
+                    out_line += c
             elif channel.recv_stderr_ready():
                 c = channel.recv_stderr(1)
                 err += c
+                if c == b'\n':
+                    self.m.log.info(log.strip_control_sequences(err_line))
+                    err_line = b''
+                else:
+                    err_line += c
             else:
-                return out, err, outerr
-            outerr += c
-            if stream_to:
-                stream_to.write(c)
-                if b'\n' in c:
-                    stream_to.flush()
+                return out, err
 
     def exec(self, *cmd, shell=False):
         cmd = (' '.join(["'" + a.replace("'", r"\'") + "'" for a in cmd])
                if not shell else cmd[0])
         self.connect()
         channel = self._transport.open_session()
-        log.info(f'ssh command: {cmd}')
+        self.m.log.info(f'ssh command: {cmd}')
         channel.exec_command(cmd)
-        out, err, outerr = self._stream_out_and_err(channel, sys.stdout.buffer)
+        out, err = self._stream_out_and_err(channel)
         retval = channel.recv_exit_status()
-        return fingertip.exec.ExecResult(retval, out, err, outerr)
+        return fingertip.exec.ExecResult(retval, out, err)
 
     def upload(self, src, dst=None):  # may be unused
         import paramiko  # ... in parallel with VM spin-up
@@ -357,6 +368,6 @@ class SSH:
         key_file = path.fingertip('ssh_key', 'fingertip')
         mode = os.stat(key_file)[stat.ST_MODE]
         if mode & 0o77:
-            log.debug(f'fixing up permissions on {key_file}')
+            self.m.log.debug(f'fixing up permissions on {key_file}')
             os.chmod(key_file, mode & 0o7700)
         return key_file

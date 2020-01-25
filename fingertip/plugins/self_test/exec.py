@@ -56,16 +56,9 @@ def main(m):
         f = m('false', check=False)
         assert not f
         ret, out, err = f
-        print(ret, out, err, f.outerr)
         assert (ret, out, err) == (1, '', '')
-        assert f.outerr == ''
 
         e = m('echo a; echo e >/dev/stderr; echo b; exit 3', check=False)
-        print()
-        print('outerr', repr(e.outerr))
-        print('out', repr(e.out))
-        print('err', repr(e.err))
         assert e.retcode == 3
-        assert e.outerr in ('a\ne\nb\n', 'a\nb\ne\n')  # this is racy =/
         assert e.out == 'a\nb\n'
         assert e.err == 'e\n'

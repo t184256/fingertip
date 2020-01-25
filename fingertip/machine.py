@@ -7,7 +7,7 @@ import cloudpickle
 
 import fingertip.exec
 from fingertip import step_loader, expiration
-from fingertip.util import hooks, lock, log, temp, path
+from fingertip.util import hooks, lock, log, path, reflink, temp
 
 
 def transient(func):
@@ -22,7 +22,7 @@ def transient(func):
 
 
 class Machine:
-    def __init__(self, sealed=True, expire_in='7d'):
+    def __init__(self, backend_name, sealed=True, expire_in='7d'):
         self.hooks = hooks.HookManager()
         os.makedirs(path.MACHINES, exist_ok=True)
         self.path = temp.disappearing_dir(path.MACHINES)
@@ -34,6 +34,13 @@ class Machine:
         self._up_counter = 0
         self.sealed = sealed
         self.expiration = expiration.Expiration(expire_in)
+        self.backend = backend_name
+        self.log = log.sublogger(f'plugins.backend.{backend_name}',
+                                 os.path.join(self.path, 'log.txt'))
+        self.log.debug(f'created {backend_name}')
+        self.hooks.clone.append(
+            lambda to: reflink.auto(os.path.join(self.path, 'log.txt'),
+                                    os.path.join(to, 'log.txt')))
 
     def __call__(self, *args, **kwargs):  # a convenience method
         return fingertip.exec.nice_exec(self, *args, **kwargs)
@@ -92,7 +99,8 @@ class Machine:
             log.debug(f'linking {link_this} to {link_as}')
             if os.path.lexists(link_as):
                 if os.path.exists(link_as) and not needs_a_rebuild(link_as):
-                    log.abort(f'Refusing to overwrite fresh {link_as}')
+                    log.critical(f'Refusing to overwrite fresh {link_as}')
+                    raise RuntimeError(f'Not overriding fresh {link_as}')
                 os.unlink(link_as)
             os.symlink(link_this, link_as)
             return link_as
@@ -107,7 +115,8 @@ class Machine:
             log.debug(f'applying to clean')
             return self._cache_aware_apply(step, tag, func, *args, **kwargs)
         else:
-            log.abort(f'apply to state={self._state}')
+            log.critical(f'apply to state={self._state}')
+            raise RuntimeError(f'State machine error, apply to {self._state}')
 
     def _cache_aware_apply(self, step, tag, func, *args, **kwargs):
         assert self._state == 'loaded'
@@ -129,14 +138,22 @@ class Machine:
                 clone_from_path = new_mpath
             else:
                 # loaded, not spun up, step not cached: perform step, cache
-                log.info(f'building (and, possibly, caching) {tag}')
+                log.info(f'applying (and, possibly, caching) {tag}')
+                prev_log = self.log
+                self.log = log.sublogger('plugins.' + tag.split(':', 1)[0],
+                                         os.path.join(self.path, 'log.txt'))
                 m = func(self, *args, **kwargs)
+                self.log.disengage()
+                self.log = prev_log
                 if m and not m._transient:  # normal step, rebase to its result
                     m._finalize(link_as=new_mpath, name_hint=tag)
                     clone_from_path = new_mpath
+                    log.info(f'succesfully applied and saved {tag}')
                 else:  # transient step
                     clone_from_path = self._parent_path
-        return clone_and_load(clone_from_path, link_as=end_goal)
+                    log.info(f'succesfully applied and dropped {tag}')
+        m = clone_and_load(clone_from_path, link_as=end_goal)
+        return m
 
 
 def _load_from_path(data_dir_path):
@@ -154,8 +171,6 @@ def _load_from_path(data_dir_path):
 
 def clone_and_load(from_path, link_as=None, name_hint=None):
     log.debug(f'clone {from_path} {link_as}')
-    if from_path is None:  # TODO: remove later
-        log.abort(f'from_path == None')
     temp_path = temp.disappearing_dir(from_path, hint=name_hint)
     log.debug(f'temp = {temp_path}')
     os.makedirs(temp_path, exist_ok=True)
@@ -180,11 +195,16 @@ def build(first_step, *args, **kwargs):
     do_lock = not hasattr(func, 'transient')
     with lock.MaybeLock(lock_path, lock=do_lock):
         if not os.path.exists(mpath) or needs_a_rebuild(mpath):
+            log.info(f'building {tag}...')
             first = func(*args, **kwargs)
+            first.log.disengage()
             if first is None:
                 return
             first._finalize(link_as=mpath, name_hint=tag)
-    return clone_and_load(mpath)
+            log.info(f'succesfully built {tag}')
+    m = clone_and_load(mpath)
+    m.log = log.sublogger('<unknown>')
+    return m
 
 
 OFFLINE = os.getenv('FINGERTIP_OFFLINE', '0') != '0'
@@ -201,6 +221,6 @@ def needs_a_rebuild(mpath):
     else:
         log.debug(f'{mpath} is valid until {m.expiration.pretty()}')
     if OFFLINE and expired:
-        log.warn(f'{mpath} expired at {m.expiration.pretty()}, '
-                 'but offline mode is enabled, so, reusing it')
+        log.warning(f'{mpath} expired at {m.expiration.pretty()}, '
+                    'but offline mode is enabled, so, reusing it')
     return expired and not OFFLINE

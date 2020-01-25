@@ -7,10 +7,11 @@ A plugin to execute Ansible playbooks and ad-hoc commands.
 Ansible's Python API is not stable yet, so... CLI.
 """
 
+import logging
 import os
 import subprocess
 
-from fingertip.util import log, temp
+from fingertip.util import temp
 
 
 def prepare(m):
@@ -43,8 +44,10 @@ def _ansible(m, *args, check=True, cmd=('ansible', 'fingertip')):
         f.write(' '.join(host))
     more_opts = ('-T', '120', '-i', inventory, '-c', connection)
     cmd = prefix + cmd + more_opts + args
-    log.info(' '.join(cmd))
-    return subprocess.run(cmd, env=env, check=check)
+    m.log.debug(' '.join(cmd))
+    run = m.log.pipe_powered(subprocess.run,
+                             stdout=logging.INFO, stderr=logging.INFO)
+    return run(cmd, env=env, check=check)
 
 
 def main(m, module, *args, **kwargs):
