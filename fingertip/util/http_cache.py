@@ -78,7 +78,7 @@ class HTTPCache:
                     self._status_and_headers(r.status_code, r.headers)
                     if meth == 'GET':
                         self.wfile.write(data)
-                    log.info(f'{meth} served: {uri} {length}')
+                    log.info(f'{meth} {uri} served {length}')
                 except ConnectionResetError:
                     log.warning(f'Connection reset for {meth} {uri}')
                 except requests.exceptions.ConnectionError:
