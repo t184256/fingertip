@@ -135,24 +135,29 @@ class Machine:
                 # sweet, scratch this instance, fast-forward to cached result
                 log.info(f'reusing {step} @ {new_mpath}')
                 self._finalize()
+                prev_log = self.log
                 clone_from_path = new_mpath
             else:
                 # loaded, not spun up, step not cached: perform step, cache
                 log.info(f'applying (and, possibly, caching) {tag}')
                 prev_log = self.log
+                prev_log.disable_hint()
                 self.log = log.sublogger('plugins.' + tag.split(':', 1)[0],
                                          os.path.join(self.path, 'log.txt'))
                 m = func(self, *args, **kwargs)
-                self.log.disengage()
-                self.log = prev_log
+                prev_log.enable_hint()
+                self.log.disable_hint()
+                if m:
+                    m.log = log.sublogger('<unknown>')
                 if m and not m._transient:  # normal step, rebase to its result
                     m._finalize(link_as=new_mpath, name_hint=tag)
                     clone_from_path = new_mpath
-                    log.info(f'succesfully applied and saved {tag}')
+                    log.info(f'successfully applied and saved {tag}')
                 else:  # transient step
                     clone_from_path = self._parent_path
-                    log.info(f'succesfully applied and dropped {tag}')
+                    log.info(f'successfully applied and dropped {tag}')
         m = clone_and_load(clone_from_path, link_as=end_goal)
+        m.log = prev_log
         return m
 
 
@@ -197,25 +202,25 @@ def build(first_step, *args, **kwargs):
         if not os.path.exists(mpath) or needs_a_rebuild(mpath):
             log.info(f'building {tag}...')
             first = func(*args, **kwargs)
-            first.log.disengage()
             if first is None:
                 return
+            first.log.disable_hint()
+            first.log = log.sublogger('<unknown>')
             first._finalize(link_as=mpath, name_hint=tag)
             log.info(f'succesfully built {tag}')
     m = clone_and_load(mpath)
-    m.log = log.sublogger('<unknown>')
     return m
 
 
 OFFLINE = os.getenv('FINGERTIP_OFFLINE', '0') != '0'
 
 
-def needs_a_rebuild(mpath):
+def needs_a_rebuild(mpath, by=None):
     with open(os.path.join(mpath, 'machine.clpickle'), 'rb') as f:
         m = cloudpickle.load(f)
     if not m.expiration.files_have_not_changed():
         return True
-    expired = m.expiration.is_expired()
+    expired = m.expiration.is_expired(by)
     if expired:
         log.debug(f'{mpath} has expired at {m.expiration.pretty()}')
     else:

@@ -175,13 +175,15 @@ def sublogger(name, to_file=None):
                               makedirs=True)
                 reflink.auto(to_file, t)
                 m = (f'Check {t} for more details ' 'or set FINGERTIP_DEBUG=1'
-                     if not DEBUG else f'Logfile: {t}')
+                     if not DEBUG else f'Logfile: {t} ({sub})')
                 sys.stderr.write(m + '\n')
         atexit.register(hint)
 
-        sub.disengage = lambda: atexit.unregister(hint)
+        sub.disable_hint = lambda: atexit.unregister(hint)
+        sub.enable_hint = lambda: atexit.register(hint)
     else:
-        sub.disengage = lambda: None
+        sub.disable_hint = lambda: None
+        sub.enable_hint = lambda: None
 
     sub.make_pipe = lambda **kwa: LogPipeThread(sub, **kwa).opened_write
 
