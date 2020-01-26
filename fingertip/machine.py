@@ -75,6 +75,7 @@ class Machine:
 
     def _finalize(self, link_as=None, name_hint=None):
         log.debug(f'finalize hint={name_hint} link_as={link_as} {self._state}')
+        self.log.disable_hint()
         if link_as and self._state == 'spun_down':
             self.hooks.save.in_reverse()
             temp_path = self.path
@@ -82,6 +83,7 @@ class Machine:
             log.debug(f'saving to temp {temp_path}')
             self._state = 'saving'
             self.expiration.depend_on_loaded_python_modules()
+            del self.log
             with open(os.path.join(temp_path, 'machine.clpickle'), 'wb') as f:
                 cloudpickle.dump(self, f)
             log.debug(f'moving {temp_path} to {self.path}')
@@ -131,25 +133,22 @@ class Machine:
         if do_lock:
             log.info(f'acquiring lock for {tag}...')
         with lock.MaybeLock(lock_path, lock=do_lock):
+            prev_log = self.log
             if os.path.exists(new_mpath) and not needs_a_rebuild(new_mpath):
                 # sweet, scratch this instance, fast-forward to cached result
                 log.info(f'reusing {step} @ {new_mpath}')
                 self._finalize()
-                prev_log = self.log
                 clone_from_path = new_mpath
             else:
                 # loaded, not spun up, step not cached: perform step, cache
                 log.info(f'applying (and, possibly, caching) {tag}')
-                prev_log = self.log
                 prev_log.disable_hint()
                 self.log = log.sublogger('plugins.' + tag.split(':', 1)[0],
                                          os.path.join(self.path, 'log.txt'))
                 m = func(self, *args, **kwargs)
                 prev_log.enable_hint()
-                self.log.disable_hint()
                 if m:
-                    m.log = log.sublogger('<unknown>')
-                if m and not m._transient:  # normal step, rebase to its result
+                    assert not m._transient
                     m._finalize(link_as=new_mpath, name_hint=tag)
                     clone_from_path = new_mpath
                     log.info(f'successfully applied and saved {tag}')
@@ -167,6 +166,7 @@ def _load_from_path(data_dir_path):
         m = cloudpickle.load(f)
     assert m._state == 'saving'
     m._state = 'loading'
+    m.log = log.sublogger('<unknown>')
     assert m.path == data_dir_path
     assert m._parent_path == os.path.realpath(os.path.dirname(data_dir_path))
     m.hooks.load()
@@ -181,7 +181,9 @@ def clone_and_load(from_path, link_as=None, name_hint=None):
     os.makedirs(temp_path, exist_ok=True)
     with open(os.path.join(from_path, 'machine.clpickle'), 'rb') as f:
         m = cloudpickle.load(f)
+    m.log = log.sublogger('<cloning>')
     m.hooks.clone(temp_path)
+    del m.log
     m._parent_path = os.path.realpath(from_path)
     m.path = temp_path
     m._link_as = link_as
@@ -204,8 +206,6 @@ def build(first_step, *args, **kwargs):
             first = func(*args, **kwargs)
             if first is None:
                 return
-            first.log.disable_hint()
-            first.log = log.sublogger('<unknown>')
             first._finalize(link_as=mpath, name_hint=tag)
             log.info(f'succesfully built {tag}')
     m = clone_and_load(mpath)

@@ -182,8 +182,7 @@ def sublogger(name, to_file=None):
         sub.disable_hint = lambda: atexit.unregister(hint)
         sub.enable_hint = lambda: atexit.register(hint)
     else:
-        sub.disable_hint = lambda: None
-        sub.enable_hint = lambda: None
+        sub.disable_hint = sub.enable_hint = lambda: None
 
     sub.make_pipe = lambda **kwa: LogPipeThread(sub, **kwa).opened_write
 

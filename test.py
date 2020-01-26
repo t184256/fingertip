@@ -22,11 +22,14 @@ BASES = dict(
 )
 
 TESTS = dict(
+    xtrue=lambda m: m.apply('exec', 'true'),
+    again=lambda m: m.apply('exec', 'true'),
+    nsave=lambda m: m.apply('exec', 'true', transient=True),
+    xtend=lambda m: m.apply('exec', 'true').apply('exec', 'true'),
+    false=lambda m: m.apply('exec', 'false', no_check=True),
     uname=lambda m: m.apply('ansible', 'command', 'uname -a'),
     patch=lambda m: m.apply('ansible', 'package',
                             name='patch', state='present'),
-    xtrue=lambda m: m.apply('exec', 'true'),
-    false=lambda m: m.apply('exec', 'false', no_check=True),
     execs=lambda m: m.apply('self_test.exec'),
     greet=lambda m: m.apply('self_test.greeting'),
     prmpt=lambda m: m.apply('self_test.prompts'),
