@@ -171,11 +171,11 @@ def sublogger(name, to_file=None):
 
         def hint():
             if os.path.exists(to_file):
-                t = path.logs(datetime.datetime.utcnow().isoformat(),
-                              makedirs=True)
+                fname = f'{name}-{datetime.datetime.utcnow().isoformat()}.txt'
+                t = path.logs(fname, makedirs=True)
                 reflink.auto(to_file, t)
-                m = (f'Check {t} for more details ' 'or set FINGERTIP_DEBUG=1'
-                     if not DEBUG else f'Logfile: {t} ({sub})')
+                m = (f'Check {t} for more details or set FINGERTIP_DEBUG=1'
+                     if not DEBUG else f'Logfile: {t}')
                 sys.stderr.write(m + '\n')
         atexit.register(hint)
 
