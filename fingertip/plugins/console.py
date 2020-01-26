@@ -10,7 +10,8 @@ def main(m, no_unseal=False):
 
     assert hasattr(m, '_backend_mode')
     if hasattr(m, 'qemu'):
-        m.log.warning('^A x (could be ^A^A x in screen) or power off to exit.')
+        m.log.warning('^A x (could be ^A^A x in screen) or power off to exit. '
+                      'Fake prompt:')
         assert not m._up_counter
 
         m.log.plain()
