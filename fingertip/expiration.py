@@ -27,8 +27,8 @@ class Expiration:
     def cap(self, interval):
         self.time = min(self.time, time.time() + _parse(interval))
 
-    def is_expired(self):
-        return self.time < time.time()
+    def is_expired(self, by=None):
+        return self.time < (by or time.time())
 
     def depend_on_a_file(self, path):
         if path.startswith('/usr/lib') or '/site-packages/' in path:
