@@ -26,7 +26,7 @@ _REWIND = '\x1b[1000D'  # hope nobody's term is wider than 1000 cols
 _COLORS = {'DEBUG': 'blue', 'WARNING': 'yellow',
            'ERROR': 'red', 'CRITICAL': 'red,bg_white'}
 DEBUG = os.getenv('FINGERTIP_DEBUG') == '1'
-_FMT = '%(reset)s%(log_color)s%(levelname).1s %(name)s: %(message)s%(reset)s'
+_FMT = '%(reset)s%(log_color)s%(name)s: %(message)s%(reset)s'
 
 
 def strip_control_sequences(s):
