@@ -7,6 +7,8 @@ import sys
 import fingertip
 import fingertip.util.log
 
+from fingertip.util import optional_pretty_backtraces  # noqa: F401
+
 
 def parse_kwarg(kwarg):
     key, val = kwarg.split('=', 1) if '=' in kwarg else (kwarg, True)

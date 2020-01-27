@@ -1,7 +1,7 @@
 with import <nixpkgs> {};
 
 let
-  fsmonitor = python36Packages.buildPythonPackage {
+  fsmonitor = python3Packages.buildPythonPackage {
     pname = "fsmonitor";
     version = "0.1p";
     src = fetchFromGitHub {
@@ -18,8 +18,29 @@ let
       license = licenses.mit;
     };
   };
+  backtrace = python3Packages.buildPythonPackage rec {
+    pname = "backtrace";
+    version = "0.2.1";
+    src = fetchFromGitHub {
+      owner = "nir0s";
+      repo = "backtrace";
+      rev = "d4ebd760f0fdb8410feae4d88b563f258f829bbd";
+      sha256 = "1n4v0ihli5wmr5l75270qimv3ch2xzjj4hlrql2x2cawh39fxhnh";
+    };
+    meta = {
+      homepage = "https://github.com/nir0s/backtrace";
+      license = stdenv.lib.licenses.asl20;
+      description = "Makes Python tracebacks human friendly";
+    };
+    prePatch = ''
+      touch LICENSE
+    '';
+    propagatedBuildInputs = [ python3Packages.colorama ];
+    buildInputs = [ python3Packages.pytest ];
+  };
 in
-(python36.withPackages (ps: with ps; [
+(python3.withPackages (ps: with ps; [
+  backtrace
   cachecontrol
   cloudpickle
   colorlog
