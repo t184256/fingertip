@@ -58,8 +58,14 @@ $ git clone https://github.com/t184256/fingertip
 
 Install the dependencies (adjust accordingly):
 ``` bash
-$ sudo <your package manager> install qemu ansible python3-colorlog python3-paramiko python3-pexpect python3-xdg python3-CacheControl python3-requests python3-requests-mock python3-fasteners python3-cloudpickle
+$ sudo <your package manager> install qemu ansible python3-colorlog python3-paramiko python3-pexpect python3-xdg python3-CacheControl python3-requests python3-requests-mock python3-fasteners python3-lockfile python3-cloudpickle
 ```
+
+OR, if you have Podman or Docker, you can try out a containerized version
+(`fingertip/fingertip-containerized`) that'll install
+Fedora with all the required dependencies into a container.
+
+### CoW
 
 If you don't want your SSD to wear out prematurely,
 you need a CoW-enabled filesystem on your `~/.cache/fingertip/machines`.
@@ -85,12 +91,17 @@ $ echo "$HOME/.cache/fingertip/for-machines.xfs $HOME/.cache/fingertip/machines 
 Now run `fingertip` with `python3 <path to checkout>`:
 
 ``` bash
-$ python3 fingertip fedora + self_test.console_greeting
+$ python3 fingertip os.fedora + ssh
 ```
 
-You should see Fedora installation starting up, then shutting down,
+(or, if you are using a containerized version:)
+``` bash
+$ fingertip/fingertip-containerized os.fedora + ssh
+```
+
+You should observe Fedora installation starting up, then shutting down,
 compressing an image, booting up again and, finally,
-writing `'Hello!'` to file and outputting the contents of that file.
+giving you interactive control over the machine over SSH.
 
 Invoke the same command again, and it should do nearly nothing,
 the downloads, the installation and half of the test are already cached
@@ -157,3 +168,7 @@ with the test file already present if there is one.
 
 Due to what exactly I cache and the early stage of development,
 empty your `~/.cache/fingertip/machines` often, at least after each update.
+
+``` bash
+$ python3 fingertip cleanup machines all
+```

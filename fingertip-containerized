@@ -1,0 +1,52 @@
+#!/bin/bash
+
+set -ue
+
+DISTRO=fedora:31
+FINGERTIPDIR=$(dirname "$0")
+
+if command -v podman > /dev/null; then
+	BACKEND=podman
+elif command -v docker > /dev/null; then
+	BACKEND=docker
+else
+	echo "Neither podman or docker were found, sorry"
+fi
+
+EXTRA_OPTS=""
+if [[ -n "${FINGERTIP_DEBUG+x}" ]] && [[ "$FINGERTIP_DEBUG" == 1 ]]; then
+	EXTRA_OPTS="-e FINGERTIP_DEBUG=1"
+fi
+
+mkdir -p ~/.config/fingertip
+
+MARKER=$FINGERTIPDIR/.$BACKEND-build-marker
+if [[ ! -e "$MARKER" ||  -n "$(find "$FINGERTIPDIR"/* -newer "$MARKER")" ]]
+then
+	echo "Trying to run $DISTRO with $BACKEND for starters..."
+	if ! $BACKEND run -it $DISTRO true; then
+		echo "$($BACKEND run -it $DISTRO true) fails, fix this"
+		exit 1
+	fi
+	echo "Building a fingertip image for $BACKEND..."
+	pushd "$FINGERTIPDIR"
+	$BACKEND build -t fingertip "$FINGERTIPDIR"
+	popd
+	touch "$MARKER"
+fi
+
+echo "Trying a limited version of fingertip inside $BACKEND..."
+
+# --device /dev/kvm didn't work out, so --privileged
+exec $BACKEND run \
+	--rm \
+	--tmpfs /tmp:rw,size=6G \
+	--volume "$(pwd):/cwd:z" \
+	--volume "$FINGERTIPDIR:/containerized-fingertip:z" \
+	--volume ~/.cache/fingertip:/user-home/.cache/fingertip:z \
+	--label=false \
+	--privileged \
+	--userns=keep-id --user $(id -u):$(id -g) \
+	$EXTRA_OPTS \
+	-it fingertip \
+	/usr/bin/python /containerized-fingertip "$@"

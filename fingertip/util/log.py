@@ -174,6 +174,8 @@ def sublogger(name, to_file=None):
                 fname = f'{name}-{datetime.datetime.utcnow().isoformat()}.txt'
                 t = path.logs(fname, makedirs=True)
                 reflink.auto(to_file, t)
+                home = os.path.expanduser('~')
+                t = t if not t.startswith(home) else t.replace(home, '~')
                 m = (f'Check {t} for more details or set FINGERTIP_DEBUG=1'
                      if not DEBUG else f'Logfile: {t}')
                 sys.stderr.write(m + '\n')
