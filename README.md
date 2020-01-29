@@ -17,8 +17,39 @@ that's it.
 
 It's in an early demo stage.
 
+Some examples of executing it:
+
+``` bash
+$ python3 fingertip os.fedora + ssh  # install Fedora and SSH into it
+$ python3 fingertip os.alpine + console  # install Alpine, access serial console
+$ python3 fingertip os.alpine + ansible package --state=present --name=patch
+$ python3 fingertip backend.podman-criu + os.alpine + console  # containers!
+$ python3 fingertip backend.podman-criu + os.alpine + exec 'free -m'
+```
+
+An example of Python usage and writing your own steps:
+
+``` python
+import fingertip
+
+def main(m=None, alias='itself'):
+    m = m or fingertip.build('os.fedora')
+    m = m.apply('ansible', 'lineinfile', path='/etc/hosts',
+                line='127.0.0.1 itself')
+    with m:
+        assert '1 received' in m('ping -c1 itself').out
+    return m
+```
+
+Put in `fingertip/plugins/demo.py`, this can be used as
+```
+$ python3 fingertip demo
+```
+
 
 ## Preparations
+
+### Dependencies
 
 Check out this repository:
 ``` bash
