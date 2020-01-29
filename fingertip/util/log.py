@@ -100,7 +100,7 @@ class ErasingStreamHandler(colorlog.StreamHandler):
 
 
 logger = logging.getLogger('fingertip')
-error, warning = logger.error, logger.warning
+critical, error, warning = logger.critical, logger.error, logger.warning
 debug, info = logger.debug, logger.info
 erasing_handler = None
 
