@@ -49,7 +49,7 @@ def remove(*paths):
             log.warning(f'cleanup error for {path}: {e}')
 
 
-def disappearing_file(dstdir=None, hint=''):  # defaults to /tmp
+def disappearing_file(dstdir=None, hint=''):
     prefix = AUTOREMOVE_PREFIX + hint + '.' if hint else AUTOREMOVE_PREFIX
     _, temp_file_path = tempfile.mkstemp(prefix=prefix, dir=dstdir)
     assert AUTOREMOVE_PREFIX in temp_file_path
@@ -57,7 +57,7 @@ def disappearing_file(dstdir=None, hint=''):  # defaults to /tmp
     return temp_file_path
 
 
-def disappearing_dir(dstdir=None, hint=''):  # defaults to /tmp
+def disappearing_dir(dstdir=None, hint=''):
     prefix = AUTOREMOVE_PREFIX + hint + '.' if hint else AUTOREMOVE_PREFIX
     temp_dir_path = tempfile.mkdtemp(prefix=prefix, dir=dstdir)
     assert AUTOREMOVE_PREFIX in temp_dir_path

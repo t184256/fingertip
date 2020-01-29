@@ -122,7 +122,7 @@ class QEMUNamespacedFeatures:
             lock = fasteners.process_lock.InterProcessLock('/tmp/.fingertip')
             lock.acquire()
             if self.vm._transient and temp.has_space(required_space):
-                image = temp.disappearing_file(hint='fingertip-qemu')
+                image = temp.disappearing_file('/tmp', hint='fingertip-qemu')
                 reflink.auto(self._image_to_clone, image)
                 lock.release()
             else:
