@@ -40,6 +40,7 @@ let
   };
 in
 (python3.withPackages (ps: with ps; [
+  ansible
   backtrace
   cachecontrol
   cloudpickle

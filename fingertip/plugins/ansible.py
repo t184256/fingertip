@@ -57,7 +57,7 @@ def main(m, module, *args, **kwargs):
         if isinstance(v, bool):
             return 'yes' if v else 'no'
         return str(v)
-    module_args = args + tuple(f'{k}={to_str(v)}' for k, v in kwargs.items())
+    module_args = args + tuple(f'{k}="{to_str(v)}"' for k, v in kwargs.items())
     with m.apply(prepare) as m:
         _ansible(m, '-m', module, '-a', ' '.join(module_args))
     return m
