@@ -40,6 +40,7 @@ let
   };
 in
 (python3.withPackages (ps: with ps; [
+  GitPython
   ansible
   backtrace
   cachecontrol
