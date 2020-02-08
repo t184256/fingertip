@@ -31,6 +31,7 @@ class Expiration:
         return self.time < (by or time.time())
 
     def depend_on_a_file(self, path):
+        path = os.path.abspath(path)
         if path.startswith('/usr/lib') or '/site-packages/' in path:
             return
         self._deps[path] = (os.stat(path).st_mtime, weak_hash.of_file(path))
