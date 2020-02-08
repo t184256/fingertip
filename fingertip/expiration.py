@@ -36,11 +36,14 @@ class Expiration:
         self._deps[path] = (os.stat(path).st_mtime, weak_hash.of_file(path))
 
     def files_have_not_changed(self):
+        if os.getenv('FINGERTIP_IGNORE_CODE_CHANGES', '0') != '0':
+            return True
         for path, (mtime, hash_) in self._deps.items():
             log.debug(f'checking that {path} has not changed...')
             if mtime != (os.stat(path).st_mtime):
                 if hash_ != weak_hash.of_file(path):
-                    log.warning(f'{path} has changed')
+                    log.warning(f'{path} has changed, set '
+                                'FINGERTIP_IGNORE_CODE_CHANGES=1 to ignore')
                     return False
         return True
 
