@@ -115,12 +115,12 @@ class Machine:
             return func(self, *args, **kwargs)
         elif self._state == 'loaded':
             log.debug(f'applying to clean')
-            return self._cache_aware_apply(step, tag, func, *args, **kwargs)
+            return self._cache_aware_apply(step, tag, func, args, kwargs)
         else:
             log.critical(f'apply to state={self._state}')
             raise RuntimeError(f'State machine error, apply to {self._state}')
 
-    def _cache_aware_apply(self, step, tag, func, *args, **kwargs):
+    def _cache_aware_apply(self, step, tag, func, args, kwargs):
         assert self._state == 'loaded'
 
         # Could there already be a cached result?
