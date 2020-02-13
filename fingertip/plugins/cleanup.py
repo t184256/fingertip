@@ -60,22 +60,13 @@ def _cleanup_dir(dirpath, older_than, time_func):
 def machines(expired_for=0):
     if expired_for != 'all':
         adjusted_time = time.time() - fingertip.expiration._parse(expired_for)
-    change = False
-    while change:
-        change = False
-        for root, dirs, files in os.walk(path.MACHINES, topdown=False):
-            for f in (os.path.join(root, x) for x in files + dirs):
-                if expired_for == 'all' or not os.path.exists(f):
-                    assert os.path.realpath(f).startswith(path.MACHINES)
-                    log.info(f'removing {os.path.realpath(f)}')
-                    os.unlink(f)  # broken symlink or cleaning up all the things
-                    change = True
-    for root, dirs, _ in os.walk(path.MACHINES, topdown=False):
+    for root, dirs, files in os.walk(path.MACHINES, topdown=False):
         for d in (os.path.join(root, x) for x in dirs):
             lock_path = os.path.join(root, '.' + os.path.basename(d) + '-lock')
             lock = fasteners.process_lock.InterProcessLock(lock_path)
             lock.acquire()
             if (expired_for == 'all' or
+                    not os.path.exists(d) or
                     fingertip.machine.needs_a_rebuild(d, by=adjusted_time)):
                 assert os.path.realpath(d).startswith(path.MACHINES)
                 log.info(f'removing {os.path.realpath(d)}')
