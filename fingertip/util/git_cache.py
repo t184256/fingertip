@@ -16,7 +16,7 @@ DIR = path.downloads('git')
 
 
 class Repo(git.Repo):
-    def __init__(self, url, *path_components):
+    def __init__(self, url, *path_components, enough_to_have=None):
         self.url = url
         self.path = os.path.join(DIR, *path_components)
         lock_path = self.path + '-lock'
@@ -28,7 +28,18 @@ class Repo(git.Repo):
             super().__init__(self.path)
         else:
             super().__init__(self.path)
-            if not OFFLINE:
+            update_not_needed = enough_to_have and (
+                enough_to_have in (t.name for t in self.tags) or
+                enough_to_have in (h.name for h in self.heads) or
+                enough_to_have in (c.hexsha for c in self.iter_commits())
+                # that's not all commits, but best-effort should be fine here
+            )
+            if update_not_needed:
+                log.info(f'not re-fetching {url} '
+                         f'because {enough_to_have} is already present')
+            if OFFLINE:
+                log.info(f'not re-fetching {url} because of offline mode')
+            if not OFFLINE and not update_not_needed:
                 log.info(f'updating {url}...')
                 self.remote().fetch()
         self.lock.release()
@@ -41,11 +52,12 @@ class Repo(git.Repo):
         self.lock.release()
 
 
-def cached_clone(m, url, path_in_m, rev=None):
+def cached_clone(m, url, path_in_m, rev=None, rev_is_enough=True):
     # TODO: improve for guaranteed fresh copy
     assert hasattr(m, 'ssh')
     with m:
-        with Repo(url, url.replace('/', '::')) as repo:
+        kwa = {} if not rev_is_enough else {'enough_to_have': rev}
+        with Repo(url, url.replace('/', '::'), **kwa) as repo:
             tar = temp.disappearing_file()
             tar_in_m = f'/tmp/{os.path.basename(tar)}'
             extracted_in_m = f'/tmp/{os.path.basename(tar)}-extracted'
