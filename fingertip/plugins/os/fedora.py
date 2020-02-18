@@ -19,19 +19,29 @@ def determine_mirror():
     return FEDORA_GEOREDIRECTOR
 
 
-def main(m=None, version=31):
+def main(m=None, version=31, updates=True):
     m = m or fingertip.build('backend.qemu')
     if hasattr(m, 'qemu'):
-        return m.apply(install_in_qemu, version=version)
+        m = m.apply(install_in_qemu, version=version, updates=updates)
     elif hasattr(m, 'container'):
-        return m.apply(m.container.from_image, f'fedora:{version}')
+        m = m.apply(m.container.from_image, f'fedora:{version}')
+        if updates:
+            with m:
+                m('dnf -y update')
     else:
         raise NotImplementedError()
+    return m
 
 
-def install_in_qemu(m, version):
+def install_in_qemu(m, version, updates=True):
     mirror = determine_mirror()
     m.log.info(f'selected mirror: {mirror}')
+    metalink = ('http://mirrors.fedoraproject.org/metalink' +
+                f'?repo=updates-released-f{version}&arch=x86_64&protocol=http')
+    extra_repos = (f'repo --name=updates --metalink={metalink}'
+                   if updates else '')
+
+    m.expiration.cap('2d')  # non-immutable repositories
 
     fedora_url = mirror + f'/releases/{version}/Server/x86_64/os'
     original_ram_size = m.qemu.ram_size
@@ -48,7 +58,8 @@ def install_in_qemu(m, version):
         with open(ks_fname) as f:
             ks_text = f.read().format(HOSTNAME=f'fedora{version}',
                                       SSH_PUBKEY=ssh_pubkey,
-                                      PROXY=m.http_cache.internal_url)
+                                      PROXY=m.http_cache.internal_url,
+                                      EXTRA_REPOS=extra_repos)
         m.expiration.depend_on_a_file(ks_fname)
 
         m.http_cache.mock('http://ks', text=ks_text)
@@ -70,7 +81,7 @@ def install_in_qemu(m, version):
         m.qemu.compress_image()
         m.qemu.ram_size = original_ram_size
         m.qemu.run(load=None)  # cold boot
-        HOSTNAME = 'fedora31'
+        HOSTNAME = f'fedora{version}'
         ROOT_PASSWORD = 'fingertip'
         m.prompt = f'[root@{HOSTNAME} ~]# '
         m.console.expect(f'{HOSTNAME} login: ')

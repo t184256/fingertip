@@ -4,6 +4,11 @@ import fingertip
 BASES = dict(
     podman_centos=lambda: fingertip.build('backend.podman-criu', 'centos'),
     podman_fedora=lambda: fingertip.build('backend.podman-criu', 'fedora'),
+    podman_fedorO=lambda: (
+        fingertip
+        .build('backend.podman-criu')
+        .apply('os.fedora', updates=False)
+    ),
     podman_alpine=lambda: (
         fingertip.build('backend.podman-criu').apply('os.alpine')
     ),
@@ -19,6 +24,7 @@ BASES = dict(
         .apply('.hooks.disable_cache')
     ),
     qemu_fedora=lambda: fingertip.build('os.fedora'),
+    qemu_fedorO=lambda: fingertip.build('os.fedora', updates=False),
 )
 
 TESTS = dict(
