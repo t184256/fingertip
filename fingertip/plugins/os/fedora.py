@@ -1,13 +1,22 @@
 # Licensed under GNU General Public License v3 or later, see COPYING.
 # Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
 
+import requests
+
 import os
 
 import fingertip.machine
 from fingertip.util import path
 
 
-FEDORA_MIRROR = 'http://download.fedoraproject.org/pub/fedora'
+FEDORA_GEOREDIRECTOR = 'http://download.fedoraproject.org/pub/fedora/linux'
+
+
+def determine_mirror():
+    h = requests.head(FEDORA_GEOREDIRECTOR, allow_redirects=False)
+    if h.status_code == 302 and 'Location' in h.headers:
+        return h.headers['Location'].rstrip('/')
+    return FEDORA_GEOREDIRECTOR
 
 
 def main(m=None, version=31):
@@ -21,7 +30,10 @@ def main(m=None, version=31):
 
 
 def install_in_qemu(m, version):
-    FEDORA_URL = FEDORA_MIRROR + f'/linux/releases/{version}/Server/x86_64/os'
+    mirror = determine_mirror()
+    m.log.info(f'selected mirror: {mirror}')
+
+    fedora_url = mirror + f'/releases/{version}/Server/x86_64/os'
     original_ram_size = m.qemu.ram_size
 
     with m:
@@ -40,16 +52,16 @@ def install_in_qemu(m, version):
         m.expiration.depend_on_a_file(ks_fname)
 
         m.http_cache.mock('http://ks', text=ks_text)
-        m.log.info(f'fetching kernel: {FEDORA_URL}/isolinux/vmlinuz')
+        m.log.info(f'fetching kernel: {fedora_url}/isolinux/vmlinuz')
         kernel = os.path.join(m.path, 'kernel')
-        m.http_cache.fetch(f'{FEDORA_URL}/isolinux/vmlinuz', kernel)
-        m.log.info(f'fetching initrd: {FEDORA_URL}/isolinux/initrd.img')
+        m.http_cache.fetch(f'{fedora_url}/isolinux/vmlinuz', kernel)
+        m.log.info(f'fetching initrd: {fedora_url}/isolinux/initrd.img')
         initrd = os.path.join(m.path, 'initrd')
-        m.http_cache.fetch(f'{FEDORA_URL}/isolinux/initrd.img', initrd)
+        m.http_cache.fetch(f'{fedora_url}/isolinux/initrd.img', initrd)
         append = ('ks=http://ks inst.ksstrict console=ttyS0 inst.notmux '
                   f'proxy={m.http_cache.internal_url} ' +
                   f'inst.proxy={m.http_cache.internal_url} ' +
-                  f'inst.repo={FEDORA_URL}')
+                  f'inst.repo={fedora_url}')
         extra_args = ['-kernel', kernel, '-initrd', initrd, '-append', append]
 
         m.qemu.run(load=None, extra_args=extra_args)
