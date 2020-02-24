@@ -80,6 +80,8 @@ class HTTPCache:
                     if meth == 'GET':
                         self.wfile.write(data)
                     log.info(f'{meth} {uri} served {length}')
+                except BrokenPipeError:
+                    log.warning(f'Broken pipe for {meth} {uri}')
                 except ConnectionResetError:
                     log.warning(f'Connection reset for {meth} {uri}')
                 except requests.exceptions.ConnectionError:
