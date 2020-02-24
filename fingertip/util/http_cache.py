@@ -55,7 +55,8 @@ class HTTPCache:
                 try:
                     if meth == 'GET' and not OFFLINE:
                         # direct streaming might be required...
-                        preview = sess.head(uri, headers=headers)
+                        preview = sess.head(uri, headers=headers,
+                                            allow_redirects=False)
                         direct = None
                         if int(preview.headers.get('Content-Length', 0)) > BIG:
                             direct = f'file bigger than {BIG}'
@@ -70,7 +71,7 @@ class HTTPCache:
                     # fetch with caching
                     m_func = getattr(sess, meth.lower())
                     r = m_func(uri if '://' in uri else 'http://self' + uri,
-                               headers=headers)
+                               headers=headers, allow_redirects=False)
                     data = r.content
                     length = int(r.headers.get('Content-Length', 0))
                     if len(data) != length:
@@ -136,7 +137,7 @@ class HTTPCache:
 
 def hack_around_unpacking(uri, headers, wrong_content):
     log.warning(f're-fetching correct content for {uri}')
-    r = requests.get(uri, headers=headers, stream=True)
+    r = requests.get(uri, headers=headers, stream=True, allow_redirects=False)
     h = hashlib.sha256(wrong_content).hexdigest()
     cachefile = path.downloads('fixups', h, makedirs=True)
     if not os.path.exists(cachefile):
