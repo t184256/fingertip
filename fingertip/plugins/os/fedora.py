@@ -12,14 +12,14 @@ from fingertip.util import path
 FEDORA_GEOREDIRECTOR = 'http://download.fedoraproject.org/pub/fedora/linux'
 
 
-def determine_mirror():
-    h = requests.head(FEDORA_GEOREDIRECTOR, allow_redirects=False)
+def determine_mirror(url):
+    h = requests.head(url, allow_redirects=False)
     if h.status_code == 302 and 'Location' in h.headers:
         return h.headers['Location'].rstrip('/')
-    return FEDORA_GEOREDIRECTOR
+    return url
 
 
-def main(m=None, version=31, updates=True):
+def main(m=None, version=31, updates=True, mirror=FEDORA_GEOREDIRECTOR):
     m = m or fingertip.build('backend.qemu')
     if hasattr(m, 'qemu'):
         m = m.apply(install_in_qemu, version=version, updates=updates)
@@ -33,8 +33,8 @@ def main(m=None, version=31, updates=True):
     return m
 
 
-def install_in_qemu(m, version, updates=True):
-    mirror = determine_mirror()
+def install_in_qemu(m, version, updates=True, mirror=FEDORA_GEOREDIRECTOR):
+    mirror = determine_mirror(mirror)
     m.log.info(f'selected mirror: {mirror}')
     metalink = ('http://mirrors.fedoraproject.org/metalink' +
                 f'?repo=updates-released-f{version}&arch=x86_64&protocol=http')
