@@ -45,8 +45,8 @@ def install_in_qemu(m, version, updates=True,
         if resolve_redirect:
             m.log.info(f'autoselecting mirror by redirect from {mirror}...')
             mirror = determine_mirror(mirror)
-        url = f'{mirror}/releases/{version}/Everything/x86_64/'
-        upd = f'{mirror}/updates/{version}/Everything/x86_64/'
+        url = f'{mirror}/releases/{version}/Everything/x86_64/os'
+        upd = f'{mirror}/updates/{version}/Everything/x86_64'
         repos = (f'url --url {url}\n' +
                  f'repo --name fedora --baseurl {url}\n' +
                  (f'repo --name updates --baseurl {upd}'
@@ -54,7 +54,7 @@ def install_in_qemu(m, version, updates=True,
     else:
         m.log.info('autoselecting mirror...')
         mirror = determine_mirror(FEDORA_GEOREDIRECTOR)
-        url = f'{mirror}/releases/{version}/Everything/x86_64/'
+        url = f'{mirror}/releases/{version}/Everything/x86_64/os'
         repos = (f'url --url {url}\n' +
                  f'repo --name fedora --metalink {ml_norm}\n' +
                  (f'repo --name updates --metalink {ml_upd}'
@@ -63,7 +63,6 @@ def install_in_qemu(m, version, updates=True,
 
     m.expiration.cap('2d')  # non-immutable repositories
 
-    fedora_url = mirror + f'/releases/{version}/Server/x86_64/os'
     original_ram_size = m.qemu.ram_size
 
     with m:
@@ -83,16 +82,16 @@ def install_in_qemu(m, version, updates=True,
         m.expiration.depend_on_a_file(ks_fname)
 
         m.http_cache.mock('http://ks', text=ks_text)
-        m.log.info(f'fetching kernel: {fedora_url}/isolinux/vmlinuz')
+        m.log.info(f'fetching kernel: {url}/isolinux/vmlinuz')
         kernel = os.path.join(m.path, 'kernel')
-        m.http_cache.fetch(f'{fedora_url}/isolinux/vmlinuz', kernel)
-        m.log.info(f'fetching initrd: {fedora_url}/isolinux/initrd.img')
+        m.http_cache.fetch(f'{url}/isolinux/vmlinuz', kernel)
+        m.log.info(f'fetching initrd: {url}/isolinux/initrd.img')
         initrd = os.path.join(m.path, 'initrd')
-        m.http_cache.fetch(f'{fedora_url}/isolinux/initrd.img', initrd)
+        m.http_cache.fetch(f'{url}/isolinux/initrd.img', initrd)
         append = ('ks=http://ks inst.ksstrict console=ttyS0 inst.notmux '
                   f'proxy={m.http_cache.internal_url} ' +
                   f'inst.proxy={m.http_cache.internal_url} ' +
-                  f'inst.repo={fedora_url}')
+                  f'inst.repo={url}')
         extra_args = ['-kernel', kernel, '-initrd', initrd, '-append', append]
 
         m.qemu.run(load=None, extra_args=extra_args)
