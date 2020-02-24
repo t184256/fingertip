@@ -41,7 +41,7 @@ class Repo(git.Repo):
                 log.info(f'not re-fetching {url} because of offline mode')
             if not OFFLINE and not update_not_needed:
                 log.info(f'updating {url}...')
-                self.remote().fetch()
+                self.remote().fetch(tags=True)
         self.lock.release()
 
     def __enter__(self):
