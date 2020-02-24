@@ -12,17 +12,18 @@ from fingertip.util import path
 FEDORA_GEOREDIRECTOR = 'http://download.fedoraproject.org/pub/fedora/linux'
 
 
-def determine_mirror(url):
-    h = requests.head(url, allow_redirects=False)
+def determine_mirror():
+    h = requests.head(FEDORA_GEOREDIRECTOR, allow_redirects=False)
     if h.status_code == 302 and 'Location' in h.headers:
         return h.headers['Location'].rstrip('/')
-    return url
+    return FEDORA_GEOREDIRECTOR
 
 
-def main(m=None, version=31, updates=True, mirror=FEDORA_GEOREDIRECTOR):
+def main(m=None, version=31, updates=True, mirror=None):
     m = m or fingertip.build('backend.qemu')
     if hasattr(m, 'qemu'):
-        m = m.apply(install_in_qemu, version=version, updates=updates)
+        m = m.apply(install_in_qemu, version=version, updates=updates,
+                    mirror=mirror)
     elif hasattr(m, 'container'):
         m = m.apply(m.container.from_image, f'fedora:{version}')
         if updates:
@@ -33,8 +34,10 @@ def main(m=None, version=31, updates=True, mirror=FEDORA_GEOREDIRECTOR):
     return m
 
 
-def install_in_qemu(m, version, updates=True, mirror=FEDORA_GEOREDIRECTOR):
-    mirror = determine_mirror(mirror)
+def install_in_qemu(m, version, updates=True, mirror=None):
+    if not mirror:
+        m.log.info('autoselecting mirror...')
+        mirror = determine_mirror()
     m.log.info(f'selected mirror: {mirror}')
     metalink = ('http://mirrors.fedoraproject.org/metalink' +
                 f'?repo=updates-released-f{version}&arch=x86_64&protocol=http')
