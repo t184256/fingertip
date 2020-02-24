@@ -71,7 +71,8 @@ class HTTPCache:
                     m_func = getattr(sess, meth.lower())
                     r = m_func(uri if '://' in uri else 'http://self' + uri,
                                headers=headers)
-                    data, length = r.content, int(r.headers['Content-Length'])
+                    data = r.content
+                    length = int(r.headers.get('Content-Length', 0))
                     if len(data) != length:
                         data = hack_around_unpacking(uri, headers, data)
                     assert len(data) == length
