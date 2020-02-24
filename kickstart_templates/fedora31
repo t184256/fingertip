@@ -1,4 +1,4 @@
-{EXTRA_REPOS}
+{REPOS}
 
 authselect --passalgo=sha512 --useshadow
 autopart

@@ -12,18 +12,19 @@ from fingertip.util import path
 FEDORA_GEOREDIRECTOR = 'http://download.fedoraproject.org/pub/fedora/linux'
 
 
-def determine_mirror():
-    h = requests.head(FEDORA_GEOREDIRECTOR, allow_redirects=False)
-    if h.status_code == 302 and 'Location' in h.headers:
+def determine_mirror(mirror):
+    h = requests.head(mirror, allow_redirects=False)
+    if h.status_code in (301, 302, 303, 307, 308) and 'Location' in h.headers:
         return h.headers['Location'].rstrip('/')
-    return FEDORA_GEOREDIRECTOR
+    return mirror
 
 
-def main(m=None, version=31, updates=True, mirror=None):
+def main(m=None, version=31, updates=True,
+         mirror=None, resolve_redirect=False):
     m = m or fingertip.build('backend.qemu')
     if hasattr(m, 'qemu'):
         m = m.apply(install_in_qemu, version=version, updates=updates,
-                    mirror=mirror)
+                    mirror=mirror, resolve_redirect=resolve_redirect)
     elif hasattr(m, 'container'):
         m = m.apply(m.container.from_image, f'fedora:{version}')
         if updates:
@@ -34,15 +35,31 @@ def main(m=None, version=31, updates=True, mirror=None):
     return m
 
 
-def install_in_qemu(m, version, updates=True, mirror=None):
-    if not mirror:
+def install_in_qemu(m, version, updates=True,
+                    mirror=None, resolve_redirect=False):
+    ml_norm = ('http://mirrors.fedoraproject.org/metalink' +
+               f'?repo=fedora-f{version}&arch=x86_64&protocol=http')
+    ml_upd = ('http://mirrors.fedoraproject.org/metalink' +
+              f'?repo=updates-released-f{version}&arch=x86_64&protocol=http')
+    if mirror:
+        if resolve_redirect:
+            m.log.info(f'autoselecting mirror by redirect from {mirror}...')
+            mirror = determine_mirror(mirror)
+        url = f'{mirror}/releases/{version}/Everything/x86_64/'
+        upd = f'{mirror}/updates/{version}/Everything/x86_64/'
+        repos = (f'url --url {url}\n' +
+                 f'repo --name fedora --baseurl {url}\n' +
+                 (f'repo --name updates --baseurl {upd}'
+                  if updates else ''))
+    else:
         m.log.info('autoselecting mirror...')
-        mirror = determine_mirror()
+        mirror = determine_mirror(FEDORA_GEOREDIRECTOR)
+        url = f'{mirror}/releases/{version}/Everything/x86_64/'
+        repos = (f'url --url {url}\n' +
+                 f'repo --name fedora --metalink {ml_norm}\n' +
+                 (f'repo --name updates --metalink {ml_upd}'
+                  if updates else ''))
     m.log.info(f'selected mirror: {mirror}')
-    metalink = ('http://mirrors.fedoraproject.org/metalink' +
-                f'?repo=updates-released-f{version}&arch=x86_64&protocol=http')
-    extra_repos = (f'repo --name=updates --metalink={metalink}'
-                   if updates else '')
 
     m.expiration.cap('2d')  # non-immutable repositories
 
@@ -62,7 +79,7 @@ def install_in_qemu(m, version, updates=True, mirror=None):
             ks_text = f.read().format(HOSTNAME=f'fedora{version}',
                                       SSH_PUBKEY=ssh_pubkey,
                                       PROXY=m.http_cache.internal_url,
-                                      EXTRA_REPOS=extra_repos)
+                                      REPOS=repos)
         m.expiration.depend_on_a_file(ks_fname)
 
         m.http_cache.mock('http://ks', text=ks_text)
