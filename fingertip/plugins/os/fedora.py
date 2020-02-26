@@ -41,11 +41,12 @@ def install_in_qemu(m, version, updates=True,
                f'?repo=fedora-f{version}&arch=x86_64&protocol=http')
     ml_upd = ('http://mirrors.fedoraproject.org/metalink' +
               f'?repo=updates-released-f{version}&arch=x86_64&protocol=http')
+    releases_development = 'development' if version == '32' else 'releases'
     if mirror:
         if resolve_redirect:
             m.log.info(f'autoselecting mirror by redirect from {mirror}...')
             mirror = determine_mirror(mirror)
-        url = f'{mirror}/releases/{version}/Everything/x86_64/os'
+        url = f'{mirror}/{releases_development}/{version}/Everything/x86_64/os'
         upd = f'{mirror}/updates/{version}/Everything/x86_64'
         repos = (f'url --url {url}\n' +
                  f'repo --name fedora --baseurl {url}\n' +
@@ -54,7 +55,7 @@ def install_in_qemu(m, version, updates=True,
     else:
         m.log.info('autoselecting mirror...')
         mirror = determine_mirror(FEDORA_GEOREDIRECTOR)
-        url = f'{mirror}/releases/{version}/Everything/x86_64/os'
+        url = f'{mirror}/{releases_development}/{version}/Everything/x86_64/os'
         repos = (f'url --url {url}\n' +
                  f'repo --name fedora --metalink {ml_norm}\n' +
                  (f'repo --name updates --metalink {ml_upd}'
