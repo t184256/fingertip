@@ -65,9 +65,11 @@ def machines(expired_for=0):
             lock_path = os.path.join(root, '.' + os.path.basename(d) + '-lock')
             lock = fasteners.process_lock.InterProcessLock(lock_path)
             lock.acquire()
-            if (expired_for == 'all' or
-                    not os.path.exists(d) or
-                    fingertip.machine.needs_a_rebuild(d, by=adjusted_time)):
+            try:
+                remove = fingertip.machine.needs_a_rebuild(d, by=adjusted_time)
+            except FileNotFoundError:
+                remove = True
+            if (expired_for == 'all' or remove):
                 assert os.path.realpath(d).startswith(path.MACHINES)
                 log.info(f'removing {os.path.realpath(d)}')
                 if not os.path.islink(d):
