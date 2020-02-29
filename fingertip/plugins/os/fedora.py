@@ -96,7 +96,11 @@ def install_in_qemu(m, version, updates=True,
         extra_args = ['-kernel', kernel, '-initrd', initrd, '-append', append]
 
         m.qemu.run(load=None, extra_args=extra_args)
-        m.console.expect('Storing configuration files and kickstarts')
+        i = m.console.expect(['Storing configuration files and kickstarts',
+                              'installation failed',
+                              'installation was stopped',
+                              'installer will now terminate'])
+        assert i == 0, 'Installation failed'
         m.qemu.wait()
         m.qemu.compress_image()
         m.qemu.ram_size = original_ram_size
