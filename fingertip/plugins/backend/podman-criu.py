@@ -66,7 +66,8 @@ def _base():
                                             logfile=logging.INFO)
             m.console = pexp('sudo', ['podman', 'attach',
                                       m.container.container_id],
-                             echo=False, timeout=None, encoding='utf-8')
+                             echo=False, timeout=None,
+                             encoding='utf-8', codec_errors='ignore')
         elif m._backend_mode == 'direct':
             subprocess.run(['sudo', 'podman', 'attach',
                            m.container.container_id])

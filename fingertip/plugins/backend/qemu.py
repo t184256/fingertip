@@ -140,7 +140,8 @@ class QEMUNamespacedFeatures:
             pexp = self.vm.log.pseudofile_powered(pexpect.spawn,
                                                   logfile=logging.INFO)
             self.vm.console = pexp(self._qemu, args, echo=False,
-                                   timeout=None, encoding='utf-8')
+                                   timeout=None,
+                                   encoding='utf-8', codec_errors='ignore')
             self.live = True
         elif self.vm._backend_mode == 'direct':
             subprocess.run([self._qemu, '-serial', 'mon:stdio'] + args,
