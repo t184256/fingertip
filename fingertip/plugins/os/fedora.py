@@ -38,7 +38,7 @@ def main(m=None, version=31, updates=True,
 def install_in_qemu(m, version, updates=True,
                     mirror=None, resolve_redirect=False):
     ml_norm = ('http://mirrors.fedoraproject.org/metalink' +
-               f'?repo=fedora-f{version}&arch=x86_64&protocol=http')
+               f'?repo=fedora-{version}&arch=x86_64&protocol=http')
     ml_upd = ('http://mirrors.fedoraproject.org/metalink' +
               f'?repo=updates-released-f{version}&arch=x86_64&protocol=http')
     releases_development = 'development' if version == '32' else 'releases'
