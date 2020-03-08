@@ -67,7 +67,7 @@ def machines(expired_for=0):
             lock.acquire()
             try:
                 remove = fingertip.machine.needs_a_rebuild(d, by=adjusted_time)
-            except FileNotFoundError:
+            except (FileNotFoundError, EOFError):
                 remove = True
             if (expired_for == 'all' or remove):
                 assert os.path.realpath(d).startswith(path.MACHINES)
