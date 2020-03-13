@@ -133,11 +133,9 @@ class LogPipeThread(threading.Thread):
         self.opened_write = os.fdopen(self.pipe_write, 'wb')
         self.opened_read = os.fdopen(self.pipe_read, 'rb')
         self.start()
-        self.opened_write.data = b''
 
     def run(self):
         for line in iter(self.opened_read.readline, b''):
-            self.opened_write.data += line
             if line:
                 line = strip_control_sequences(line).rstrip('\r\n')
                 self.logger.log(self.level, line)
@@ -147,10 +145,9 @@ class LogPipeThread(threading.Thread):
 class LogPseudoFile():
     def __init__(self, logger, level=logging.INFO):
         self.logger, self.level = logger, level
-        self.data = self._buffer = ''
+        self._buffer = ''
 
     def write(self, d):
-        self.data += d
         self._buffer += d
         lines = self._buffer.split('\n')
         for line in lines[:-1]:

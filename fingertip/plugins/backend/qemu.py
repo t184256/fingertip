@@ -322,25 +322,25 @@ class SSH:
     def _stream_out_and_err(self, channel):
         sel = selectors.DefaultSelector()
         sel.register(channel, selectors.EVENT_READ)
-        out, err, out_line, err_line = b'', b'', b'', b''
+        out, err, out_buf, err_buf = b'', b'', b'', b''
         while True:
             sel.select()
             if channel.recv_ready():
-                c = channel.recv(1)
-                out += c
-                if c == b'\n':
+                r = channel.recv(512)
+                out += r
+                out_buf += r
+                out_lines = out_buf.split(b'\n')
+                for out_line in out_lines[:-1]:
                     self.m.log.info(log.strip_control_sequences(out_line))
-                    out_line = b''
-                else:
-                    out_line += c
+                out_buf = out_lines[-1]
             elif channel.recv_stderr_ready():
-                c = channel.recv_stderr(1)
-                err += c
-                if c == b'\n':
+                r = channel.recv_stderr(512)
+                err += r
+                err_buf += r
+                err_lines = err_buf.split(b'\n')
+                for err_line in err_lines[:-1]:
                     self.m.log.info(log.strip_control_sequences(err_line))
-                    err_line = b''
-                else:
-                    err_line += c
+                err_buf = err_lines[-1]
             else:
                 return out, err
 
