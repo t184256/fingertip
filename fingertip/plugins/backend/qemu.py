@@ -296,12 +296,12 @@ class SSH:
         self.m.log.debug(f'ssh port {self.port}')
         self._transport = None
 
-    def connect(self, retries=12, timeout=1/32):
+    def connect(self, force_reconnect=False, retries=12, timeout=1/32):
         import paramiko  # ... in parallel with VM spin-up
-        if self._transport is not None:
+        if not force_reconnect and self._transport is not None:
             self._transport.send_ignore()
             if self._transport.is_authenticated():
-                return  # the connection is already OK
+                return  # the transport is already OK
         self.m.log.debug('waiting for the VM to spin up and offer SSH...')
         pkey = paramiko.ECDSAKey.from_private_key_file(self.key)
 
@@ -350,7 +350,11 @@ class SSH:
         cmd = (' '.join(["'" + a.replace("'", r"\'") + "'" for a in cmd])
                if not shell else cmd[0])
         self.connect()
-        channel = self._transport.open_session()
+        try:
+            channel = self._transport.open_session()
+        except EOFError:
+            self.connect(force_reconnect=True)
+            channel = self._transport.open_session()
         self.m.log.info(f'ssh command: {cmd}')
         channel.exec_command(cmd)
         out, err = self._stream_out_and_err(channel)
