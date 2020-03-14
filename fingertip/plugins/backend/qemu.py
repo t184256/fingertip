@@ -298,23 +298,25 @@ class SSH:
 
     def connect(self, retries=12, timeout=1/32):
         import paramiko  # ... in parallel with VM spin-up
-        if self._transport is None:
-            self.m.log.debug('waiting for the VM to spin up and offer SSH...')
-            pkey = paramiko.ECDSAKey.from_private_key_file(self.key)
+        if self._transport is not None:
+            self._transport.send_ignore()
+            if self._transport.is_authenticated():
+                return  # the connection is already OK
+        self.m.log.debug('waiting for the VM to spin up and offer SSH...')
+        pkey = paramiko.ECDSAKey.from_private_key_file(self.key)
 
-            def connect():
-                t = paramiko.Transport((self.host, self.port))
-                t.start_client()
-                return t
+        def connect():
+            t = paramiko.Transport((self.host, self.port))
+            t.start_client()
+            return t
 
-            transport = repeatedly.keep_trying(
-                connect,
-                paramiko.ssh_exception.SSHException,
-                retries=retries, timeout=timeout
-            )
-            transport.auth_publickey('root', pkey)
-            self._transport = transport
-            self.m.log.debug(f'{self._transport}')
+        transport = repeatedly.keep_trying(
+            connect,
+            paramiko.ssh_exception.SSHException,
+            retries=retries, timeout=timeout
+        )
+        transport.auth_publickey('root', pkey)
+        self._transport = transport
 
     def invalidate(self):
         self._transport = None
