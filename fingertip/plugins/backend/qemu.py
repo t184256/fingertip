@@ -8,7 +8,7 @@ import selectors
 import socket
 import stat
 import subprocess
-import sys
+import time
 
 import fasteners
 import pexpect
@@ -302,6 +302,7 @@ class SSH:
             self._transport.send_ignore()
             if self._transport.is_authenticated():
                 return  # the transport is already OK
+        self._transport = None
         self.m.log.debug('waiting for the VM to spin up and offer SSH...')
         pkey = paramiko.ECDSAKey.from_private_key_file(self.key)
 
@@ -353,6 +354,8 @@ class SSH:
         try:
             channel = self._transport.open_session()
         except EOFError:
+            self.m.log.warning('EOFError on SSH exec, retrying in 2 sec...')
+            time.sleep(2)
             self.connect(force_reconnect=True)
             channel = self._transport.open_session()
         self.m.log.info(f'ssh command: {cmd}')
