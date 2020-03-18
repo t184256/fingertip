@@ -23,6 +23,7 @@ openssh-server
 %post --erroronfail
 sed -i 's|\blocalhost\b|{HOSTNAME} localhost|' /etc/hosts
 sed -i 's|^\[main\]$|[main]\nproxy={PROXY}\ndeltarpm=0\nzchunk=0\ninstall_weak_deps=0|' /etc/dnf/dnf.conf
+sed -i 's|^baseurl=https://|baseurl=http://|' /etc/yum.repos.d/*
 sed -i 's|^metalink=https://|metalink=http://|' /etc/yum.repos.d/*
 sed -i 's|^metalink=\(.*\)$|metalink=\1\&protocol=http|' /etc/yum.repos.d/*
 dnf clean all
