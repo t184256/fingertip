@@ -62,3 +62,12 @@ def main(m):
         assert e.retcode == 3
         assert e.out == 'a\nb\n'
         assert e.err == 'e\n'
+
+        e = m('''
+          yes out1 | head -n 5000
+          yes err1 | head -n 5000 > /dev/stderr
+          yes out2 | head -n 5000
+          yes err2 | head -n 5000 > /dev/stderr
+        ''')
+        assert e.out == 'out1\n' * 5000 + 'out2\n' * 5000
+        assert e.err == 'err1\n' * 5000 + 'err2\n' * 5000
