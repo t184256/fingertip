@@ -13,6 +13,7 @@ def main(m, no_unseal=False):
         m.log.plain()
         subprocess.run(['ssh',
                         '-o', 'StrictHostKeyChecking=no',
+                        '-o', 'UserKnownHostsFile=/dev/null',
                         '-o', 'GSSAPIAuthentication=no',
                         '-o', 'GSSAPIKeyExchange=no',
                         '-i', m.ssh.key_file,
