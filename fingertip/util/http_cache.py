@@ -20,7 +20,7 @@ OFFLINE = os.getenv('FINGERTIP_OFFLINE', '0') != '0'
 BIG = 2**30  # too big for caching
 STRIP_IF_OFFLINE = ('Cache-Control', 'Pragma')
 STRIP_ALWAYS = ('TE', 'Transfer-Encoding', 'Keep-Alive', 'Trailer', 'Upgrade',
-                'Connection', 'Range', 'Host', 'Accept')
+                'Connection', 'Host', 'Accept')
 STRIP_HEADERS = STRIP_ALWAYS + STRIP_IF_OFFLINE if OFFLINE else STRIP_ALWAYS
 
 
