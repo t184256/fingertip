@@ -60,6 +60,11 @@ class HTTPCache:
                         direct = None
                         if int(preview.headers.get('Content-Length', 0)) > BIG:
                             direct = f'file bigger than {BIG}'
+                        if 'Range' in headers:
+                            # There seems to be a bug in CacheControl
+                            # that serves contents in full if a range request
+                            # hits a non-ranged cached entry.
+                            direct = f'ranged request, playing safe'
                         if direct:
                             # Don't cache, don't reencode, stream it as is
                             log.warning(f'streaming {uri} directly ({direct})')
