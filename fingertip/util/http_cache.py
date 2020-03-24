@@ -62,7 +62,7 @@ class HTTPCache:
                             direct = f'file bigger than {BIG}'
                         if direct:
                             # Don't cache, don't reencode, stream it as is
-                            log.warn(f'streaming {uri} directly ({direct})')
+                            log.warning(f'streaming {uri} directly ({direct})')
                             r = requests.get(uri, headers=headers, stream=True)
                             self._status_and_headers(r.status_code, r.headers)
                             self.copyfile(r.raw, self.wfile)
