@@ -49,4 +49,4 @@ exec $BACKEND run \
 	--userns=keep-id --user $(id -u):$(id -g) \
 	$EXTRA_OPTS \
 	-it fingertip \
-	/usr/bin/python /containerized-fingertip "$@"
+	/usr/bin/python3 /containerized-fingertip "$@"
