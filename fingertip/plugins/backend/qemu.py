@@ -378,6 +378,7 @@ class SSH:
         dst = dst or os.path.basename(src)
         self.connect()
         sftp_client = paramiko.SFTPClient.from_transport(self._transport)
+        sftp_client.stat(src)  # don't truncate dst if src does not exist
         sftp_client.get(src, dst)
 
     @property
