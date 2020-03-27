@@ -373,6 +373,13 @@ class SSH:
         sftp_client.put(src, dst)
         sftp_client.chmod(dst, os.stat(src).st_mode)
 
+    def download(self, src, dst=None):
+        import paramiko  # ... in parallel with VM spin-up
+        dst = dst or os.path.basename(src)
+        self.connect()
+        sftp_client = paramiko.SFTPClient.from_transport(self._transport)
+        sftp_client.get(src, dst)
+
     @property
     def key_file(self):
         key_file = path.fingertip('ssh_key', 'fingertip')
