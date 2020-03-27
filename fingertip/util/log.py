@@ -132,10 +132,13 @@ class LogPipeThread(threading.Thread):
         self.pipe_read, self.pipe_write = os.pipe()
         self.opened_write = os.fdopen(self.pipe_write, 'wb')
         self.opened_read = os.fdopen(self.pipe_read, 'rb')
+        self.opened_write.data = b''
+        self.opened_write.wait = self.join
         self.start()
 
     def run(self):
         for line in iter(self.opened_read.readline, b''):
+            self.opened_write.data += line
             if line:
                 line = strip_control_sequences(line).rstrip('\r\n')
                 self.logger.log(self.level, line)

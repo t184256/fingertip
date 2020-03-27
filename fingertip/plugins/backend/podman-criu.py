@@ -119,7 +119,9 @@ def _base():
                      os.path.join(to, 'snapshot.tar'))
     m.hooks.clone.append(clone)
 
-    m.exec = m.container.exec
+    def attach_exec():
+        m.exec = m.container.exec
+    m.hooks.up.append(attach_exec)  # FIXME self_test.exec, I blame cloudpickle
 
     return m
 
@@ -147,6 +149,8 @@ class ContainerNamespacedFeatures:
         finally:
             stdout.close()
             stderr.close()
+            stdout.wait()
+            stderr.wait()
         out, err = stdout.data, stderr.data
         if p.returncode:  # HACK: ugly workaround for podman polluting stderr
             m = (f'Error: non zero exit code: {p.returncode}:'
