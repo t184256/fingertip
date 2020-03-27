@@ -46,7 +46,6 @@ Put in `fingertip/plugins/demo.py`, this can be used as
 $ python3 fingertip demo
 ```
 
-
 ## Preparations
 
 ### Dependencies
@@ -56,14 +55,46 @@ Check out this repository:
 $ git clone https://github.com/t184256/fingertip
 ```
 
-Install the dependencies (adjust accordingly):
+Install the required dependencies (adjust accordingly):
 ``` bash
-$ sudo <your package manager> install qemu ansible python3-colorlog python3-paramiko python3-pexpect python3-xdg python3-CacheControl python3-requests python3-requests-mock python3-fasteners python3-lockfile python3-cloudpickle python3-GitPython
+$ sudo <your package manager> install qemu ansible
 ```
 
-OR, if you have Podman or Docker, you can try out a containerized version
+### Running with system packages
+
+To run fingertip with system Python packages, first install all required dependencies:
+
+``` bash
+$ sudo <your package manager> install python3-colorlog python3-paramiko python3-pexpect python3-xdg python3-CacheControl python3-requests python3-requests-mock python3-fasteners python3-lockfile python3-cloudpickle python3-GitPython
+```
+
+You can now run fingertip in project root with
+
+``` bash
+$ python3 -m fingertip PLUGINS
+```
+
+### Running via container
+
+If you have Podman or Docker, you can try out a containerized version
 (`fingertip/fingertip-containerized`) that'll install
 Fedora with all the required dependencies into a container.
+
+### Running via Poetry
+
+Poetry will install fingertip in an virtual environment and provide a way to execute it.
+
+[Install poetry](https://python-poetry.org/docs/) and install fingertip by running in project root:
+
+``` bash
+$ poetry install
+```
+
+To run fingertip you can use
+
+``` bash
+$ poetry run fingertip PLUGINS
+```
 
 ### CoW
 
@@ -162,6 +193,21 @@ def func(m=None):
 
 NOTE: `m.apply` happening outside the `with` block will use a cached machine
 with the test file already present if there is one.
+
+
+## Publishing to Pypi
+
+To publish a new version to pypi, install Poetry and bump the version to the version you want:
+
+``` bash
+$ poetry version VERSION
+```
+
+To publish to Pypi run:
+
+``` bash
+$ poetry publish
+```
 
 
 ## Disclaimer
