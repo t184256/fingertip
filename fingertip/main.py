@@ -6,6 +6,8 @@ import sys
 
 import fingertip
 import fingertip.util.log
+import fingertip.util.path
+import fingertip.util.reflink
 
 from fingertip.util import optional_pretty_backtraces  # noqa: F401
 
@@ -24,6 +26,16 @@ def parse_subcmd(subcmd, *all_args):
 
 def main():
     fingertip.util.log.nicer()
+
+    # warn if there is no reflink support
+    path = fingertip.util.path.MACHINES
+    fingertip.util.log.debug(f"checking reflink support for {path}")
+    if not fingertip.util.reflink.is_supported(path):
+        fingertip.util.log.warning(
+            f"Reflink not supported for machines directory ('{path}'), "
+            f"Copy-on-Write not possible, YOU DON'T WANT THIS! "
+            f"See README.md, section 'CoW' on why and how to enable it."
+        )
 
     args = sys.argv[1:]
     subcmds = [list(ws)
