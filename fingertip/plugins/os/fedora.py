@@ -68,6 +68,8 @@ def install_in_qemu(m, version, updates=True,
 
     with m:
         m.qemu.ram_size = '2G'
+        hostname = f'fedora{version}'
+        fqdn = hostname + '.fingertip.local'
 
         ssh_key_fname = path.fingertip('ssh_key', 'fingertip.pub')
         with open(ssh_key_fname) as f:
@@ -76,7 +78,7 @@ def install_in_qemu(m, version, updates=True,
 
         ks_fname = path.fingertip('kickstart_templates', f'fedora{version}')
         with open(ks_fname) as f:
-            ks_text = f.read().format(HOSTNAME=f'fedora{version}',
+            ks_text = f.read().format(HOSTNAME=fqdn,
                                       SSH_PUBKEY=ssh_pubkey,
                                       PROXY=m.http_cache.internal_url,
                                       REPOS=repos)
@@ -105,10 +107,9 @@ def install_in_qemu(m, version, updates=True,
         m.qemu.compress_image()
         m.qemu.ram_size = original_ram_size
         m.qemu.run(load=None)  # cold boot
-        HOSTNAME = f'fedora{version}'
         ROOT_PASSWORD = 'fingertip'
-        m.prompt = f'[root@{HOSTNAME} ~]# '
-        m.console.expect(f'{HOSTNAME} login: ')
+        m.prompt = f'[root@{hostname} ~]# '
+        m.console.expect(f'{hostname} login: ')
         m.console.sendline('root')
         m.console.expect('Password: ')
         m.console.sendline(ROOT_PASSWORD)
