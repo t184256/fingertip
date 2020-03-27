@@ -26,6 +26,11 @@ def main():
     fingertip.util.log.nicer()
 
     args = sys.argv[1:]
+
+    if not args:
+        fingertip.util.log.error('no plugin specified')
+        sys.exit(1)
+
     subcmds = [list(ws)
                for x, ws in itertools.groupby(args, lambda w: w != '+') if x]
     first_step, *rest_of_the_steps = [parse_subcmd(*sc) for sc in subcmds]
