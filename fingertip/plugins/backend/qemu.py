@@ -384,8 +384,12 @@ class SSH:
     @property
     def key_file(self):
         key_file = path.fingertip('ssh_key', 'fingertip')
-        mode = os.stat(key_file)[stat.ST_MODE]
-        if mode & 0o77:
+        s = os.stat(key_file)
+        mode = s[stat.ST_MODE]
+        owner = s[stat.ST_UID]
+        # OpenSSH cares about permissions on key file only if the owner
+        # matches current user
+        if mode & 0o77 and owner == os.getuid():
             self.m.log.debug(f'fixing up permissions on {key_file}')
             os.chmod(key_file, mode & 0o7700)
         return key_file
