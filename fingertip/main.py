@@ -25,17 +25,12 @@ def parse_subcmd(subcmd, *all_args):
 
 
 def main():
-    fingertip.util.log.nicer()
+    # Start with plain to get output from setup wizard
+    fingertip.util.log.plain()
 
-    # warn if there is no reflink support
-    path = fingertip.util.path.MACHINES
-    fingertip.util.log.debug(f"checking reflink support for {path}")
-    if not fingertip.util.reflink.is_supported(path):
-        fingertip.util.log.warning(
-            f"Reflink not supported for machines directory ('{path}'), "
-            f"Copy-on-Write not possible, YOU DON'T WANT THIS! "
-            f"See README.md, section 'CoW' on why and how to enable it."
-        )
+    fingertip.util.reflink.storage_setup_wizard()
+
+    fingertip.util.log.nicer()
 
     args = sys.argv[1:]
 
