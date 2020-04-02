@@ -102,27 +102,28 @@ class ErasingStreamHandler(colorlog.StreamHandler):
 logger = logging.getLogger('fingertip')
 critical, error, warning = logger.critical, logger.error, logger.warning
 debug, info = logger.debug, logger.info
-erasing_handler = None
-
+current_handler = None
 
 def nicer():
     # global logger
     # logger = logging.getLogger('fingertip')
-    global erasing_handler
+    global current_handler
     logger.setLevel(logging.DEBUG if DEBUG else logging.INFO)
-    erasing_handler = ErasingStreamHandler(shorten_name=True)
-    logger.addHandler(erasing_handler)
+    if current_handler:
+        logger.removeHandler(current_handler)
+    current_handler = ErasingStreamHandler(shorten_name=True)
+    logger.addHandler(current_handler)
 
 
 def plain():
-    global erasing_handler
+    global current_handler
     logger.setLevel(logging.DEBUG if DEBUG else logging.INFO)
-    if erasing_handler:
-        erasing_handler.stop_erasing()
-        logger.removeHandler(erasing_handler)
-        erasing_handler = None
-    regularHandler = logging.StreamHandler()
-    logger.addHandler(regularHandler)
+    if current_handler:
+        if isinstance(current_handler, ErasingStreamHandler):
+            current_handler.stop_erasing()
+        logger.removeHandler(current_handler)
+    current_handler = logging.StreamHandler()
+    logger.addHandler(current_handler)
 
 
 class LogPipeThread(threading.Thread):
@@ -210,6 +211,7 @@ def sublogger(name, to_file=None):
         return exec_func
     sub.pseudofile_powered = pseudofile_powered
 
+    sub.nicer = nicer
     sub.plain = plain
 
     return sub
