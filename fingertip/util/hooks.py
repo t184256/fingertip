@@ -1,5 +1,5 @@
 """
-Helper functions for fingertep: attacking and calling hooks.
+Helper functions for fingertip: attaching and calling hooks.
 """
 
 import collections
