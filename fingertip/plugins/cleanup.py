@@ -22,6 +22,8 @@ def main(what=None, older_than=0):
         return
     if what == 'everything':
         return everything()
+    if what == 'periodic':
+        return periodic()
     elif what in ('downloads', 'logs', 'machines'):
         return globals()[what](older_than)
     log.error('usage: ')
@@ -29,6 +31,7 @@ def main(what=None, older_than=0):
     log.error('    fingertip cleanup logs [<older-than>]')
     log.error('    fingertip cleanup machines [<expired-for>|all]')
     log.error('    fingertip cleanup everything')
+    log.error('    fingertip cleanup periodic')
     raise SystemExit()
 
 
@@ -80,6 +83,10 @@ def machines(expired_for=0):
                 log.debug(f'keeping {os.path.realpath(d)}')
             os.unlink(lock_path)
             lock.release()
+
+
+def periodic():
+    machines('12h')
 
 
 def everything():
