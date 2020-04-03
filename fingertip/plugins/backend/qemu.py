@@ -78,6 +78,8 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
             m.ssh.invalidate()
     m.hooks.disrupt.append(disrupt)
 
+    m.breakpoint = lambda: m.apply('ssh', no_unseal=True)
+
     load()
     run = m.log.pipe_powered(subprocess.run,
                              stdout=logging.INFO, stderr=logging.ERROR)
