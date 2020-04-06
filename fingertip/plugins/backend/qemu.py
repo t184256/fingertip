@@ -22,6 +22,8 @@ CACHE_INTERNAL_IP, CACHE_INTERNAL_PORT = '10.0.2.244', 8080
 CACHE_INTERNAL_URL = f'http://{CACHE_INTERNAL_IP}:{CACHE_INTERNAL_PORT}'
 # TODO: add a way to customize smp
 QEMU_COMMON_ARGS = ['-enable-kvm', '-cpu', 'host,-vmx', '-smp', '4',
+                    '-virtfs', f'local,id=shared9p,path={path.SHARED},'
+                               'security_model=mapped-file,mount_tag=shared',
                     '-nographic',
                     '-object', 'rng-random,id=rng0,filename=/dev/urandom',
                     '-device', 'virtio-rng-pci,rng=rng0']
@@ -107,6 +109,7 @@ class QEMUNamespacedFeatures:
         # TODO: extract SSH into a separate plugin?
         self.vm.ssh = SSH(self.vm,
                           key=path.fingertip('ssh_key', 'fingertip.paramiko'))
+        self.vm.shared_directory = SharedDirectory(self.vm)
         self.vm.exec = self.vm.ssh.exec
         ssh_host_forward = f'hostfwd=tcp:127.0.0.1:{self.vm.ssh.port}-:22'
         cache_guest_forward = (CACHE_INTERNAL_IP, CACHE_INTERNAL_PORT,
@@ -135,6 +138,8 @@ class QEMUNamespacedFeatures:
                      f'file={image},cache=unsafe,if=virtio,discard=unmap']
 
         run_args += ['-m', self.ram_size]
+
+        os.makedirs(path.SHARED, exist_ok=True)
 
         args = QEMU_COMMON_ARGS + self.custom_args + run_args + extra_args
         self.vm.log.debug(' '.join(args))
@@ -288,6 +293,24 @@ class Monitor:
         # as live QEMU images are not CoW-backed with qcow2 mechanism,
         # just deduplicated with FS-level reflinks that QEMU is unaware of
         self._execute_human_command('commit all')
+
+
+class SharedDirectory:
+    def __init__(self, m):
+        self.m = m
+        self.mount_count = 0
+
+    def __enter__(self):
+        if not self.mount_count:
+            self.m('mkdir -p /shared && '
+                   'mount -t 9p -o trans=virtio shared /shared '
+                   '  -oversion=9p2000.L')
+        self.mount_count += 1
+
+    def __exit__(self, *_):
+        self.mount_count -= 1
+        if not self.mount_count:
+            self.m('umount /shared')
 
 
 class SSH:
