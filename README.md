@@ -103,9 +103,15 @@ you need a CoW-enabled filesystem on your `~/.cache/fingertip/machines`.
 In practice, this probably means either `btrfs` or specially-created `xfs`
 (see example below):
 
+When you first run `fingertip`, the interactive setup wizard will create
+all of this for you, which should cover most of the common use cases.
+In case you need to automate the setup, you can use the environment
+variables `FINGERTIP_SETUP=auto|suggest|never` and `FINGERTIP_SETUP_SIZE`
+or perform the setup manualy:
+
 ``` bash
 $ mkdir -p ~/.cache/fingertip/machines
-$ fallocate -l 20G ~/.cache/fingertip/for-machines.xfs
+$ fallocate -l 25G ~/.cache/fingertip/for-machines.xfs
 $ mkfs.xfs -m reflink=1 ~/.cache/fingertip/for-machines.xfs
 $ sudo mount -o loop ~/.cache/fingertip/for-machines.xfs ~/.cache/fingertip/machines
 $ sudo chown $USER ~/.cache/fingertip/machines
