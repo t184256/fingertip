@@ -105,9 +105,9 @@ In practice, this probably means either `btrfs` or specially-created `xfs`
 
 ``` bash
 $ mkdir -p ~/.cache/fingertip/machines
-$ fallocate -l 20G ~/.cache/fingertip/machines/for-machines.xfs
-$ mkfs.xfs -m reflink=1 ~/.cache/fingertip/machines/for-machines.xfs
-$ sudo mount -o loop ~/.cache/fingertip/machines/for-machines.xfs ~/.cache/fingertip/machines
+$ fallocate -l 20G ~/.cache/fingertip/for-machines.xfs
+$ mkfs.xfs -m reflink=1 ~/.cache/fingertip/for-machines.xfs
+$ sudo mount -o loop ~/.cache/fingertip/for-machines.xfs ~/.cache/fingertip/machines
 $ sudo chown $USER ~/.cache/fingertip/machines
 ```
 
