@@ -345,6 +345,10 @@ class SSH:
         self._transport = transport
 
     def invalidate(self):
+        # gracefully terminate transport channel
+        if self._transport:
+            self.m.log.debug('Closing SSH session')
+            self._transport.close()
         self._transport = None
 
     def _stream_out_and_err(self, channel):
