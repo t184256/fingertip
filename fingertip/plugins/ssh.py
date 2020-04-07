@@ -9,6 +9,9 @@ def main(m, no_unseal=False):
     with m.transient() as m:
         m.log.info(f'waiting for the SSH server to be up...')
         m.ssh.exec('true')
+        # terminate the ssh session not to leave any traces in vm
+        m.ssh.invalidate()
+
         m.log.info(f'starting interactive SSH session, {m.ssh.port}')
         m.log.plain()
         subprocess.run(['ssh',
