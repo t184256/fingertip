@@ -9,10 +9,11 @@ from fingertip.util import log, filesystem
 
 @fingertip.transient
 def main(what=None):
-    if what in ('setup', 'cleanup'):
+    if what in ('setup', 'unmount', 'cleanup'):
         return globals()[what]()
     log.error('usage: ')
     log.error('    fingertip filesystem setup')
+    log.error('    fingertip filesystem unmount')
     log.error('    fingertip filesystem cleanup')
     raise SystemExit()
 
@@ -21,5 +22,9 @@ def setup():
     filesystem.storage_setup_wizard()
 
 
-def cleanup():
+def unmount():
     filesystem.storage_unmount()
+
+
+def cleanup():
+    filesystem.storage_destroy()
