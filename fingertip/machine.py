@@ -75,7 +75,6 @@ class Machine:
 
     def _finalize(self, link_as=None, name_hint=None):
         log.debug(f'finalize hint={name_hint} link_as={link_as} {self._state}')
-        self.log.disable_hint()
         if link_as and self._state == 'spun_down':
             self.hooks.save.in_reverse()
             temp_path = self.path
@@ -83,7 +82,9 @@ class Machine:
             log.debug(f'saving to temp {temp_path}')
             self._state = 'saving'
             self.expiration.depend_on_loaded_python_modules()
-            del self.log
+            if hasattr(self, 'log'):
+                self.log.disable_hint()
+                del self.log
             with open(os.path.join(temp_path, 'machine.clpickle'), 'wb') as f:
                 cloudpickle.dump(self, f)
             log.debug(f'moving {temp_path} to {self.path}')
@@ -91,6 +92,9 @@ class Machine:
             self._state == 'saved'
             link_this = self.path
         else:
+            if hasattr(self, 'log'):
+                self.log.disable_hint()
+                del self.log
             assert self._state in ('spun_down', 'loaded', 'dropped')
             log.info(f'discarding {self.path}')
             temp.remove(self.path)
@@ -132,8 +136,10 @@ class Machine:
         do_lock = not hasattr(func, 'transient')
         if do_lock:
             log.info(f'acquiring lock for {tag}...')
+        self.log.disable_hint()
+        prev_log_name = self.log.name
+        del self.log
         with lock.MaybeLock(lock_path, lock=do_lock):
-            prev_log = self.log
             if os.path.exists(new_mpath) and not needs_a_rebuild(new_mpath):
                 # sweet, scratch this instance, fast-forward to cached result
                 log.info(f'reusing {step} @ {new_mpath}')
@@ -142,11 +148,12 @@ class Machine:
             else:
                 # loaded, not spun up, step not cached: perform step, cache
                 log.info(f'applying (and, possibly, caching) {tag}')
-                prev_log.disable_hint()
                 self.log = log.sublogger('plugins.' + tag.split(':', 1)[0],
                                          os.path.join(self.path, 'log.txt'))
                 m = func(self, *args, **kwargs)
-                prev_log.enable_hint()
+                if hasattr(self, 'log'):
+                    self.log.disable_hint()
+                    del self.log
                 if m:
                     assert not m._transient
                     m._finalize(link_as=new_mpath, name_hint=tag)
@@ -156,7 +163,7 @@ class Machine:
                     clone_from_path = self._parent_path
                     log.info(f'successfully applied and dropped {tag}')
         m = clone_and_load(clone_from_path, link_as=end_goal)
-        m.log = prev_log
+        m.log = log.sublogger(prev_log_name, os.path.join(m.path, 'log.txt'))
         return m
 
 

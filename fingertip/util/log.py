@@ -9,6 +9,7 @@ import atexit
 import datetime
 import logging
 import os
+import random
 import re
 import sys
 import threading
@@ -35,11 +36,6 @@ def strip_control_sequences(s):
     s = re.sub(br'\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', b'', s)
     s = s.decode() if r'\x' not in repr(s.decode()) else repr(s)
     return s
-
-#print(repr(strip_ansi_sequences('\x1bc\x1b[?7l\x1b[2J\x1b[0mSeaBIOS')))
-#print(repr(strip_ansi_sequences('\x1bc\x1b[?7l\x1b[2J\x1b7')))
-#print(repr(strip_ansi_sequences('\x1b[1m\x1b[32m*\x1b[m ')))
-#sys.exit(1)
 
 
 class ErasingFormatter(colorlog.ColoredFormatter):
@@ -84,9 +80,6 @@ class ErasingStreamHandler(colorlog.StreamHandler):
         self.erasing = stream.isatty() and not DEBUG and erasing
         self.setFormatter(ErasingFormatter(erasing=self.erasing,
                                            shorten_name=shorten_name))
-        #self.formatter = ErasingFormatter(erasing=self.erasing,
-        #                                  shorten_name=shorten_name)
-        #self.setFormatter(self.formatter)
         if self.erasing:
             self.terminator = ''
 
@@ -95,7 +88,6 @@ class ErasingStreamHandler(colorlog.StreamHandler):
             sys.stderr.write(_REWIND + _ERASE)
             sys.stderr.flush()
             self.terminator = '\n'
-#            self.formatter.erasing = False
             self.erasing = False
 
 
@@ -103,6 +95,7 @@ logger = logging.getLogger('fingertip')
 critical, error, warning = logger.critical, logger.error, logger.warning
 debug, info = logger.debug, logger.info
 current_handler = None
+
 
 def nicer():
     # global logger
@@ -165,14 +158,17 @@ class LogPseudoFile():
 
 
 def sublogger(name, to_file=None):
-    sub = logger.getChild(name)
+    # If I don't do this, it assumes that subloggers with the same name
+    # are reusable, and logs stuff *somewhere*. Ugh.
+    sub = logger.getChild(name + '.' + str(random.random()))
+    sub.name = logger.name + '.' + name
 
     if to_file:
         sub.addHandler(logging.FileHandler(to_file))
 
         def hint():
             if os.path.exists(to_file):
-                fname = f'{name}-{datetime.datetime.utcnow().isoformat()}.txt'
+                fname = f'{datetime.datetime.utcnow().isoformat()}.txt'
                 t = path.logs(fname, makedirs=True)
                 reflink.auto(to_file, t)
                 home = os.path.expanduser('~')
