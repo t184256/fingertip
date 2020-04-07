@@ -112,6 +112,18 @@ def storage_unmount():
     log.nicer()
 
 
+def storage_destroy():
+    backing_file = os.path.join(CACHE, 'for-machines.xfs')
+    if os.path.exists(backing_file):
+        # we should not remove the file if it is mounted
+        mount = subprocess.run(['mount'], capture_output=True)
+        if backing_file in mount.stdout:
+            log.warning('Filesystem is still mounted. Try to unmount.')
+            storage_unmount()
+
+    os.unlink(backing_file)
+
+
 def storage_schedule_cleanup():
     # Do this only if fingertip is in PATH
     if not shutil.which("fingertip"):
