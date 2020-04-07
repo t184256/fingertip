@@ -115,7 +115,7 @@ def storage_unmount():
 def storage_schedule_cleanup():
     # Do this only if fingertip is in PATH
     if not shutil.which("fingertip"):
-        log.warning('No `fingertip` found in PATH. Not scheduling '
+        log.debug('No `fingertip` found in PATH. Not scheduling '
                     'automatic cleanup.')
         return
 
@@ -131,8 +131,8 @@ def storage_schedule_cleanup():
         subprocess.run(['systemctl', '--user', 'is-active', '--quiet',
                        'fingertip-cleanup.timer'])
         # exit code 0:
-        log.info('The systemd timer handling cleanup is already installed '
-                 'and running.')
+        log.debug('The systemd timer handling cleanup is already installed '
+                  'and running.')
         return
     except CalledProcessError as e:
         # non-zero exit code means it is not active or not existing
