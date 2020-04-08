@@ -51,6 +51,11 @@ SKIP = (
     ('podman_alpine', 'subsh'),  # shell poorly snapshottable with CRIU (ash)
     ('podman_ubuntu', 'wait4'),  # shell poorly snapshottable with CRIU (dash)
     ('podman_ubuntu', 'subsh'),  # shell poorly snapshottable with CRIU (dash)
+    ('podman_centos', 'scrpt'),  # needs ssh.upload
+    ('podman_fedora', 'scrpt'),  # needs ssh.upload
+    ('podman_fedorO', 'scrpt'),  # needs ssh.upload
+    ('podman_alpine', 'scrpt'),  # needs ssh.upload
+    ('podman_ubuntu', 'scrpt'),  # needs ssh.upload
 )
 
 for base_name, base in BASES.items():
