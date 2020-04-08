@@ -55,6 +55,14 @@ def install_in_qemu(m):
         m.console.sendline('. /etc/profile.d/proxy.sh')
         m.console.expect_exact(m.prompt)
 
+        fqdn = m.hostname + '.fingertip.local'
+        m.console.sendline(f'echo "{m.hostname}" > /etc/hostname')
+        m.console.expect_exact(m.prompt)
+        m.console.sendline('hostname -F /etc/hostname')
+        m.console.expect_exact(m.prompt)
+        m.console.sendline(f'echo "127.0.0.1 {fqdn} {m.hostname}" > /etc/hosts')
+        m.console.expect_exact(m.prompt)
+
         m.console.sendline(f'setup-apkrepos {REPO}')
         m.console.expect_exact(m.prompt)
 
