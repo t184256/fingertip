@@ -266,12 +266,12 @@ class Monitor:
         self._expect({'return': {}})
 
     def pause(self):
+        self.vm.hooks.disrupt()
         self._execute('stop')
         r = self._expect(None)
         assert set(r.keys()) == {'timestamp', 'event'}
         assert r['event'] == 'STOP'
         self._expect({'return': {}})
-        self.vm.hooks.disrupt()
 
     def quit(self):
         self.vm.hooks.disrupt()
