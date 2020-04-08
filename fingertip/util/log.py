@@ -157,37 +157,49 @@ class LogPseudoFile():
         pass
 
 
-def sublogger(name, to_file=None):
-    # If I don't do this, it assumes that subloggers with the same name
-    # are reusable, and logs stuff *somewhere*. Ugh.
-    sub = logger.getChild(name + '.' + str(random.random()))
-    sub.name = logger.name + '.' + name
+class Sublogger:
+    def __init__(self, name, to_file=None):
+        # If I don't do this, it assumes that subloggers with the same name
+        # are reusable, and logs stuff *somewhere*. Ugh.
+        self.sub = logger.getChild(name + '.' + str(random.random()))
+        self.sub.name = self.name = logger.name + '.' + name
+        self.path = to_file
+        self.used = False
 
-    if to_file:
-        sub.addHandler(logging.FileHandler(to_file))
+    def hint(self):
+        if not os.path.exists(self.path):
+            self.warning(f'{self.path} missing!')
 
-        def hint():
-            if os.path.exists(to_file):
-                fname = f'{datetime.datetime.utcnow().isoformat()}.txt'
-                t = path.logs(fname, makedirs=True)
-                reflink.auto(to_file, t)
-                home = os.path.expanduser('~')
-                t = t if not t.startswith(home) else t.replace(home, '~')
-                m = (f'Check {t} for more details or set FINGERTIP_DEBUG=1'
-                     if not DEBUG else f'Logfile: {t}')
-                sys.stderr.write(m + '\n')
-        atexit.register(hint)
+        fname = f'{datetime.datetime.utcnow().isoformat()}.txt'
+        t = path.logs(fname, makedirs=True)
+        reflink.auto(self.path, t)
+        home = os.path.expanduser('~')
+        t = t if not t.startswith(home) else t.replace(home, '~')
+        m = (f'Check {t} for more details or set FINGERTIP_DEBUG=1'
+             if not DEBUG else f'Logfile: {t}')
+        sys.stderr.write(m + '\n')
 
-        sub.disable_hint = lambda: atexit.unregister(hint)
-        sub.enable_hint = lambda: atexit.register(hint)
-    else:
-        sub.disable_hint = sub.enable_hint = lambda: None
+    def initialize(self):
+        if not self.used:
+            self.used = True
 
-    sub.make_pipe = lambda **kwa: LogPipeThread(sub, **kwa).opened_write
+            if self.path:
+                self.sub.addHandler(logging.FileHandler(self.path))
 
-    def pipe_powered(func, **what_to_supply):
+                debug(f'logging to {self.path}, enabling hint')
+                atexit.register(self.hint)
+
+    def finalize(self):
+        if self.used and self.path:
+            debug(f'no longer logging to {self.path}, disabling hint')
+            atexit.unregister(self.hint)
+
+    def make_pipe(self, **kwargs):
+        return LogPipeThread(self.sub, **kwargs).opened_write
+
+    def pipe_powered(self, func, **what_to_supply):
         def exec_func(*a, **kwa):
-            extra_args = {name: sub.make_pipe(level=level)
+            extra_args = {name: self.make_pipe(level=level)
                           for name, level in what_to_supply.items()}
             try:
                 return func(*a, **kwa, **extra_args)
@@ -195,19 +207,35 @@ def sublogger(name, to_file=None):
                 for pipe in extra_args.values():
                     pipe.close()
         return exec_func
-    sub.pipe_powered = pipe_powered
 
-    sub.make_pseudofile = lambda **kwa: LogPseudoFile(sub, **kwa)
+    def make_pseudofile(self, **kwargs):
+        return LogPseudoFile(self.sub, **kwargs)
 
-    def pseudofile_powered(func, **what_to_supply):
+    def pseudofile_powered(self, func, **what_to_supply):
         def exec_func(*a, **kwa):
-            extra_args = {name: sub.make_pseudofile(level=level)
+            extra_args = {name: self.make_pseudofile(level=level)
                           for name, level in what_to_supply.items()}
             return func(*a, **kwa, **extra_args)
         return exec_func
-    sub.pseudofile_powered = pseudofile_powered
 
-    sub.nicer = nicer
-    sub.plain = plain
+    plain, nicer = staticmethod(plain), staticmethod(nicer)
 
-    return sub
+    def critical(self, *args, **kwargs):
+        self.initialize()
+        return self.sub.critical(*args, **kwargs)
+
+    def error(self, *args, **kwargs):
+        self.initialize()
+        return self.sub.error(*args, **kwargs)
+
+    def warning(self, *args, **kwargs):
+        self.initialize()
+        return self.sub.warning(*args, **kwargs)
+
+    def info(self, *args, **kwargs):
+        self.initialize()
+        return self.sub.info(*args, **kwargs)
+
+    def debug(self, *args, **kwargs):
+        self.initialize()
+        return self.sub.debug(*args, **kwargs)

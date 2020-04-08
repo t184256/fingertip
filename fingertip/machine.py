@@ -35,7 +35,7 @@ class Machine:
         self.sealed = sealed
         self.expiration = expiration.Expiration(expire_in)
         self.backend = backend_name
-        self.log = log.sublogger(f'plugins.backend.{backend_name}',
+        self.log = log.Sublogger(f'plugins.backend.{backend_name}',
                                  os.path.join(self.path, 'log.txt'))
         self.log.debug(f'created {backend_name}')
         self.hooks.clone.append(
@@ -82,9 +82,7 @@ class Machine:
             log.debug(f'saving to temp {temp_path}')
             self._state = 'saving'
             self.expiration.depend_on_loaded_python_modules()
-            if hasattr(self, 'log'):
-                self.log.disable_hint()
-                del self.log
+            self.log.finalize()
             with open(os.path.join(temp_path, 'machine.clpickle'), 'wb') as f:
                 cloudpickle.dump(self, f)
             log.debug(f'moving {temp_path} to {self.path}')
@@ -92,9 +90,7 @@ class Machine:
             self._state == 'saved'
             link_this = self.path
         else:
-            if hasattr(self, 'log'):
-                self.log.disable_hint()
-                del self.log
+            self.log.finalize()
             assert self._state in ('spun_down', 'loaded', 'dropped')
             log.info(f'discarding {self.path}')
             temp.remove(self.path)
@@ -136,9 +132,8 @@ class Machine:
         do_lock = not hasattr(func, 'transient')
         if do_lock:
             log.info(f'acquiring lock for {tag}...')
-        self.log.disable_hint()
         prev_log_name = self.log.name
-        del self.log
+        self.log.finalize()
         with lock.MaybeLock(lock_path, lock=do_lock):
             if os.path.exists(new_mpath) and not needs_a_rebuild(new_mpath):
                 # sweet, scratch this instance, fast-forward to cached result
@@ -148,12 +143,9 @@ class Machine:
             else:
                 # loaded, not spun up, step not cached: perform step, cache
                 log.info(f'applying (and, possibly, caching) {tag}')
-                self.log = log.sublogger('plugins.' + tag.split(':', 1)[0],
+                self.log = log.Sublogger('plugins.' + tag.split(':', 1)[0],
                                          os.path.join(self.path, 'log.txt'))
                 m = func(self, *args, **kwargs)
-                if hasattr(self, 'log'):
-                    self.log.disable_hint()
-                    del self.log
                 if m:
                     assert not m._transient
                     m._finalize(link_as=new_mpath, name_hint=tag)
@@ -163,7 +155,7 @@ class Machine:
                     clone_from_path = self._parent_path
                     log.info(f'successfully applied and dropped {tag}')
         m = clone_and_load(clone_from_path, link_as=end_goal)
-        m.log = log.sublogger(prev_log_name, os.path.join(m.path, 'log.txt'))
+        m.log = log.Sublogger(prev_log_name, os.path.join(m.path, 'log.txt'))
         return m
 
 
@@ -173,7 +165,7 @@ def _load_from_path(data_dir_path):
         m = cloudpickle.load(f)
     assert m._state == 'saving'
     m._state = 'loading'
-    m.log = log.sublogger('<unknown>')
+    m.log = log.Sublogger('<unknown>')
     assert m.path == data_dir_path
     assert m._parent_path == os.path.realpath(os.path.dirname(data_dir_path))
     m.hooks.load()
@@ -188,9 +180,8 @@ def clone_and_load(from_path, link_as=None, name_hint=None):
     os.makedirs(temp_path, exist_ok=True)
     with open(os.path.join(from_path, 'machine.clpickle'), 'rb') as f:
         m = cloudpickle.load(f)
-    m.log = log.sublogger('<cloning>')
+    m.log = log.Sublogger('<cloning>')
     m.hooks.clone(temp_path)
-    del m.log
     m._parent_path = os.path.realpath(from_path)
     m.path = temp_path
     m._link_as = link_as
@@ -216,6 +207,7 @@ def build(first_step, *args, **kwargs):
             first._finalize(link_as=mpath, name_hint=tag)
             log.info(f'succesfully built {tag}')
     m = clone_and_load(mpath)
+    m.log = log.Sublogger('<just built>', os.path.join(m.path, 'log.txt'))
     return m
 
 

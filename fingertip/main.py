@@ -2,6 +2,7 @@
 # Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
 
 import itertools
+import os
 import sys
 
 import fingertip
@@ -49,6 +50,12 @@ def main():
         m = m.apply(step_cmd, *step_args, **step_kwargs)
 
     fingertip.util.log.plain()
+    success_log = os.path.join(os.path.dirname(m.path), 'log.txt')
+    DEBUG = os.getenv('FINGERTIP_DEBUG') == '1'
+    msg = (f'Check {success_log} for more details or set FINGERTIP_DEBUG=1'
+           if not DEBUG else f'Logfile: {success_log}')
+    fingertip.util.log.info(f'Success. {msg}')
+    m.log.finalize()
 
 
 if __name__ == '__main__':
