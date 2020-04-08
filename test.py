@@ -42,6 +42,7 @@ TESTS = dict(
     subsh=lambda m: m.apply('self_test.subshell'),
     wait4=lambda m: m.apply('self_test.wait_for_it'),
     scrpt=lambda m: m.apply('self_test.script'),
+    hostn=lambda m: m.apply('self_test.hostname'),
 )
 
 SKIP = (
