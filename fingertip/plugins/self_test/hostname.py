@@ -6,7 +6,7 @@ import fingertip
 @fingertip.transient
 def main(m):
     with m.transient() as m:
-        r = m('hostname')
+        r = m('hostname -f')
         assert r.out.endswith('.fingertip.local\n')
         assert m('hostname -d').out == 'fingertip.local\n'
 
