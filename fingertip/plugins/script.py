@@ -5,9 +5,10 @@ import fingertip
 
 
 # fingertip ... + script.run script  -  no cache, never persist, always rerun
-# fingertip ... + script.run script + ssh  -  cache just for ssh, never reuse
+# fingertip ... + script.run script + ssh  -  cache just for this invocation
 # fingertip ... + script.run script --cache=1h  -  try to cache for 1h at most
 # fingertip ... + script.run script --cache=1h + ssh  -  try reusing the cache
+# fingertip ... + transient script.run script --cache=1h + ssh  -  revert
 
 
 def _should_run_be_transient(scriptpath, cache=0, no_unseal=False):
