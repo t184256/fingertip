@@ -3,10 +3,11 @@ import subprocess
 import fingertip
 
 
-@fingertip.transient
+@fingertip.transient(when='last')
 def main(m, no_unseal=False):
     m = m if no_unseal else m.apply('unseal')
     with m:
+        m.expiration.cap(0)  # non-deterministic user input, never reuse
         m.log.info(f'waiting for the SSH server to be up...')
         m.ssh.exec('true')
         # terminate the ssh session not to leave any traces in vm
@@ -22,4 +23,5 @@ def main(m, no_unseal=False):
                         '-i', m.ssh.key_file,
                         '-p', str(m.ssh.port),
                         '-t',
-                        'root@127.0.0.1'])
+                        'root@127.0.0.1'], check=True)
+    return m
