@@ -2,6 +2,7 @@
 # Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
 
 import datetime
+import numbers
 import os
 import sys
 import time
@@ -13,7 +14,9 @@ def _parse(interval):
     _SUFFIXES = {'s': 1, 'm': 60, 'h': 60 * 60, 'd': 24 * 60 * 60}
     if isinstance(interval, str) and interval[-1] in _SUFFIXES:
         return float(interval[:-1]) * _SUFFIXES[interval[-1]]
-    return float(interval)
+    if isinstance(interval, numbers.Real) and not isinstance(interval, bool):
+        return float(interval)
+    raise ValueError(f'Cannot parse time interval {interval}')
 
 
 class Expiration:
