@@ -2,7 +2,9 @@
 # Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
 
 import functools
+import inspect
 import os
+
 import cloudpickle
 
 import fingertip.exec
@@ -14,7 +16,7 @@ def transient(func=None, when='always'):
     if func is None:  # no parameters, just @transient
         return functools.partial(transient, when=when)
 
-    func.transient = when
+    func.transient = when  # can be a callable!
     return func
 
 
@@ -124,11 +126,21 @@ class Machine:
         assert self._state == 'loaded'
 
         transient_hint = func.transient if hasattr(func, 'transient') else None
+        if callable(transient_hint):
+            if 'last_step' in inspect.signature(transient_hint).parameters:
+                transient_hint = transient_hint(*args, **kwargs,
+                                                last_step=last_step)
+            else:
+                transient_hint = transient_hint(*args, **kwargs)
+
         return_as_transient = self._transient
         exec_as_transient = (
-            transient_hint == 'always' or
+            transient_hint in ('always', True) or
             transient_hint == 'last' and last_step
         )
+        log.debug(f'transient: {transient_hint}')
+        log.debug(f'exec_as_transient: {exec_as_transient}')
+        log.debug(f'return_as_transient: {return_as_transient}')
 
         # Could there already be a cached result?
         log.debug(f'PATH {self.path} {tag}')
@@ -156,7 +168,9 @@ class Machine:
                 self._transient = exec_as_transient
                 m = func(self, *args, **kwargs)
                 if m:
-                    assert not m._transient
+                    assert (not m._transient or
+                            # step returned m just in case it's not the last
+                            transient_hint == 'last' and not last_step)
                     m._finalize(link_as=new_mpath, name_hint=tag)
                     clone_from_path = new_mpath
                     log.info(f'successfully applied and saved {tag}')
