@@ -11,8 +11,7 @@ import sys
 import shutil
 import subprocess
 
-from fingertip.util import log, temp
-from fingertip.util.path import MACHINES, CACHE
+from fingertip.util import log, temp, path
 
 
 SETUP = os.getenv('FINGERTIP_SETUP', 'suggest')
@@ -63,17 +62,16 @@ def storage_setup_wizard():
     if SETUP == 'never':
         return
     size = SIZE
-    machinesdir = MACHINES
-    if not os.path.exists(machinesdir):
-        os.mkdir(machinesdir)
-    if not is_supported(machinesdir):
-        log.warning(f'images directory {machinesdir} lacks reflink support')
-        log.warning('without it, fingertip will thrash and fill up your SSD in no time')
-        backing_file = os.path.join(CACHE, 'for-machines.xfs')
+    os.makedirs(path.MACHINES, exist_ok=True)
+    if not is_supported(path.MACHINES):
+        log.warning(f'images directory {path.MACHINES} lacks reflink support')
+        log.warning('without it, fingertip will thrash and fill up your SSD '
+                    'in no time')
+        backing_file = os.path.join(path.CACHE, 'for-machines.xfs')
         if not os.path.exists(backing_file):
             if SETUP == 'suggest':
-                log.info(f'would you like to allow fingertip to allocate {size} '
-                         f'at {backing_file} '
+                log.info(f'would you like to allow fingertip '
+                         f'to allocate {size} at {backing_file} '
                          'for a reflink-enabled XFS loop mount?')
                 log.info('(set FINGERTIP_SETUP="auto" environment variable'
                          ' to do it automatically)')
@@ -84,7 +82,7 @@ def storage_setup_wizard():
                 elif i == 'ignore':
                     return
                 size = i or size
-            tmp = temp.disappearing_file(CACHE)
+            tmp = temp.disappearing_file(path.CACHE)
             create_supported_fs(tmp, size)
             os.rename(tmp, backing_file)
 
@@ -92,14 +90,15 @@ def storage_setup_wizard():
         if SETUP == 'suggest':
             i = input(f'[ok]/skip/cancel> ').strip()
             if i == 'skip':
-                log.warning('skipping; fingertip will have no reflink superpowers')
+                log.warning('skipping; '
+                            'fingertip will have no reflink superpowers')
                 log.warning('tell your SSD I\'m sorry')
                 return
             elif i and i != 'ok':
                 log.error('cancelled')
                 sys.exit(1)
 
-        mount_supported_fs(backing_file, MACHINES)
+        mount_supported_fs(backing_file, path.MACHINES)
 
     # Schedule automatic cleanup
     storage_schedule_cleanup()
@@ -107,18 +106,18 @@ def storage_setup_wizard():
 
 def storage_unmount():
     log.plain()
-    log.info(f'unmounting {MACHINES} ...')
-    subprocess.run(['sudo', 'umount', '-l', MACHINES])
+    log.info(f'unmounting {path.MACHINES} ...')
+    subprocess.run(['sudo', 'umount', '-l', path.MACHINES])
     log.nicer()
 
 
 def storage_destroy():
-    backing_file = os.path.join(CACHE, 'for-machines.xfs')
+    backing_file = os.path.join(path.CACHE, 'for-machines.xfs')
     if os.path.exists(backing_file):
         # we should not remove the file if it is mounted
         mount = subprocess.run(['mount'], capture_output=True)
-        if backing_file in mount.stdout:
-            log.warning('Filesystem is still mounted. Try to unmount.')
+        if backing_file in mount.stdout.decode():
+            log.warning('Filesystem is still mounted. Trying to unmount.')
             storage_unmount()
 
     os.unlink(backing_file)
@@ -128,7 +127,7 @@ def storage_schedule_cleanup():
     # Do this only if fingertip is in PATH
     if not shutil.which("fingertip"):
         log.debug('No `fingertip` found in PATH. Not scheduling '
-                    'automatic cleanup.')
+                  'automatic cleanup.')
         return
 
     # Skip if systemd is not available
@@ -146,7 +145,7 @@ def storage_schedule_cleanup():
         log.debug('The systemd timer handling cleanup is already installed '
                   'and running.')
         return
-    except CalledProcessError as e:
+    except subprocess.CalledProcessError:
         # non-zero exit code means it is not active or not existing
         pass
 

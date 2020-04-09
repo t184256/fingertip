@@ -1,10 +1,9 @@
 # Licensed under GNU General Public License v3 or later, see COPYING.
 # Copyright (c) 2020 Red Hat, Inc., see CONTRIBUTORS.
 
-import os
 
 import fingertip.machine
-from fingertip.util import log, filesystem
+from fingertip.util import log, reflink
 
 
 @fingertip.transient
@@ -19,12 +18,12 @@ def main(what=None):
 
 
 def setup():
-    filesystem.storage_setup_wizard()
+    reflink.storage_setup_wizard()
 
 
 def unmount():
-    filesystem.storage_unmount()
+    reflink.storage_unmount()
 
 
 def cleanup():
-    filesystem.storage_destroy()
+    reflink.storage_destroy()
