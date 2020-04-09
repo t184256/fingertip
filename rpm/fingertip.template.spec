@@ -1,36 +1,35 @@
-%global git_date 20200408
-%global git_commit 36dd03af8a120c692b95627b51b7951c629f3220
-%{?git_commit:%global git_commit_hash %(c=%{git_commit}; echo ${c:0:7})}
-%global rpm_release 1
-
 Name:		fingertip
-Version:	0.%{git_date}
-Release:	%{rpm_release}.git%{git_commit_hash}%{?dist}
+Version:	{{ver}}
+Release:        {{rel}}%{?dist}
 Summary:	Control VMs, containers and other machines with Python, leverage live snapshots
 
 License:	GPLv3+
 URL:		https://github.com/t184256/fingertip
-Source0:	https://github.com/t184256/fingertip/archive/%{git_commit}/%{name}-%{git_commit_hash}.tar.gz
+Source0:	https://github.com/t184256/fingertip/archive/{{git_commit}}/{{tarball}}
 
 BuildArch:	noarch
 BuildRequires:	python3
 BuildRequires:	python3-devel
 
-Requires:	qemu-system-x86
 Requires:	ansible
 Requires:	git-core
+Requires:	openssh-clients
 Requires:	python3
+Requires:	python3-CacheControl
+Requires:	python3-GitPython
+Requires:	python3-cloudpickle
 Requires:	python3-colorlog
+Requires:	python3-fasteners
+Requires:	python3-lockfile
 Requires:	python3-paramiko
 Requires:	python3-pexpect
 Requires:	python3-pyxdg
-Requires:	python3-CacheControl
 Requires:	python3-requests
 Requires:	python3-requests-mock
-Requires:	python3-fasteners
-Requires:	python3-lockfile
-Requires:	python3-cloudpickle
-Requires:	python3-GitPython
+Requires:	qemu-system-x86
+Requires:	qemu-img
+Requires:	util-linux
+Requires:	xfsprogs
 Recommends:	podman
 
 %description
@@ -48,7 +47,7 @@ limits as possible. If you look at it and think that it does nothing in
 the laziest way possible, that's it.
 
 %prep
-%setup -q -n fingertip-%{git_commit}
+%setup -q -n fingertip-{{git_commit}}
 
 %build
 # noop
@@ -76,6 +75,5 @@ cp -p __main__.py %{buildroot}%{python3_sitelib}/fingertip
 %{python3_sitelib}/fingertip/kickstart_templates/*
 
 
+# templated from build.sh
 %changelog
-* Wed Apr 08 2020 Jakub Jelen <jjelen@redhat.com> - 0.20200408-1.git36dd03a
-- Initial release
