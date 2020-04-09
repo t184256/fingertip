@@ -12,5 +12,5 @@ def main(m):
     filename = '/etc/TADAA'
     with open(scriptname, "w") as f:
         f.write(f'#!/bin/sh\n\ntouch {filename}')
-    with m.apply('script.run', scriptname).transient() as m:
+    with m.apply('script.run', scriptname) as m:
         assert m(f'ls -1 {filename}').out.strip() == filename

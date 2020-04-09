@@ -164,7 +164,7 @@ def make_greeting(m, greeting='Hello!'):                      # take a machine
 @fingertip.transient                                          # do not lock
 def main(m, greeting='Hello!'):                               # take a machine
     m = m.apply(make_greeting, greeting=greeting):            # modify
-    with m.transient():                                       # start
+    with m:                                                   # start
         m.console.sendline(f"cat .greeting")                  # execute command
         m.console.expect_exact(greeting)                      # get output
         m.console.expect_exact(m.prompt)                      # wait for prompt
@@ -185,8 +185,10 @@ Here's what can happen inside such a function:
   All custom modifications of the machine must live inside that block!
 * Return the machine if the result should be cached and used for the next steps.
   Not returning one will undo all the changes (not available on all backends).
-  If you don't intend to save the result, also 1) decorate the function with
-  `@fingertip.transient` and 2) use `.transient()` with `with`.
+  If you don't intend to save the result, don't return m; additionally, 
+  decorate the function with `@fingertip.transient`
+  or at least use `.transient()` with `with`,
+  so that fingertip can apply performance optimizations.
 
 The first function in the chain (or the one used in `build`)
 will not get a machine as the first argument.

@@ -23,5 +23,5 @@ def main(m, no_unseal=False):
         m.log.plain()
 
     m._backend_mode = 'direct'
-    with m.transient():
+    with m:
         sys.exit(0)  # will happen only the underlying process exits

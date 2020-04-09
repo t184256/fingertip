@@ -13,6 +13,6 @@ def setup(m):
 
 @fingertip.transient
 def main(m):
-    with m.apply(setup).transient() as m:
+    with m.apply(setup) as m:
         m.console.expect_exact('>post-sleep')
         m.console.expect_exact(m.prompt)

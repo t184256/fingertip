@@ -15,7 +15,7 @@ def setup(m, greeting='Hello!'):
 
 @fingertip.transient
 def main(m, greeting='Hello!'):
-    with m.apply(setup, greeting=greeting).transient() as m:
+    with m.apply(setup, greeting=greeting) as m:
         m.console.sendline('')
         m.console.expect_exact('@child> ')
         m.console.sendcontrol('d')

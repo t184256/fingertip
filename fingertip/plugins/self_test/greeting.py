@@ -18,5 +18,5 @@ def make_greeting(m, greeting='Hello!'):
 
 @fingertip.transient
 def main(m, greeting='Hello!'):
-    with m.apply(make_greeting, greeting=greeting).transient() as m:
+    with m.apply(make_greeting, greeting=greeting) as m:
         assert m('cat .greeting').out.strip() == greeting

@@ -26,7 +26,7 @@ SCRIPT_WITH_HEREDOCS = r'''
 
 @fingertip.transient
 def main(m):
-    with m.transient():
+    with m:
         assert m.exec('true')
         assert m('true')
         assert m('sh -c true')

@@ -6,7 +6,7 @@ import fingertip
 @fingertip.transient
 def main(m, no_unseal=False):
     m = m if no_unseal else m.apply('unseal')
-    with m.transient() as m:
+    with m:
         m.log.info(f'waiting for the SSH server to be up...')
         m.ssh.exec('true')
         # terminate the ssh session not to leave any traces in vm

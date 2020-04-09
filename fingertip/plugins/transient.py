@@ -6,5 +6,5 @@ import fingertip
 
 @fingertip.transient
 def main(m, next_plugin, *args, **kwargs):
-    with m.transient() as m:
+    with m:
         m.apply(next_plugin, *args, **kwargs)

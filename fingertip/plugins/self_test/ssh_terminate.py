@@ -29,7 +29,7 @@ def check_processes(m):
 @fingertip.transient
 def main(m):
     m = m.apply('unseal')
-    with m.apply(check_processes).transient() as m:
+    with m.apply(check_processes) as m:
         m.log.info(m('cat .sshd1').out.strip())
         m.log.info(m('cat .sshd2').out.strip())
         assert m('cat .sshd1 | wc -l').out.strip() == "0"
