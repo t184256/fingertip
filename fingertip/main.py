@@ -44,18 +44,20 @@ def main():
     first_step, *rest_of_the_steps = [parse_subcmd(*sc) for sc in subcmds]
 
     first_step_cmd, first_step_args, first_step_kwargs = first_step
-    m = fingertip.build(first_step_cmd, *first_step_args, **first_step_kwargs)
+    m = fingertip.build(first_step_cmd, *first_step_args, **first_step_kwargs,
+                        last_step=(not rest_of_the_steps))
 
-    for step_cmd, step_args, step_kwargs in rest_of_the_steps:
-        m = m.apply(step_cmd, *step_args, **step_kwargs)
+    for i, (step_cmd, step_args, step_kwargs) in enumerate(rest_of_the_steps):
+        last_step = i == len(rest_of_the_steps) - 1
+        m = m.apply(step_cmd, *step_args, **step_kwargs, last_step=last_step)
+    result_path = m
 
     fingertip.util.log.plain()
-    success_log = os.path.join(os.path.dirname(m.path), 'log.txt')
+    success_log = os.path.join(result_path, 'log.txt')
     DEBUG = os.getenv('FINGERTIP_DEBUG') == '1'
-    msg = (f'Check {success_log} for more details or set FINGERTIP_DEBUG=1'
+    msg = (f'For more details, check {success_log} or set FINGERTIP_DEBUG=1.'
            if not DEBUG else f'Logfile: {success_log}')
     fingertip.util.log.info(f'Success. {msg}')
-    m.log.finalize()
 
 
 if __name__ == '__main__':

@@ -10,15 +10,12 @@ from fingertip import step_loader, expiration
 from fingertip.util import hooks, lock, log, path, reflink, temp
 
 
-def transient(func):
-    func.transient = True
+def transient(func=None, when='always'):
+    if func is None:  # no parameters, just @transient
+        return functools.partial(transient, when=when)
 
-    @functools.wraps(func)
-    def wrapper(*a, **kwa):
-        r = func(*a, **kwa)
-        assert r is None
-
-    return wrapper
+    func.transient = when
+    return func
 
 
 class Machine:
@@ -30,7 +27,9 @@ class Machine:
         self._link_as = None  # what are we building?
         # States: loaded -> spun_up -> spun_down -> saved/dropped
         self._state = 'spun_down'
+        self._last_step = False
         self._transient = False
+        self._transient_when = None
         self._up_counter = 0
         self.sealed = sealed
         self.expiration = expiration.Expiration(expire_in)
@@ -45,8 +44,8 @@ class Machine:
     def __call__(self, *args, **kwargs):  # a convenience method
         return fingertip.exec.nice_exec(self, *args, **kwargs)
 
-    def transient(self):
-        self._transient = True
+    def transient(self, when='always'):
+        self._transient_when = when
         return self
 
     def __enter__(self):
@@ -64,10 +63,10 @@ class Machine:
         assert self._state == 'spun_up'
         self._up_counter -= 1
         if not self._up_counter:
-            if not self._transient:
+            if not self._transient:  # the machine needs to be spun down
                 self.hooks.down.in_reverse()
                 self._state = 'spun_down'
-            else:
+            else:  # the machine can be dropped, fast and dirty
                 self.hooks.drop.in_reverse()
                 self._state = 'dropped'
             if not exc_type and self._link_as:
@@ -107,7 +106,7 @@ class Machine:
             os.symlink(link_this, link_as)
             return link_as
 
-    def apply(self, step, *args, **kwargs):
+    def apply(self, step, *args, last_step=False, **kwargs):
         func, tag = step_loader.func_and_autotag(step, *args, **kwargs)
         log.debug(f'apply {self.path} {step} {func} {args} {kwargs}')
         if self._state == 'spun_up':
@@ -115,13 +114,21 @@ class Machine:
             return func(self, *args, **kwargs)
         elif self._state == 'loaded':
             log.debug(f'applying to clean')
-            return self._cache_aware_apply(step, tag, func, args, kwargs)
+            return self._cache_aware_apply(step, tag, func, args, kwargs,
+                                           last_step)
         else:
             log.critical(f'apply to state={self._state}')
             raise RuntimeError(f'State machine error, apply to {self._state}')
 
-    def _cache_aware_apply(self, step, tag, func, args, kwargs):
+    def _cache_aware_apply(self, step, tag, func, args, kwargs, last_step):
         assert self._state == 'loaded'
+
+        transient_hint = func.transient if hasattr(func, 'transient') else None
+        return_as_transient = self._transient
+        exec_as_transient = (
+            transient_hint == 'always' or
+            transient_hint == 'last' and last_step
+        )
 
         # Could there already be a cached result?
         log.debug(f'PATH {self.path} {tag}')
@@ -129,13 +136,14 @@ class Machine:
         end_goal = self._link_as
 
         lock_path = os.path.join(self._parent_path, '.' + tag + '-lock')
-        do_lock = not hasattr(func, 'transient')
+        do_lock = not self._transient
         if do_lock:
             log.info(f'acquiring lock for {tag}...')
         prev_log_name = self.log.name
         self.log.finalize()
         with lock.MaybeLock(lock_path, lock=do_lock):
-            if os.path.exists(new_mpath) and not needs_a_rebuild(new_mpath):
+            if (os.path.exists(new_mpath) and not needs_a_rebuild(new_mpath)
+                    and not exec_as_transient):
                 # sweet, scratch this instance, fast-forward to cached result
                 log.info(f'reusing {step} @ {new_mpath}')
                 self._finalize()
@@ -145,17 +153,23 @@ class Machine:
                 log.info(f'applying (and, possibly, caching) {tag}')
                 self.log = log.Sublogger('plugins.' + tag.split(':', 1)[0],
                                          os.path.join(self.path, 'log.txt'))
+                self._transient = exec_as_transient
                 m = func(self, *args, **kwargs)
                 if m:
                     assert not m._transient
                     m._finalize(link_as=new_mpath, name_hint=tag)
                     clone_from_path = new_mpath
                     log.info(f'successfully applied and saved {tag}')
-                else:  # transient step
+                else:  # transient step, either had hints or just returned None
+                    if last_step:
+                        return self.path
                     clone_from_path = self._parent_path
                     log.info(f'successfully applied and dropped {tag}')
+        if last_step:
+            return clone_from_path
         m = clone_and_load(clone_from_path, link_as=end_goal)
         m.log = log.Sublogger(prev_log_name, os.path.join(m.path, 'log.txt'))
+        m._transient = return_as_transient
         return m
 
 
@@ -190,7 +204,7 @@ def clone_and_load(from_path, link_as=None, name_hint=None):
     return _load_from_path(temp_path)
 
 
-def build(first_step, *args, **kwargs):
+def build(first_step, *args, last_step=False, **kwargs):
     func, tag = step_loader.func_and_autotag(first_step, *args, **kwargs)
 
     # Could there already be a cached result?
@@ -206,6 +220,8 @@ def build(first_step, *args, **kwargs):
                 return
             first._finalize(link_as=mpath, name_hint=tag)
             log.info(f'succesfully built {tag}')
+    if last_step:
+        return mpath
     m = clone_and_load(mpath)
     m.log = log.Sublogger('<just built>', os.path.join(m.path, 'log.txt'))
     return m

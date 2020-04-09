@@ -175,7 +175,7 @@ class Sublogger:
         reflink.auto(self.path, t)
         home = os.path.expanduser('~')
         t = t if not t.startswith(home) else t.replace(home, '~')
-        m = (f'Check {t} for more details or set FINGERTIP_DEBUG=1'
+        m = (f'For an intermediate log, check {t} or set FINGERTIP_DEBUG=1.'
              if not DEBUG else f'Logfile: {t}')
         sys.stderr.write(m + '\n')
 
