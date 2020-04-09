@@ -8,7 +8,6 @@ Helper functions and constants for fingertip: reflinking (CoW-powered copying).
 
 import os
 import sys
-import shutil
 import subprocess
 
 from fingertip.util import log, temp, path
@@ -100,9 +99,6 @@ def storage_setup_wizard():
 
         mount_supported_fs(backing_file, path.MACHINES)
 
-    # Schedule automatic cleanup
-    storage_schedule_cleanup()
-
 
 def storage_unmount():
     log.plain()
@@ -121,36 +117,3 @@ def storage_destroy():
             storage_unmount()
 
     os.unlink(backing_file)
-
-
-def storage_schedule_cleanup():
-    # Do this only if fingertip is in PATH
-    if not shutil.which("fingertip"):
-        log.debug('No `fingertip` found in PATH. Not scheduling '
-                  'automatic cleanup.')
-        return
-
-    # Skip if systemd is not available
-    if not shutil.which('systemd-run') or not shutil.which('systemctl'):
-        log.warning('It looks like systemd is not available. '
-                    'No cleanup is scheduled! If you are running out of disk, '
-                    'space, run `fingertip cleanup periodic` manually.')
-        return
-
-    # If the timer is already installed skip installation too
-    try:
-        subprocess.run(['systemctl', '--user', 'is-active', '--quiet',
-                       'fingertip-cleanup.timer'])
-        # exit code 0:
-        log.debug('The systemd timer handling cleanup is already installed '
-                  'and running.')
-        return
-    except subprocess.CalledProcessError:
-        # non-zero exit code means it is not active or not existing
-        pass
-
-    # Run twice a day
-    log.info('Scheduling cleanup twice a day at 8AM and 8PM')
-    subprocess.run(['systemd-run', '--unit=fingertip-cleanup', '--user',
-                    '--on-calendar=', '*-*-* 08,20:00:00',
-                    'fingertip', 'cleanup', 'periodic'])
