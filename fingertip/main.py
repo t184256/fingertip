@@ -50,14 +50,16 @@ def main():
     for i, (step_cmd, step_args, step_kwargs) in enumerate(rest_of_the_steps):
         last_step = i == len(rest_of_the_steps) - 1
         m = m.apply(step_cmd, *step_args, **step_kwargs, last_step=last_step)
-    result_path = m
 
-    fingertip.util.log.plain()
-    success_log = os.path.join(result_path, 'log.txt')
-    DEBUG = os.getenv('FINGERTIP_DEBUG') == '1'
-    msg = (f'For more details, check {success_log} or set FINGERTIP_DEBUG=1.'
-           if not DEBUG else f'Logfile: {success_log}')
-    fingertip.util.log.info(f'Success. {msg}')
+    if m:
+        result_path = m
+        fingertip.util.log.plain()
+        success_log = os.path.join(result_path, 'log.txt')
+        DEBUG = os.getenv('FINGERTIP_DEBUG') == '1'
+        msg = (f'For more details, check {success_log} '
+               'or set FINGERTIP_DEBUG=1.'
+               if not DEBUG else f'Logfile: {success_log}')
+        fingertip.util.log.info(f'Success. {msg}')
 
 
 if __name__ == '__main__':
