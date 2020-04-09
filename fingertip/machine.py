@@ -170,7 +170,7 @@ class Machine:
                 if m:
                     assert (not m._transient or
                             # step returned m just in case it's not the last
-                            transient_hint == 'last' and not last_step)
+                            transient_hint == 'last' and last_step)
                     m._finalize(link_as=new_mpath, name_hint=tag)
                     clone_from_path = new_mpath
                     log.info(f'successfully applied and saved {tag}')
