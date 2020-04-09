@@ -6,6 +6,7 @@ import os
 import sys
 
 import fingertip
+import fingertip.util.cleanup_job
 import fingertip.util.log
 import fingertip.util.path
 import fingertip.util.reflink
@@ -30,6 +31,7 @@ def main():
     fingertip.util.log.plain()
 
     fingertip.util.reflink.storage_setup_wizard()
+    fingertip.util.cleanup_job.schedule()
 
     fingertip.util.log.nicer()
 
