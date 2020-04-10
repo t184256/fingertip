@@ -20,6 +20,12 @@ def transient(func=None, when='always'):
     return func
 
 
+def supply_last_step_if_requested(func, fingertip_last_step):
+    if 'fingertip_last_step' in inspect.signature(func).parameters:
+        return functools.partial(func, fingertip_last_step=fingertip_last_step)
+    return func
+
+
 class Machine:
     def __init__(self, backend_name, sealed=True, expire_in='7d'):
         self.hooks = hooks.HookManager()
@@ -108,16 +114,17 @@ class Machine:
             os.symlink(link_this, link_as)
             return link_as
 
-    def apply(self, step, *args, last_step=False, **kwargs):
+    def apply(self, step, *args, fingertip_last_step=False, **kwargs):
         func, tag = step_loader.func_and_autotag(step, *args, **kwargs)
         log.debug(f'apply {self.path} {step} {func} {args} {kwargs}')
         if self._state == 'spun_up':
             log.debug(f'applying to unclean')
+            func = supply_last_step_if_requested(func, fingertip_last_step)
             return func(self, *args, **kwargs)
         elif self._state == 'loaded':
             log.debug(f'applying to clean')
             return self._cache_aware_apply(step, tag, func, args, kwargs,
-                                           last_step)
+                                           fingertip_last_step)
         else:
             log.critical(f'apply to state={self._state}')
             raise RuntimeError(f'State machine error, apply to {self._state}')
@@ -127,11 +134,9 @@ class Machine:
 
         transient_hint = func.transient if hasattr(func, 'transient') else None
         if callable(transient_hint):
-            if 'last_step' in inspect.signature(transient_hint).parameters:
-                transient_hint = transient_hint(*args, **kwargs,
-                                                last_step=last_step)
-            else:
-                transient_hint = transient_hint(*args, **kwargs)
+            transient_hint = supply_last_step_if_requested(transient_hint,
+                                                           last_step)
+            transient_hint = transient_hint(*args, **kwargs)
 
         return_as_transient = self._transient
         exec_as_transient = (
@@ -166,6 +171,7 @@ class Machine:
                 self.log = log.Sublogger('plugins.' + tag.split(':', 1)[0],
                                          os.path.join(self.path, 'log.txt'))
                 self._transient = exec_as_transient
+                func = supply_last_step_if_requested(func, last_step)
                 m = func(self, *args, **kwargs)
                 if m:
                     assert (not m._transient or
@@ -218,7 +224,7 @@ def clone_and_load(from_path, link_as=None, name_hint=None):
     return _load_from_path(temp_path)
 
 
-def build(first_step, *args, last_step=False, **kwargs):
+def build(first_step, *args, fingertip_last_step=False, **kwargs):
     func, tag = step_loader.func_and_autotag(first_step, *args, **kwargs)
 
     # Could there already be a cached result?
@@ -229,12 +235,13 @@ def build(first_step, *args, last_step=False, **kwargs):
     with lock.MaybeLock(lock_path, lock=do_lock):
         if not os.path.exists(mpath) or needs_a_rebuild(mpath):
             log.info(f'building {tag}...')
+            func = supply_last_step_if_requested(func, fingertip_last_step)
             first = func(*args, **kwargs)
             if first is None:
                 return
             first._finalize(link_as=mpath, name_hint=tag)
             log.info(f'succesfully built {tag}')
-    if last_step:
+    if fingertip_last_step:
         return mpath
     m = clone_and_load(mpath)
     m.log = log.Sublogger('<just built>', os.path.join(m.path, 'log.txt'))

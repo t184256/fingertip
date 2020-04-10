@@ -47,11 +47,12 @@ def main():
 
     first_step_cmd, first_step_args, first_step_kwargs = first_step
     m = fingertip.build(first_step_cmd, *first_step_args, **first_step_kwargs,
-                        last_step=(not rest_of_the_steps))
+                        fingertip_last_step=(not rest_of_the_steps))
 
     for i, (step_cmd, step_args, step_kwargs) in enumerate(rest_of_the_steps):
         last_step = i == len(rest_of_the_steps) - 1
-        m = m.apply(step_cmd, *step_args, **step_kwargs, last_step=last_step)
+        m = m.apply(step_cmd, *step_args, **step_kwargs,
+                    fingertip_last_step=last_step)
 
     if m:
         result_path = m
