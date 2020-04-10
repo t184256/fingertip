@@ -1,9 +1,9 @@
 # Prerequisites
 
 First and foremost, you need a recent Linux installation.
-If you want to command VMs, you need KVM,
-you really want a CoW-enabled filesystem or root access.
-If you vant to command containers, you need podman `> 1.8`.
+If you want to command VMs, you need KVM and
+you really want a CoW-enabled filesystem or one-time root access to setup one.
+If you want to command containers, you need podman `> 1.8`.
 
 
 # Installation of a package
