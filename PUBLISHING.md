@@ -1,31 +1,28 @@
-# RPM packaging
+# Release versioning
 
-The template in `fingertip.spec` contains template for packaging fingertip in
-Fedora and RHEL. As fingertip does not provide any releases yet, the latest
-git version is packaged (`git_commit` macro) and version is considered as
-`0.git_date`, where `git_date` is the date of package creation.
+fingertip uses
+[semantic versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
-# Content
 
-Aside of the spec file, there are additional files. One of them is `fingertip.in`
-wrapper, which is used to invoke `fingertip` command by the end users. It takes
-care of correct location of the python library.
+## Publishing to Pypi
 
-# Updating package
+To publish a new version to pypi, install Poetry (`>= 1.0`) and
+[poetry-dynamic-versioning](https://pypi.org/project/poetry-dynamic-versioning).
+Test it with
 
-For pulling new changes from upstream, update `git_commit` and `git_date`
-constants to latest release and revert `rpm_release` to 1. Then download
-latest snapsthot from github (`GIT_SHORTCOMMIT` is first 7 characters
-of `GIT_COMMIT`):
+``` bash
+$ poetry build
+```
 
-    wget https://github.com/t184256/fingertip/archive/{GIT_COMMIT}.tar.gz -O fingertip-{GIT_SHORTCOMMIT}.tar.gz
+Publish with
 
-For bugfix release, update patches, fix spec file and bump `rpm_release` macro.
+``` bash
+$ poetry publish
+```
 
-Insert a new changelog entry.
 
-Try to build a package using your favorite tool from current directory, for example:
+## Publishing to COPR
 
-    fedpkg --release=master local
-
-Submit updated spec file and package update to Fedora/copr.
+Just push, and
+https://copr.fedorainfracloud.org/coprs/asosedkin/fingertip
+should pick up and build all versions from master, tagged or not.

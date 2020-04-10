@@ -11,20 +11,21 @@ This program/library aims to be a way to:
 * control other types of machines that are not local VMs
 
 All while striving to be intentionally underengineered
-and imposing as little limits as possible.
+and imposing as few limits as possible.
 If you look at it and think that it does nothing in the laziest way possible,
 that's it.
 
-It's in an early demo stage.
+It's currently in alpha stage.
 
-Some examples of executing it:
+# Teaser
+
+Some examples of executing it from your shell:
 
 ``` bash
-$ python3 fingertip os.fedora + ssh  # install Fedora and SSH into it
-$ python3 fingertip os.alpine + console  # install Alpine, access serial console
-$ python3 fingertip os.alpine + ansible package --state=present --name=patch
-$ python3 fingertip backend.podman-criu + os.alpine + console  # containers!
-$ python3 fingertip backend.podman-criu + os.alpine + exec 'free -m'
+$ fingertip os.fedora + ssh  # install Fedora and SSH into it
+$ fingertip os.alpine + console  # install Alpine, access serial console
+$ fingertip os.alpine + ansible package --state=present --name=patch + ssh
+$ fingertip backend.podman-criu + os.alpine + console  # containers!
 ```
 
 An example of Python usage and writing your own steps:
@@ -35,143 +36,77 @@ import fingertip
 def main(m=None, alias='itself'):
     m = m or fingertip.build('os.fedora')
     m = m.apply('ansible', 'lineinfile', path='/etc/hosts',
-                line='127.0.0.1 itself')
+                line=f'127.0.0.1 {alias}')
     with m:
-        assert '1 received' in m('ping -c1 itself').out
+        assert '1 received' in m(f'ping -c1 {alias}').out
     return m
 ```
 
-Put in `fingertip/plugins/demo.py`, this can be used as
+Put in `fingertip/plugins/demo.py`,
+this can be now be used in pipelines:
 ```
-$ python3 fingertip demo
-```
-
-## Preparations
-
-### Dependencies
-
-Check out this repository:
-``` bash
-$ git clone https://github.com/t184256/fingertip
+$ fingertip demo
+$ fingertip os.fedora + demo me
+$ fingertip os.alpine + demo --alias=myself + ssh
 ```
 
-Install the required dependencies (adjust accordingly):
-``` bash
-$ sudo <your package manager> install qemu ansible
-```
+## Installation
 
-### Running with system packages
+Refer to [INSTALL.md](INSTALL.md).
 
-To run fingertip with system Python packages, first install all required dependencies:
 
-``` bash
-$ sudo <your package manager> install python3-colorlog python3-paramiko python3-pexpect python3-xdg python3-CacheControl python3-requests python3-requests-mock python3-fasteners python3-lockfile python3-cloudpickle python3-GitPython
-```
+### Shell usage
 
-You can now run fingertip in project root with
+If you have installed fingertip, invoke it as `fingertip`.
+
+If you're running from a checkout, use `python3 <path to checkout>` instead
+or make an alias.
+
+If you're using a containerized version, invoke `fingertip-containerized`
+(and hope for the best).
+
+So,
 
 ``` bash
-$ python3 -m fingertip PLUGINS
-```
-
-### Running via container
-
-If you have Podman or Docker, you can try out a containerized version
-(`fingertip/fingertip-containerized`) that'll install
-Fedora with all the required dependencies into a container.
-
-### Running via Poetry
-
-Poetry will install fingertip in an virtual environment and provide a way to execute it.
-
-[Install poetry](https://python-poetry.org/docs/) and install fingertip by running in project root:
-
-``` bash
-$ poetry install
-```
-
-To run fingertip you can use
-
-``` bash
-$ poetry run fingertip PLUGINS
-```
-
-### CoW
-
-If you don't want your SSD to wear out prematurely,
-you need a CoW-enabled filesystem on your `~/.cache/fingertip/machines`.
-In practice, this probably means either `btrfs` or specially-created `xfs`
-(see example below):
-
-When you first run `fingertip`, the interactive setup wizard will create
-all of this for you, which should cover most of the common use cases.
-In case you need to automate the setup, you can use the environment
-variables `FINGERTIP_SETUP=auto|suggest|never` and `FINGERTIP_SETUP_SIZE`
-or perform the setup manualy:
-
-``` bash
-$ mkdir -p ~/.cache/fingertip/machines
-$ fallocate -l 25G ~/.cache/fingertip/for-machines.xfs
-$ mkfs.xfs -m reflink=1 ~/.cache/fingertip/for-machines.xfs
-$ sudo mount -o loop ~/.cache/fingertip/for-machines.xfs ~/.cache/fingertip/machines
-$ sudo chown $USER ~/.cache/fingertip/machines
-```
-
-(consider adding it to /etc/fstab so that you don't forget about it:)
-``` bash
-$ echo "$HOME/.cache/fingertip/for-machines.xfs $HOME/.cache/fingertip/machines auto loop
-```
-
-
-### The shell side of things
-
-Now run `fingertip` with `python3 <path to checkout>`:
-
-``` bash
-$ python3 fingertip os.fedora + ssh
-```
-
-(or, if you are using a containerized version:)
-``` bash
-$ fingertip/fingertip-containerized os.fedora + ssh
+$ fingertip os.fedora + ssh
 ```
 
 You should observe Fedora installation starting up, then shutting down,
 compressing an image, booting up again and, finally,
 giving you interactive control over the machine over SSH.
 
-Invoke the same command again, and it should do nearly nothing,
-the downloads, the installation and half of the test are already cached
+Invoke the same command again, and it should do nearly nothing, as
+the downloads and the installation are already cached
 in `~/.cache/fingertip`.
 Enjoy fresh clean VMs brought up in mere seconds.
 Feel like they're already at your fingertips.
 Control them from console or from Python.
 
 
-## The Python side of things
+## Python usage
 
 Let's see how manipulating machines can look like
-(`fingertip/plugins/self_test/console_greeting.py`):
+(`fingertip/plugins/self_test/greeting.py`):
 
 ``` python
 def make_greeting(m, greeting='Hello!'):                      # take a machine
     with m:                                                   # start if needed
-        m.console.sendline(f"echo '{greeting}' > .greeting")  # execute command
+        m.console.sendline(f"echo '{greeting}' > .greeting")  # type a command
         m.console.expect_exact(m.prompt)                      # wait for prompt
-        return m                                              # cache result
+    return m                                                  # cache result
 
 
-@fingertip.transient                                          # do not lock
+@fingertip.transient                                          # don't lock/save
 def main(m, greeting='Hello!'):                               # take a machine
-    m = m.apply(make_greeting, greeting=greeting):            # modify
-    with m:                                                   # start
-        m.console.sendline(f"cat .greeting")                  # execute command
-        m.console.expect_exact(greeting)                      # get output
-        m.console.expect_exact(m.prompt)                      # wait for prompt
+    m = m.apply(make_greeting, greeting=greeting)             # use cached step
+    with m:                                                   # start if needed
+        assert m('cat .greeting').out.strip() == greeting     # execute command
                                                               # do not save
 ```
 
+
 These are regular Python functions, nothing fancy.
+Even this `@fingertip.transient` thing is an optimization-only hint.
 You can just pass them `fingertip.build('fedora')` and that'll work.
 
 Here's what can happen inside such a function:
@@ -179,42 +114,25 @@ Here's what can happen inside such a function:
 * It accepts a machine as the first argument
   (which may be already spun up or not, you don't know).
 * It inspects it and applies more functions if it wants to,
-  (extra steps applied through `.apply` are cached if it's possible).
-* Should any custom steps be applied, the machine must be first
-  spun up using a `with` block (`with m as m`).
-  All custom modifications of the machine must live inside that block!
+  (extra steps applied through `.apply` are cached / reused if it's possible).
+* Should any custom steps or changes be applied,
+  the machine must be first spun up using a `with` block (`with m as m`).
+  All modifications to the machine must happen inside that block,
+  or risk being silently undone!
 * Return the machine if the result should be cached and used for the next steps.
-  Not returning one will undo all the changes (not available on all backends).
-  If you don't intend to save the result, don't return m; additionally, 
-  decorate the function with `@fingertip.transient`
+  Not returning one can and usually will undo all the changes you've made.
+  If you don't intend to save the result, don't return m;
+  additionally, decorate the function with `@fingertip.transient`
   or at least use `.transient()` with `with`,
-  so that fingertip can apply performance optimizations.
+  so that fingertip can apply performance optimizations and be even faster.
 
-The first function in the chain (or the one used in `build`)
+The first function in the chain (or the one used in `fingertip.build`)
 will not get a machine as the first argument.
 To write a universal function, just use:
 ``` python
 def func(m=None):
     m = m or fingertip.build('fedora')
     ...
-```
-
-NOTE: `m.apply` happening outside the `with` block will use a cached machine
-with the test file already present if there is one.
-
-
-## Publishing to Pypi
-
-To publish a new version to pypi, install Poetry and bump the version to the version you want:
-
-``` bash
-$ poetry version VERSION
-```
-
-To publish to Pypi run:
-
-``` bash
-$ poetry publish
 ```
 
 
@@ -224,5 +142,11 @@ Due to what exactly I cache and the early stage of development,
 empty your `~/.cache/fingertip/machines` often, at least after each update.
 
 ``` bash
-$ python3 fingertip cleanup machines all
+$ fingertip cleanup machines all
+```
+
+Some days the whole `~/.cache/fingertip` has to go.
+
+``` bash
+$ fingertip cleanup all
 ```
