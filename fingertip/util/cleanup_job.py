@@ -27,16 +27,12 @@ def schedule():
         return
 
     # If the timer is already installed skip installation too
-    try:
-        subprocess.run(['systemctl', '--user', 'is-active', '--quiet',
+    p = subprocess.run(['systemctl', '--user', 'is-active', '--quiet',
                        'fingertip-cleanup.timer'])
-        # exit code 0:
+    if p.returncode == 0:
         log.debug('The systemd timer handling cleanup is already installed '
                   'and running.')
         return
-    except subprocess.CalledProcessError:
-        # non-zero exit code means it is not active or not existing
-        pass
 
     # Run twice a day
     log.info('Scheduling cleanup twice a day at 8AM and 8PM')
