@@ -37,5 +37,5 @@ def schedule():
     # Run twice a day
     log.info('Scheduling cleanup twice a day at 8AM and 8PM')
     subprocess.run(['systemd-run', '--unit=fingertip-cleanup', '--user',
-                    '--on-calendar=', '*-*-* 08,20:00:00',
+                    '--on-calendar=*-*-* 08,20:00:00',
                     'fingertip', 'cleanup', 'periodic'])
