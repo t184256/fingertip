@@ -66,5 +66,6 @@ def main(m, module, *args, **kwargs):
 def playbook(m, playbook_path):
     with m.apply(prepare) as m:
         _ansible(m, playbook_path, cmd=('ansible-playbook',))
-        m.depend_on_a_file(playbook_path)  # not comprehensive; best-effort
+        # not comprehensive; best-effort
+        m.expiration.depend_on_a_file(playbook_path)
     return m
