@@ -56,6 +56,11 @@ SKIP = (
     ('podman_fedorO', 'scrpt'),  # needs ssh.upload
     ('podman_alpine', 'scrpt'),  # needs ssh.upload
     ('podman_ubuntu', 'scrpt'),  # needs ssh.upload
+    ('podman_centos', 'hostn'),  # nothing sets it
+    ('podman_fedora', 'hostn'),  # nothing sets it
+    ('podman_fedorO', 'hostn'),  # nothing sets it
+    ('podman_alpine', 'hostn'),  # nothing sets it
+    ('podman_ubuntu', 'hostn'),  # nothing sets it
 )
 
 for base_name, base in BASES.items():
