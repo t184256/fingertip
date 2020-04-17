@@ -146,6 +146,7 @@ class Machine:
         log.debug(f'transient: {transient_hint}')
         log.debug(f'exec_as_transient: {exec_as_transient}')
         log.debug(f'return_as_transient: {return_as_transient}')
+        self._transient = exec_as_transient
 
         # Could there already be a cached result?
         log.debug(f'PATH {self.path} {tag}')
@@ -170,7 +171,6 @@ class Machine:
                 log.info(f'applying (and, possibly, caching) {tag}')
                 self.log = log.Sublogger('plugins.' + tag.split(':', 1)[0],
                                          os.path.join(self.path, 'log.txt'))
-                self._transient = exec_as_transient
                 func = supply_last_step_if_requested(func, last_step)
                 m = func(self, *args, **kwargs)
                 if m:
