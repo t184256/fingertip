@@ -55,14 +55,15 @@ def main():
                     fingertip_last_step=last_step)
 
     if m:
-        result_path = m
+        success_log = m
         fingertip.util.log.plain()
-        success_log = os.path.join(result_path, 'log.txt')
         DEBUG = os.getenv('FINGERTIP_DEBUG') == '1'
         msg = (f'For more details, check {success_log} '
                'or set FINGERTIP_DEBUG=1.'
                if not DEBUG else f'Logfile: {success_log}')
         fingertip.util.log.info(f'Success. {msg}')
+    else:
+        msg = f'Success, no log. Rerun with FINGERTIP_DEBUG=1 for more info.'
 
 
 if __name__ == '__main__':

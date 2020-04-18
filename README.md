@@ -105,9 +105,10 @@ def main(m, greeting='Hello!'):                               # take a machine
 ```
 
 
-These are regular Python functions, nothing fancy.
-Even this `@fingertip.transient` thing is an optimization-only hint.
+Plugins are regular Python functions, nothing fancy.
 You can just pass them `fingertip.build('fedora')` and that'll work.
+Even this `@fingertip.transient` thing
+is just an optimization hint to `.apply()`.
 
 Here's what can happen inside such a function:
 
@@ -123,8 +124,8 @@ Here's what can happen inside such a function:
   Not returning one can and usually will undo all the changes you've made.
   If you don't intend to save the result, don't return m;
   additionally, decorate the function with `@fingertip.transient`
-  or at least use `.transient()` with `with`,
-  so that fingertip can apply performance optimizations and be even faster.
+  so that fingertip can apply performance optimizations and avoid locking.
+  There's much more to it, see `docs/on_transiency.md` for details.
 
 The first function in the chain (or the one used in `fingertip.build`)
 will not get a machine as the first argument.

@@ -7,14 +7,15 @@ import fingertip
 
 # script.X (X in [run, setup]) without --cache=Y defaults to:
 #  * not caching if it is the last plugin in the pipeline
-#  * caching if there are further plugins in the pipeline
+#  * caching for just one invocation
+#    if there are further plugins in the pipeline
 # Examples:
 # fingertip ... + script.X script  -  no cache, never persist, always rerun
 # fingertip ... + script.X script + ssh  -  cache just for this invocation
-# fingertip ... + script.X script --cache=1h  -  try to cache for 1h at most
-# fingertip ... + script.X script --cache=1h + ssh  -  try reusing the cache
-# fingertip ... + transient script.X script --cache=1h + ssh  -  revert
-def _should_be_transient(scriptpath, cache=0, no_unseal=False):
+# fingertip ... + script.X script --cache=1h  -  cache for 1h at most
+# fingertip ... + script.X script --cache=1h + ssh  -  cache or reuse if fresh
+# fingertip ... + transient script.X script + ssh  -  revert
+def _should_be_transient(m, scriptpath, cache=0, no_unseal=False):
     return False if cache else 'last'
 
 

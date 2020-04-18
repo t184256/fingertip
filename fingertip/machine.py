@@ -1,6 +1,7 @@
 # Licensed under GNU General Public License v3 or later, see COPYING.
 # Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
 
+import datetime
 import functools
 import inspect
 import os
@@ -32,12 +33,9 @@ class Machine:
         os.makedirs(path.MACHINES, exist_ok=True)
         self.path = temp.disappearing_dir(path.MACHINES)
         self._parent_path = path.MACHINES
-        self._link_as = None  # what are we building?
         # States: loaded -> spun_up -> spun_down -> saved/dropped
         self._state = 'spun_down'
-        self._last_step = False
         self._transient = False
-        self._transient_when = None
         self._up_counter = 0
         self.sealed = sealed
         self.expiration = expiration.Expiration(expire_in)
@@ -52,8 +50,8 @@ class Machine:
     def __call__(self, *args, **kwargs):  # a convenience method
         return fingertip.exec.nice_exec(self, *args, **kwargs)
 
-    def transient(self, when='always'):
-        self._transient_when = when
+    def transient(self):
+        self._transient = True
         return self
 
     def __enter__(self):
@@ -71,14 +69,16 @@ class Machine:
         assert self._state == 'spun_up'
         self._up_counter -= 1
         if not self._up_counter:
-            if not self._transient:  # the machine needs to be spun down
+            if not self._transient:
+                # the machine needs to be spun down, will be finalized later
                 self.hooks.down.in_reverse()
                 self._state = 'spun_down'
-            else:  # the machine can be dropped, fast and dirty
+            else:
+                # the machine can be dropped and finalized, fast and dirty
                 self.hooks.drop.in_reverse()
                 self._state = 'dropped'
-            if not exc_type and self._link_as:
-                self._finalize()
+                if not exc_type:
+                    self._finalize()
 
     def _finalize(self, link_as=None, name_hint=None):
         log.debug(f'finalize hint={name_hint} link_as={link_as} {self._state}')
@@ -100,6 +100,9 @@ class Machine:
             self.log.finalize()
             assert self._state in ('spun_down', 'loaded', 'dropped')
             log.info(f'discarding {self.path}')
+            # TODO: track whether the step will be transient-last and reflink?
+            with open(os.path.join(self.path, 'log.txt')) as f:
+                self.log_contents = f.read()
             temp.remove(self.path)
             link_this = self._parent_path
             self._state = 'dropped'
@@ -136,7 +139,7 @@ class Machine:
         if callable(transient_hint):
             transient_hint = supply_last_step_if_requested(transient_hint,
                                                            last_step)
-            transient_hint = transient_hint(*args, **kwargs)
+            transient_hint = transient_hint(self, *args, **kwargs)
 
         return_as_transient = self._transient
         exec_as_transient = (
@@ -151,7 +154,6 @@ class Machine:
         # Could there already be a cached result?
         log.debug(f'PATH {self.path} {tag}')
         new_mpath = os.path.join(self._parent_path, tag)
-        end_goal = self._link_as
 
         lock_path = os.path.join(self._parent_path, '.' + tag + '-lock')
         do_lock = not self._transient
@@ -174,20 +176,26 @@ class Machine:
                 func = supply_last_step_if_requested(func, last_step)
                 m = func(self, *args, **kwargs)
                 if m:
-                    assert (not m._transient or
-                            # step returned m just in case it's not the last
-                            transient_hint == 'last' and last_step)
+                    if m._transient and transient_hint == 'last' and last_step:
+                        assert m._state == 'dropped'
+                        # transient-when-last step returned m
+                        # just in case it's not the last, but it was.
+                        # m is dropped already, only log contents is preserved.
+                        fname = f'{datetime.datetime.utcnow().isoformat()}.txt'
+                        t = path.logs(fname, makedirs=True)
+                        with open(t, 'w') as f:
+                            f.write(m.log_contents)
+                        return t
+                    assert not m._transient, 'transient step returned a value'
                     m._finalize(link_as=new_mpath, name_hint=tag)
                     clone_from_path = new_mpath
                     log.info(f'successfully applied and saved {tag}')
                 else:  # transient step, either had hints or just returned None
-                    if last_step:
-                        return self.path
                     clone_from_path = self._parent_path
                     log.info(f'successfully applied and dropped {tag}')
         if last_step:
-            return clone_from_path
-        m = clone_and_load(clone_from_path, link_as=end_goal)
+            return os.path.join(clone_from_path, 'log.txt')
+        m = clone_and_load(clone_from_path)
         m.log = log.Sublogger(prev_log_name, os.path.join(m.path, 'log.txt'))
         m._transient = return_as_transient
         return m
@@ -207,8 +215,8 @@ def _load_from_path(data_dir_path):
     return m
 
 
-def clone_and_load(from_path, link_as=None, name_hint=None):
-    log.debug(f'clone {from_path} {link_as}')
+def clone_and_load(from_path, name_hint=None):
+    log.debug(f'clone {from_path}')
     temp_path = temp.disappearing_dir(from_path, hint=name_hint)
     log.debug(f'temp = {temp_path}')
     os.makedirs(temp_path, exist_ok=True)
@@ -218,7 +226,6 @@ def clone_and_load(from_path, link_as=None, name_hint=None):
     m.hooks.clone(temp_path)
     m._parent_path = os.path.realpath(from_path)
     m.path = temp_path
-    m._link_as = link_as
     with open(os.path.join(m.path, 'machine.clpickle'), 'wb') as f:
         cloudpickle.dump(m, f)
     return _load_from_path(temp_path)
@@ -231,18 +238,43 @@ def build(first_step, *args, fingertip_last_step=False, **kwargs):
     mpath = path.machines(tag)
     lock_path = path.machines('.' + tag + '-lock')
     log.info(f'acquiring lock for {tag}...')
-    do_lock = not hasattr(func, 'transient')
-    with lock.MaybeLock(lock_path, lock=do_lock):
+
+    transient_hint = func.transient if hasattr(func, 'transient') else None
+    if callable(transient_hint):
+        transient_hint = supply_last_step_if_requested(transient_hint,
+                                                       fingertip_last_step)
+        transient_hint = transient_hint(*args, **kwargs)
+    transient = (
+        transient_hint in ('always', True) or
+        transient_hint == 'last' and fingertip_last_step
+    )
+
+    with lock.MaybeLock(lock_path, lock=not transient):
         if not os.path.exists(mpath) or needs_a_rebuild(mpath):
             log.info(f'building {tag}...')
             func = supply_last_step_if_requested(func, fingertip_last_step)
             first = func(*args, **kwargs)
+
             if first is None:
+                assert transient, 'first step returned None'
                 return
-            first._finalize(link_as=mpath, name_hint=tag)
-            log.info(f'succesfully built {tag}')
+
+            if transient:
+                log.info(f'succesfully built and discarded {tag}')
+                first._finalize()  # discard (not fast-dropped though)
+
+                if transient_hint == 'last' and fingertip_last_step:
+                    fname = f'{datetime.datetime.utcnow().isoformat()}.txt'
+                    t = path.logs(fname, makedirs=True)
+                    with open(t, 'w') as f:
+                        f.write(first.log_contents)
+                    return t
+            else:
+                log.info(f'succesfully built and saved {tag}')
+                first._finalize(link_as=mpath, name_hint=tag)
+
     if fingertip_last_step:
-        return mpath
+        return os.path.join(mpath, 'log.txt')
     m = clone_and_load(mpath)
     m.log = log.Sublogger('<just built>', os.path.join(m.path, 'log.txt'))
     return m
