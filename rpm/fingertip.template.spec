@@ -54,13 +54,12 @@ the laziest way possible, that's it.
 
 %install
 install -d -m 755 %{buildroot}%{_bindir}
-install -d -m 755 %{buildroot}%{python3_sitelib}/fingertip
+install -d -m 755 %{buildroot}%{python3_sitelib}
 
-ln -s %{python3_sitelib}/fingertip/__main__.py %{buildroot}%{_bindir}/fingertip
-cp -p -r fingertip %{buildroot}%{python3_sitelib}/fingertip
-cp -p -r ssh_key %{buildroot}%{python3_sitelib}/fingertip
-cp -p -r kickstart_templates %{buildroot}%{python3_sitelib}/fingertip
-cp -p __main__.py %{buildroot}%{python3_sitelib}/fingertip
+ln -s %{python3_sitelib}/fingertip/main.py %{buildroot}%{_bindir}/fingertip
+cp -p -r fingertip %{buildroot}%{python3_sitelib}/
+cp -p -r ssh_key %{buildroot}%{python3_sitelib}/
+cp -p -r kickstart_templates %{buildroot}%{python3_sitelib}/
 
 
 %files
@@ -68,11 +67,9 @@ cp -p __main__.py %{buildroot}%{python3_sitelib}/fingertip
 %doc README.md
 %{_bindir}/fingertip
 %dir %{python3_sitelib}/fingertip/
-%{python3_sitelib}/fingertip/__main__.py
-%{python3_sitelib}/fingertip/__pycache__/__main__.*
-%{python3_sitelib}/fingertip/fingertip/*
-%{python3_sitelib}/fingertip/ssh_key/*
-%{python3_sitelib}/fingertip/kickstart_templates/*
+%{python3_sitelib}/fingertip/*
+%{python3_sitelib}/ssh_key/*
+%{python3_sitelib}/kickstart_templates/*
 
 
 # templated from build.sh
