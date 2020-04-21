@@ -56,11 +56,12 @@ the laziest way possible, that's it.
 install -d -m 755 %{buildroot}%{_bindir}
 install -d -m 755 %{buildroot}%{python3_sitelib}
 
-ln -s %{python3_sitelib}/fingertip/main.py %{buildroot}%{_bindir}/fingertip
 cp -p -r fingertip %{buildroot}%{python3_sitelib}/
 cp -p -r ssh_key %{buildroot}%{python3_sitelib}/
 cp -p -r kickstart_templates %{buildroot}%{python3_sitelib}/
-chmod +x %{buildroot}%{python3_sitelib}/fingertip/main.py
+cp -p __main__.py %{buildroot}%{python3_sitelib}/
+chmod +x %{buildroot}%{python3_sitelib}/__main__.py
+ln -s %{python3_sitelib}/fingertip/__main__.py %{buildroot}%{_bindir}/fingertip
 
 
 %files
