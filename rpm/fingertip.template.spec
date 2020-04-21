@@ -13,6 +13,7 @@ BuildRequires:	python3-devel
 
 Requires:	ansible
 Requires:	git-core
+Requires:	nmap-ncat
 Requires:	openssh-clients
 Requires:	python3
 Requires:	python3-CacheControl
