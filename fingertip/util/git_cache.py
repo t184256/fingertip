@@ -24,7 +24,7 @@ class Repo(git.Repo):
         self.lock.acquire()
         if not os.path.exists(self.path):
             log.info(f'cloning {url}...')
-            r = git.Repo.clone_from(url, self.path, mirror=True)  # TODO: bare
+            git.Repo.clone_from(url, self.path, mirror=True)  # TODO: use bare
             super().__init__(self.path)
         else:
             super().__init__(self.path)
@@ -53,7 +53,6 @@ class Repo(git.Repo):
 
 
 def cached_clone(m, url, path_in_m, rev=None, rev_is_enough=True):
-    # TODO: improve for guaranteed fresh copy
     assert hasattr(m, 'ssh')
     with m:
         kwa = {} if not rev_is_enough else {'enough_to_have': rev}
