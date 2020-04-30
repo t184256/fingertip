@@ -25,6 +25,7 @@ def prepare(m):
 def _ansible(m, *args, check=True, cmd=('ansible', 'fingertip')):
     env = {**os.environ, 'ANSIBLE_HOST_KEY_CHECKING': 'False'}
     if hasattr(m, 'ssh'):
+        m.ssh.exec('true')  # to ensure correct spin-up
         connection = 'ssh'  # TODO: compare with paramiko
         prefix = ()
         host = ['fingertip',
