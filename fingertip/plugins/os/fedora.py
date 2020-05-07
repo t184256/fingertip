@@ -19,7 +19,7 @@ def determine_mirror(mirror):
     return mirror
 
 
-def main(m=None, version=31, updates=True,
+def main(m=None, version=32, updates=True,
          mirror=None, resolve_redirect=False):
     m = m or fingertip.build('backend.qemu')
     if hasattr(m, 'qemu'):
@@ -41,7 +41,7 @@ def install_in_qemu(m, version, updates=True,
                f'?repo=fedora-{version}&arch=x86_64&protocol=http')
     ml_upd = ('http://mirrors.fedoraproject.org/metalink' +
               f'?repo=updates-released-f{version}&arch=x86_64&protocol=http')
-    releases_development = 'development' if version == '32' else 'releases'
+    releases_development = 'development' if version == '33' else 'releases'
     if mirror:
         if resolve_redirect:
             m.log.info(f'autoselecting mirror by redirect from {mirror}...')
