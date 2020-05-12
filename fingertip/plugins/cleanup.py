@@ -47,12 +47,12 @@ def _cleanup_dir(dirpath, older_than, time_func):
     cutoff_time = time.time() - fingertip.expiration._parse(older_than)
     for root, dirs, files in os.walk(dirpath, topdown=False):
         for f in (os.path.join(root, x) for x in files):
-            assert os.path.realpath(f).startswith(dirpath)
+            assert os.path.realpath(f).startswith(os.path.realpath(dirpath))
             if time_func(f) <= cutoff_time:
                 log.info(f'removing {os.path.realpath(f)}')
                 os.unlink(f)
         for d in (os.path.join(root, x) for x in dirs):
-            assert os.path.realpath(d).startswith(dirpath)
+            assert os.path.realpath(d).startswith(os.path.realpath(dirpath))
             try:
                 log.info(f'removing {os.path.realpath(d)}')
                 os.rmdir(d)
@@ -73,7 +73,9 @@ def machines(expired_for=0):
             except (FileNotFoundError, EOFError, UnboundLocalError):
                 remove = True
             if (expired_for == 'all' or remove):
-                assert os.path.realpath(d).startswith(path.MACHINES)
+                assert os.path.realpath(d).startswith(
+                    os.path.realpath(path.MACHINES)
+                )
                 log.info(f'removing {os.path.realpath(d)}')
                 if not os.path.islink(d):
                     shutil.rmtree(d)
