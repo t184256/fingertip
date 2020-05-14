@@ -11,7 +11,6 @@ import atexit
 import os
 import signal
 import shutil
-import sys
 import tempfile
 
 from fingertip.util import log
@@ -23,10 +22,10 @@ AUTOREMOVE_PREFIX = 'tmp-fingertip.'
 # TODO: hacky and unclean
 def terminate_child(num, frame):
     print('caught SIGTERM, cleaning up...')
-    sys.exit(1)  # fire atexit hooks
+    raise SystemExit('SIGTERM')  # fire atexit hooks
 
 
-signal.signal(signal.SIGTERM, terminate_child)
+assert signal.signal(signal.SIGTERM, terminate_child) == signal.SIG_DFL
 
 
 def unique_dir(dstdir=None, hint=''):  # defaults to /tmp
@@ -53,7 +52,7 @@ def disappearing_file(dstdir=None, hint=''):
     prefix = AUTOREMOVE_PREFIX + hint + '.' if hint else AUTOREMOVE_PREFIX
     _, temp_file_path = tempfile.mkstemp(prefix=prefix, dir=dstdir)
     assert AUTOREMOVE_PREFIX in temp_file_path
-    atexit.register(lambda: remove(temp_file_path))
+    atexit.register(remove, temp_file_path)
     return temp_file_path
 
 
@@ -61,7 +60,7 @@ def disappearing_dir(dstdir=None, hint=''):
     prefix = AUTOREMOVE_PREFIX + hint + '.' if hint else AUTOREMOVE_PREFIX
     temp_dir_path = tempfile.mkdtemp(prefix=prefix, dir=dstdir)
     assert AUTOREMOVE_PREFIX in temp_dir_path
-    atexit.register(lambda: remove(temp_dir_path))
+    atexit.register(remove, temp_dir_path)
     return temp_dir_path
 
 
