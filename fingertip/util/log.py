@@ -121,7 +121,7 @@ def plain():
 
 class LogPipeThread(threading.Thread):
     def __init__(self, logger, level=logging.INFO):
-        threading.Thread.__init__(self, daemon=False)
+        threading.Thread.__init__(self, daemon=True)
         self.logger, self.level = logger, level
         self.pipe_read, self.pipe_write = os.pipe()
         self.opened_write = os.fdopen(self.pipe_write, 'wb')
