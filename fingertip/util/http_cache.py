@@ -7,6 +7,7 @@ import os
 import shutil
 import socketserver
 import threading
+import time
 
 import requests
 import requests_mock
@@ -85,15 +86,26 @@ class HTTPCache:
                         data = hack_around_unpacking(uri, headers, data)
                     assert len(data) == length
                     self._status_and_headers(r.status_code, r.headers)
+                except BrokenPipeError:
+                    log.warning(f'Upwards broken pipe for {meth} {uri}')
+                    time.sleep(2)  # to delay a re-request
+                except ConnectionResetError:
+                    log.warning(f'Upwards connection reset for {meth} {uri}')
+                    time.sleep(2)  # to delay a re-request
+                except requests.exceptions.ConnectionError:
+                    log.warning(f'Upwards connection error for {meth} {uri}')
+                    time.sleep(2)  # to delay a re-request
+                log.debug(f'{meth} {basename} fetched {length} ({uri})')
+                try:
                     if meth == 'GET':
                         self.wfile.write(data)
-                    log.info(f'{meth} {basename} served {length} ({uri})')
                 except BrokenPipeError:
-                    log.warning(f'Broken pipe for {meth} {uri}')
+                    log.warning(f'Downwards broken pipe for {meth} {uri}')
                 except ConnectionResetError:
-                    log.warning(f'Connection reset for {meth} {uri}')
+                    log.warning(f'Downwards connection reset for {meth} {uri}')
                 except requests.exceptions.ConnectionError:
-                    log.warning(f'Connection error for {meth} {uri}')
+                    log.warning(f'Downwards onnection error for {meth} {uri}')
+                log.info(f'{meth} {basename} served {length} ({uri})')
 
             def do_HEAD(self):
                 self._serve(uri=self.path, headers=self.headers, meth='HEAD')
