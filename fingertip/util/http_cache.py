@@ -25,7 +25,7 @@ STRIP_HEADERS = STRIP_ALWAYS + STRIP_IF_OFFLINE if OFFLINE else STRIP_ALWAYS
 
 
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
-    pass
+    daemon_threads = True
 
 
 class HTTPCache:
