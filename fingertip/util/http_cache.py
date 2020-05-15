@@ -49,6 +49,7 @@ class HTTPCache:
 
                 headers = {k: v for k, v in headers.items() if
                            not (k in STRIP_HEADERS or k.startswith('Proxy-'))}
+                headers['Accept-Encoding'] = 'identity'
                 log.debug(f'{meth} {basename} ({uri})')
                 for k, v in headers.items():
                     log.debug(f'{k}: {v}')
