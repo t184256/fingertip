@@ -1,6 +1,7 @@
 # Licensed under GNU General Public License v3 or later, see COPYING.
 # Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
 
+import atexit
 import json
 import logging
 import os
@@ -322,6 +323,7 @@ class SSH:
         self._transport = None
 
     def connect(self, force_reconnect=False, retries=12, timeout=1/32):
+        atexit.register(self.invalidate)
         import paramiko  # ... in parallel with VM spin-up
         if not force_reconnect and self._transport is not None:
             self._transport.send_ignore()
@@ -351,6 +353,7 @@ class SSH:
             self.m.log.debug('Closing SSH session')
             self._transport.close()
         self._transport = None
+        atexit.unregister(self.invalidate)
 
     def _stream_out_and_err(self, channel):
         sel = selectors.DefaultSelector()
