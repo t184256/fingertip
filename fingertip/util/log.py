@@ -56,6 +56,7 @@ class ErasingFormatter(colorlog.ColoredFormatter):
         # record.message = strip_control_sequences(record.getMessage())
         if hasattr(record, 'msg'):
             record.msg = record.msg.replace('\r', '').replace('\n', r'\n')
+            record.msg = record.msg.lstrip()
 
         if self.shorten_name and record.name.startswith('fingertip.plugins.'):
             record.name = record.name[len('fingertip.plugins.'):]
