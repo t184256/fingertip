@@ -11,6 +11,9 @@ import os
 
 import xdg.BaseDirectory
 
+import fingertip.util.lock as util_lock
+
+
 FINGERTIP = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 CACHE = os.path.join(xdg.BaseDirectory.xdg_cache_home, 'fingertip')
 DOWNLOADS = os.path.join(CACHE, 'downloads')
@@ -37,12 +40,14 @@ logs = easy_accessor(LOGS)
 
 @contextlib.contextmanager
 def wip(normal_path, makedirs=False):
-    # WARNING: prone to race conditions
-    norm, wip = normal_path, normal_path + '-WIP'
-    if os.path.exists(norm):
-        assert not os.path.exists(wip), f'Both {norm} and {wip} exist'
-        os.rename(norm, wip)
-    if makedirs:
-        os.makedirs(os.path.dirname(wip.rstrip(os.path.sep)), exist_ok=True)
-    yield wip
-    os.rename(wip, norm)
+    norm, wip, lock = normal_path, normal_path + '-WIP', normal_path + '-lock'
+    with util_lock.Lock(lock):
+        if os.path.exists(norm):
+            assert not os.path.exists(wip), f'Both {norm} and {wip} exist'
+            os.rename(norm, wip)
+        if makedirs:
+            os.makedirs(os.path.dirname(wip.rstrip(os.path.sep)),
+                        exist_ok=True)
+        yield wip
+        os.rename(wip, norm)
+        os.unlink(lock)
