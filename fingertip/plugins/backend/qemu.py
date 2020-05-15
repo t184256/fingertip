@@ -359,12 +359,13 @@ class SSH:
         sel = selectors.DefaultSelector()
         sel.register(channel, selectors.EVENT_READ)
         out, err, out_buf, err_buf = b'', b'', b'', b''
-        no_output_in_min = 0
+        last_out_time = time.time()
+        silence_min = 0
         while True:
-            sel.select(timeout=60)
+            sel.select(timeout=10)
             if channel.recv_ready():
                 r = channel.recv(512)
-                no_output_in_min = 0
+                last_out_time = time.time()
                 out += r
                 out_buf += r
                 out_lines = out_buf.split(b'\n')
@@ -373,7 +374,7 @@ class SSH:
                 out_buf = out_lines[-1]
             elif channel.recv_stderr_ready():
                 r = channel.recv_stderr(512)
-                no_output_in_min = 0
+                last_out_time = time.time()
                 err += r
                 err_buf += r
                 err_lines = err_buf.split(b'\n')
@@ -383,8 +384,10 @@ class SSH:
             elif channel.exit_status_ready():
                 return out, err
             else:
-                no_output_in_min += 1
-                self.m.log.debug(f'- no output for {no_output_in_min} min -')
+                new_silence_min = int(time.time() - last_out_time) // 60
+                if new_silence_min > silence_min:
+                    silence_min = new_silence_min
+                    self.m.log.debug(f'- no output for {silence_min} min -')
 
     def exec(self, *cmd, shell=False):
         cmd = (' '.join(["'" + a.replace("'", r"\'") + "'" for a in cmd])
