@@ -45,10 +45,11 @@ class HTTPCache:
 
             def _serve(self, uri, headers, meth='GET'):
                 sess = http_cache._get_requests_session()
+                basename = os.path.basename(uri)
 
                 headers = {k: v for k, v in headers.items() if
                            not (k in STRIP_HEADERS or k.startswith('Proxy-'))}
-                log.debug(f'{meth} {uri}')
+                log.debug(f'{meth} {basename} ({uri})')
                 for k, v in headers.items():
                     log.debug(f'{k}: {v}')
 
@@ -85,7 +86,7 @@ class HTTPCache:
                     self._status_and_headers(r.status_code, r.headers)
                     if meth == 'GET':
                         self.wfile.write(data)
-                    log.info(f'{meth} {uri} served {length}')
+                    log.info(f'{meth} {basename} served {length} ({uri})')
                 except BrokenPipeError:
                     log.warning(f'Broken pipe for {meth} {uri}')
                 except ConnectionResetError:
