@@ -161,7 +161,7 @@ class Machine:
             log.info(f'acquiring lock for {tag}...')
         prev_log_name = self.log.name
         self.log.finalize()
-        with lock.MaybeLock(lock_path, lock=do_lock):
+        with lock.Lock(lock_path) if do_lock else lock.NoLock():
             if (os.path.exists(new_mpath) and not needs_a_rebuild(new_mpath)
                     and not exec_as_transient):
                 # sweet, scratch this instance, fast-forward to cached result
@@ -249,7 +249,7 @@ def build(first_step, *args, fingertip_last_step=False, **kwargs):
         transient_hint == 'last' and fingertip_last_step
     )
 
-    with lock.MaybeLock(lock_path, lock=not transient):
+    with lock.Lock(lock_path) if not transient else lock.NoLock():
         if not os.path.exists(mpath) or needs_a_rebuild(mpath):
             log.info(f'building {tag}...')
             func = supply_last_step_if_requested(func, fingertip_last_step)
