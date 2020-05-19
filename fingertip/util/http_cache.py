@@ -89,12 +89,15 @@ class HTTPCache:
                 except BrokenPipeError:
                     log.warning(f'Upwards broken pipe for {meth} {uri}')
                     time.sleep(2)  # to delay a re-request
+                    return
                 except ConnectionResetError:
                     log.warning(f'Upwards connection reset for {meth} {uri}')
                     time.sleep(2)  # to delay a re-request
+                    return
                 except requests.exceptions.ConnectionError:
                     log.warning(f'Upwards connection error for {meth} {uri}')
                     time.sleep(2)  # to delay a re-request
+                    return
                 log.debug(f'{meth} {basename} fetched {length} ({uri})')
                 try:
                     if meth == 'GET':
