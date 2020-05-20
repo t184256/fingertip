@@ -19,7 +19,7 @@ import fingertip.util.http_cache
 from fingertip.util import free_port, log, path, reflink, repeatedly, temp
 
 
-DEFAULT_SNAPSHOT_NAME = 'tip'  # it has to have some name
+SNAPSHOT_BASE_NAME = 'tip'  # it has to have some name
 CACHE_INTERNAL_IP, CACHE_INTERNAL_PORT = '10.0.2.244', 8080
 CACHE_INTERNAL_URL = f'http://{CACHE_INTERNAL_IP}:{CACHE_INTERNAL_PORT}'
 # TODO: add a way to customize smp
@@ -37,7 +37,6 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
     # FIXME: -tmp
     m = fingertip.machine.Machine('qemu')
     m.arch = arch
-    m.default_snapshot_name = DEFAULT_SNAPSHOT_NAME
     m.qemu = QEMUNamespacedFeatures(m, ram_size, disk_size, custom_args)
     m.snapshot = SnapshotNamespacedFeatures(m)
     m._backend_mode = 'pexpect'
@@ -103,7 +102,7 @@ class QEMUNamespacedFeatures:
         self._image_to_clone = None
         self._qemu = f'qemu-system-{self.vm.arch}'
 
-    def run(self, load=DEFAULT_SNAPSHOT_NAME, guest_forwards=[], extra_args=[]):
+    def run(self, load=SNAPSHOT_BASE_NAME, guest_forwards=[], extra_args=[]):
         run_args = ['-loadvm', load] if load else []
 
         self.monitor = Monitor(self.vm)
@@ -187,15 +186,25 @@ class QEMUNamespacedFeatures:
 class SnapshotNamespacedFeatures:
     def __init__(self, vm):
         self.vm = vm
+        self.base_name = SNAPSHOT_BASE_NAME
+        self.list = [self.base_name]  # FIXME: not always true =/
 
-    def checkpoint(self, name=DEFAULT_SNAPSHOT_NAME):
+    def checkpoint(self, name=SNAPSHOT_BASE_NAME):
         self.vm.qemu.monitor.checkpoint(name)
+        self.list.append(name)
 
-    def revert(self, name=DEFAULT_SNAPSHOT_NAME):
+    def revert(self, name=SNAPSHOT_BASE_NAME):
         self.vm.qemu.monitor.restore(name)
 
     def remove(self, name):
         self.vm.qemu.monitor.del_checkpoint(name)
+        self.list.remove(name)
+
+    def purge(self, keep_base=True):
+        for name in self.list:
+            if not (keep_base and name == self.base_name):
+                self.vm.qemu.monitor.del_checkpoint(name)
+        self.list = [self.base_name] if keep_base else []
 
 
 class VMException(RuntimeError):
@@ -297,10 +306,10 @@ class Monitor:
         self._expect({'return': {}})
         self._disconnect()
 
-    def checkpoint(self, name=DEFAULT_SNAPSHOT_NAME):
+    def checkpoint(self, name=SNAPSHOT_BASE_NAME):
         self._execute_human_command(f'savevm {name}')
 
-    def restore(self, name=DEFAULT_SNAPSHOT_NAME):
+    def restore(self, name=SNAPSHOT_BASE_NAME):
         self.vm.hooks.disrupt()
         self._execute_human_command(f'loadvm {name}')
 
