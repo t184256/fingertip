@@ -19,8 +19,10 @@ Requires:	python3
 Requires:	python3-CacheControl
 Requires:	python3-GitPython
 Requires:	python3-cloudpickle
+Requires:	python3-colorama
 Requires:	python3-colorlog
 Requires:	python3-fasteners
+Requires:	python3-fsmonitor
 Requires:	python3-lockfile
 Requires:	python3-paramiko
 Requires:	python3-pexpect

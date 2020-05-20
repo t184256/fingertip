@@ -45,9 +45,10 @@ in
   backtrace
   cachecontrol
   cloudpickle
+  colorama
   colorlog
   fasteners
-  #fsmonitor
+  fsmonitor
   lockfile
   paramiko
   pexpect
