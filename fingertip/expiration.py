@@ -39,17 +39,20 @@ class Expiration:
             return
         self._deps[path] = (os.stat(path).st_mtime, weak_hash.of_file(path))
 
+    def file_has_not_changed(self, path):
+        log.debug(f'checking that {path} has not changed...')
+        mtime, hash_ = self._deps[path]
+        if mtime != (os.stat(path).st_mtime):
+            if hash_ != weak_hash.of_file(path):
+                log.warning(f'{path} has changed, set '
+                            'FINGERTIP_IGNORE_CODE_CHANGES=1 to ignore')
+                return False
+        return True
+
     def files_have_not_changed(self):
         if os.getenv('FINGERTIP_IGNORE_CODE_CHANGES', '0') != '0':
             return True
-        for path, (mtime, hash_) in self._deps.items():
-            log.debug(f'checking that {path} has not changed...')
-            if mtime != (os.stat(path).st_mtime):
-                if hash_ != weak_hash.of_file(path):
-                    log.warning(f'{path} has changed, set '
-                                'FINGERTIP_IGNORE_CODE_CHANGES=1 to ignore')
-                    return False
-        return True
+        return all((self.file_has_not_changed(path) for path in self._deps))
 
     def depend_on_loaded_python_modules(self):
         """
