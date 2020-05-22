@@ -193,8 +193,14 @@ class SnapshotNamespacedFeatures:
         self.vm.qemu.monitor.checkpoint(name)
         self.list.append(name)
 
+    def freeze(self):
+        self.vm.qemu.monitor.pause()
+
     def revert(self, name=SNAPSHOT_BASE_NAME):
         self.vm.qemu.monitor.restore(name)
+
+    def unfreeze(self):
+        self.vm.qemu.monitor.resume()
 
     def remove(self, name):
         self.vm.qemu.monitor.del_checkpoint(name)

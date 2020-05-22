@@ -14,13 +14,12 @@ import pexpect
 import fingertip
 import fingertip.util.log
 from fingertip.plugins.backend.qemu import NotEnoughSpaceForSnapshotException
-from fingertip.util.log import strip_control_sequences
 
 
 WATCHER_DEBOUNCE_TIMEOUT = .25  # seconds
 CHECKPOINT_SPARSITY = 1  # seconds
-TRAIL_EATING_TIMEOUT = .5  # seconds
-MID_PHASE_TIMEOUT = .5  # seconds
+TRAIL_EATING_TIMEOUT = .01  # seconds
+MID_PHASE_TIMEOUT = .25  # seconds
 DELAY_BEFORE_SEND = .01  # seconds
 
 
@@ -44,8 +43,12 @@ class OneOffInotifyWatcher:
     def __init__(self, log):
         self._inotify = inotify_simple.INotify()
         self.rewind_needed = threading.Event()
-        self._mask = inotify_simple.masks.ALL_EVENTS
-        self._mask &= ~inotify_simple.flags.ACCESS
+        self._mask = inotify_simple.flags.MODIFY
+        self._mask |= inotify_simple.flags.ATTRIB
+        self._mask |= inotify_simple.flags.CLOSE_WRITE
+        self._mask |= inotify_simple.flags.MOVED_TO
+        self._mask |= inotify_simple.flags.CREATE
+        self._mask |= inotify_simple.flags.DELETE_SELF
 
         def _event_loop():
             log.debug(f'inotify blocks')
@@ -114,7 +117,7 @@ def make_m_segment_aware(m):
         return duration
 
     def checkpoint_cleanup():
-        if not any ((res.checkpoint_after is not None for res in m.results)):
+        if not any((res.checkpoint_after is not None for res in m.results)):
             m.log.error('Error: ran out of checkpoints to clean up!')
             return
         deleted_checkpoints = 0
@@ -133,7 +136,7 @@ def make_m_segment_aware(m):
                     m.results[i].checkpoint_after = None
                 else:
                     m.log.info(f' keeping checkpoint after {i} '
-                               f'({int(since_prev_checkpoint * 1000)}ms) {m.checkpoint_sparsity}')
+                               f'({int(since_prev_checkpoint * 1000)}ms)')
         if not deleted_checkpoints:
             checkpoint_cleanup()
 
@@ -154,8 +157,13 @@ def make_m_segment_aware(m):
 
         m.log.debug(f'sending {segment.input}')
         m.never_executed_anything = False
+        pre = ''
         if segment.input is not None:
             m.console.sendline(segment.input)
+            m.console.expect_exact(segment.input[:40])  # avoid line-wrapping
+            ignored, pre = m.console.before, m.console.after
+            if ignored:
+                m.log.warning(f'(ignored: {repr(ignored)})')
         else:
             m.console.sendcontrol('d')
             m.console.sendline('')
@@ -176,8 +184,8 @@ def make_m_segment_aware(m):
         end_time = time.time()
         result = SegmentExecutionResult(
             segment=segment,
-            brief_output=m.console.before,
-            full_output=m.console.before + m.console.after,
+            brief_output=pre + m.console.before,
+            full_output=pre + m.console.before + m.console.after,
             encountered_pattern=segment.expected_patterns[i],
             duration=(end_time - start_time),
             checkpoint_after=None  # set later, see below
@@ -190,18 +198,25 @@ def make_m_segment_aware(m):
 
     def eat_trailing():
         m.console.expect(pexpect.TIMEOUT, timeout=TRAIL_EATING_TIMEOUT)
+        m.log.info(f'ate trailing output: {repr(m.console.before)}')
     m.console.eat_trailing = eat_trailing
 
     def rewind_before_segment(i):
         if i == 0 and m.never_executed_anything:
             m.log.debug(f'clean VM, no rewind needed')
             return
-        m.log.info(f'rewinding before segment {i}')
+        m.snapshot.freeze()
         for res in m.results[i:]:
             if res.checkpoint_after:
+                m.log.debug(f'removing snapshot {res.checkpoint_after}...')
                 m.snapshot.remove(res.checkpoint_after)
+        m.log.debug(f'preparing for a rewind...')
+        eat_trailing()
+        m.console.buffer = ''
+        m.log.info(f'rewinding before segment {i}')
         m.snapshot.revert(m.results[i-1].checkpoint_after
                           if i else m.snapshot.base_name)
+        m.snapshot.unfreeze()
         m.results = m.results[:i]
     m.rewind_before_segment = rewind_before_segment
 
@@ -223,11 +238,12 @@ def make_m_segment_aware(m):
                 m.log.info('rare overexecution-after-truncation, rewinding')
                 return True
             elif len(segments) > matching_segments_n:  # we have a current one
-                old_segment = segments[len(m.results)]
+                assert len(m.results) == matching_segments_n < len(segments)
                 currently_executing_segment = updated_segments[len(m.results)]
-                r = currently_executing_segment != old_segment
-                m.log.debug(f'rewind affects current segment: {r}')
-                return currently_executing_segment != old_segment
+                replacement_segment = segments[len(m.results)]
+                if currently_executing_segment != replacement_segment:
+                    m.log.debug(f'rewind affects current segment')
+                    return True
             return False
 
         def consider_interrupt_and_rewind():
@@ -241,7 +257,7 @@ def make_m_segment_aware(m):
         i = count_matching_segments(segments)  # first mismatching segment idx
         if i == len(segments):
             m.log.debug(f'no changes, not reexecuting anything, {i}/{i}')
-            return
+            return  # None -> no changes
         # i is now pointing at the first mismatching/missing segment,
         # but it doesn't necessarily mean we have a checkpoint right before it
         while i > 0 and not m.results[i-1].checkpoint_after:
@@ -250,7 +266,11 @@ def make_m_segment_aware(m):
         # i is now pointing at the closest segment with a checkpoint
         m.rewind_before_segment(i)
         # pseudo fast-forward
-        os.system('clear')
+        sys.stderr.flush()
+        sys.stdout.flush()
+        m.log.debug('---')
+        if os.getenv('FINGERTIP_DEBUG') != '1':
+            os.system('clear')
         for j, result in enumerate(m.results[:i]):
             m.log.debug(f'Output of previously executed segment {j}:')
             sys.stderr.flush()
@@ -266,21 +286,18 @@ def make_m_segment_aware(m):
             last = j == len(segments) - 1
             m.log.debug(f'Executing segment {j} for real:')
             m.execute_segment(segment, no_checkpoint=last)
-        return True
+        return True  # -> Completed till the end
     m.reexecute = reexecute
 
 
 # File formats support #
 
 class FormatBash:
-    def __init__(self):
-        pass
-
     @staticmethod
     def segment(code):
         segments = code.split('\n')
-        segments = [Segment(s, ['ft\$ ', 'ft> ']) for s in segments]
-        segments.append(Segment(None, [r'ft:return code \d+']))
+        segments = [Segment(s, [r'\r\nft\$ ', r'\r\nft> ']) for s in segments]
+        segments.append(Segment(None, [r'ft:return code \d+\r+\n']))
         return segments
 
     @staticmethod
@@ -289,15 +306,14 @@ class FormatBash:
             if m('command -v bash', check=False).retcode:
                 m.apply('ansible', 'package', name='bash', state='installed')
             m('command -v bash')
-            #m.console.sendline('stty -echo')
-            INVISIBLE = u'\\[\\]' # trick taken from pexpect.replwrap
+            INVISIBLE = u'\\[\\]'  # trick taken from pexpect.replwrap
             m.console.sendline(f'PS1=""')
             m.console.sendline(f'PS1="{INVISIBLE}ft$ " PS2="{INVISIBLE}ft> " '
                                'bash --noprofile --norc; '
                                'echo ft:return code $?')
             m.console.sendline('echo fingertip"": READY')
-            m.console.expect_exact('ft$ echo fingertip"": READY')
-            m.console.expect_exact('fingertip: READY')
+            m.console.expect(r'ft\$ echo fingertip"": READY\r+\n'  # ??? why +
+                             r'fingertip: READY\r+\n')
         return m
 
 
