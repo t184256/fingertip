@@ -8,7 +8,7 @@ import threading
 import time
 
 import colorama
-import fsmonitor
+import inotify_simple
 import pexpect
 
 import fingertip
@@ -30,39 +30,44 @@ class RewindNeededException(Exception):
     pass
 
 
-def _is_event_rerun_worthy(log, event):
-    log.debug(f'fsmon {event.action_name} {event.name}')
+def _is_event_rerun_worthy(event):
     if event.name.startswith('.#'):  # hi, EMACS
         return False
     if event.name.startswith('.') and event.name.endswith('.swp'):  # hi, VIM
         return False
     if event.name.startswith('.') and event.name.endswith('.swx'):  # why, VIM?
         return False
-    log.debug(f'that was rerun-worthy')
     return True
 
 
-class OneOffDirectoryWatcher:
-    def __init__(self, log, directory):
-        self._fsmon = fsmonitor.FSMonitor()
-        flags = fsmonitor.FSEvent.All & ~fsmonitor.FSEvent.Access
-        self._fsmon.add_dir_watch(directory, flags=flags)
+class OneOffInotifyWatcher:
+    def __init__(self, log):
+        self._inotify = inotify_simple.INotify()
         self.rewind_needed = threading.Event()
+        self._mask = inotify_simple.masks.ALL_EVENTS
+        self._mask &= ~inotify_simple.flags.ACCESS
 
-        def _watch():
-            ev = []
-            while not any([_is_event_rerun_worthy(log, e) for e in ev]):
-                ev = self._fsmon.read_events()
-            # exhausted the events queue? haha, you'd think so. debouncing:
+        def _event_loop():
+            log.debug(f'inotify blocks')
+            for event in self._inotify.read():
+                log.debug(f'inotify {event}')
+                if not _is_event_rerun_worthy(event):
+                    continue
+                log.debug(f'that was rerun-worthy')
+
+            # exhausting the events queue / debouncing
             debounce_end_time = time.time() + WATCHER_DEBOUNCE_TIMEOUT
             while True:
                 time_left = debounce_end_time - time.time()
                 if time_left < 0:
                     break
-                self._fsmon.read_events(timeout=time_left)
+                _ = self._inotify.read(timeout=time_left)
             # finally, set the flag and cease functioning
             self.rewind_needed.set()
-        threading.Thread(target=_watch, daemon=True).start()
+        threading.Thread(target=_event_loop, daemon=True).start()
+
+    def watch(self, path):
+        self._inotify.add_watch(path, mask=self._mask)
 
 
 # some data classes #
@@ -217,12 +222,13 @@ def make_m_segment_aware(m):
             elif matching_segments_n > len(segments):
                 m.log.info('rare overexecution-after-truncation, rewinding')
                 return True
-            else:
+            elif len(segments) > matching_segments_n:  # we have a current one
                 old_segment = segments[len(m.results)]
                 currently_executing_segment = updated_segments[len(m.results)]
                 r = currently_executing_segment != old_segment
                 m.log.debug(f'rewind affects current segment: {r}')
                 return currently_executing_segment != old_segment
+            return False
 
         def consider_interrupt_and_rewind():
             if watcher.rewind_needed.is_set():
@@ -318,7 +324,8 @@ def main(m, scriptpath, no_unseal=False):
 
         while True:
             try:
-                watcher = OneOffDirectoryWatcher(m.log, os.getcwd())
+                watcher = OneOffInotifyWatcher(m.log)
+                watcher.watch(scriptpath)
                 segments = reloader()
                 any_changes = m.reexecute(segments, watcher, reloader)
                 if any_changes:

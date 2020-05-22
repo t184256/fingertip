@@ -22,6 +22,7 @@ Requires:	python3-cloudpickle
 Requires:	python3-colorama
 Requires:	python3-colorlog
 Requires:	python3-fasteners
+Requires:	python3-inotify_simple
 Requires:	python3-lockfile
 Requires:	python3-paramiko
 Requires:	python3-pexpect
@@ -33,7 +34,6 @@ Requires:	qemu-img
 Requires:	util-linux
 Requires:	xfsprogs
 Recommends:	podman
-Recommends:	python3-fsmonitor
 
 %description
 This program/library aims to be a way to:

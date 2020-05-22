@@ -49,6 +49,7 @@ in
   colorlog
   fasteners
   fsmonitor
+  inotify-simple
   lockfile
   paramiko
   pexpect
