@@ -198,7 +198,7 @@ def make_m_segment_aware(m):
 
     def eat_trailing():
         m.console.expect(pexpect.TIMEOUT, timeout=TRAIL_EATING_TIMEOUT)
-        m.log.info(f'ate trailing output: {repr(m.console.before)}')
+        m.log.debug(f'ate trailing output: {repr(m.console.before)}')
     m.console.eat_trailing = eat_trailing
 
     def rewind_before_segment(i):
@@ -290,14 +290,15 @@ def make_m_segment_aware(m):
     m.reexecute = reexecute
 
 
-# File formats support #
+# Different REPLs support #
 
-class FormatBash:
+class REPLBash:
     @staticmethod
     def segment(code):
-        segments = code.split('\n')
-        segments = [Segment(s, [r'\r\nft\$ ', r'\r\nft> ']) for s in segments]
-        segments.append(Segment(None, [r'ft:return code \d+\r+\n']))
+        lines = code.rstrip().split('\n')
+        segments = [Segment(s, [r'\r\n\u200C\$ ', r'\r\n\u200C> '])
+                    for s in lines]
+        segments.append(Segment(None, [r'\r\n\u200Creturn code \d+\r+\n']))
         return segments
 
     @staticmethod
@@ -306,28 +307,65 @@ class FormatBash:
             if m('command -v bash', check=False).retcode:
                 m.apply('ansible', 'package', name='bash', state='installed')
             m('command -v bash')
-            INVISIBLE = u'\\[\\]'  # trick taken from pexpect.replwrap
+            INVISIBLE_IN_PS = u'\\[\\]'  # trick taken from pexpect.replwrap
             m.console.sendline(f'PS1=""')
-            m.console.sendline(f'PS1="{INVISIBLE}ft$ " PS2="{INVISIBLE}ft> " '
+            m.console.sendline(f'PS1="{INVISIBLE_IN_PS}\u200C$ " '
+                               f'PS2="{INVISIBLE_IN_PS}\u200C> " '
                                'bash --noprofile --norc; '
-                               'echo ft:return code $?')
-            m.console.sendline('echo fingertip"": READY')
-            m.console.expect(r'ft\$ echo fingertip"": READY\r+\n'  # ??? why +
-                             r'fingertip: READY\r+\n')
+                               r'bash -c "echo -e \\\\u200Creturn code $?"')
+            m.console.sendline(r'echo -e \\u200C""READY')
+            m.console.expect(r'\u200C\$ echo -e \\\\u200C""READY\r+\n' # \r\r?
+                             r'\u200CREADY\r+\n')
         return m
 
 
+class REPLPython:
+    @staticmethod
+    def segment(code):
+        lines = code.rstrip().split('\n')
+        segments = [Segment(s, [r'\r\n\u200C>>> ', r'\r\n\u200C... '])
+                    for s in lines]
+        segments.append(Segment(None, [r'\r\n\u200Creturn code \d+\r+\n']))
+        return segments
+
+    @staticmethod
+    def prepare(m, scriptpath):
+        with m:
+            if m('command -v python3', check=False).retcode:
+                m.apply('ansible', 'package', name='python3', state='installed')
+            m('command -v bash')
+            INVISIBLE = u'\\[\\]'  # trick taken from pexpect.replwrap
+            m.console.sendline(f'PS1=""')
+            m.console.sendline('python3; '
+                               r'bash -c "echo -e \\\\u200Creturn code $?"')
+            m.console.sendline('import sys')
+            m.console.sendline('sys.ps1, sys.ps2 = "\u200C>>> ", "\u200C... "')
+            m.console.sendline('del sys')
+            m.console.sendline(r'print("\u200C" + "READY")')
+            m.console.expect(r'\r+\n\u200CREADY\r+\n')
+        return m
+
+
+repls = {
+    'bash': REPLBash,
+    'python': REPLPython,
+}
+
+
 @fingertip.transient
-def main(m, scriptpath, no_unseal=False):
+def main(m, scriptpath, language='bash', no_unseal=False):
     if not no_unseal:
         m = m.apply('unseal')
     # m = m.apply('.hooks.disable_proxy')
-    m = m.apply(FormatBash.prepare, scriptpath)
+
+    repl = repls[language]
+
+    m = m.apply(repl.prepare, scriptpath)
 
     def reloader():
         with open(scriptpath) as f:
             code = f.read()
-        return FormatBash.segment(code)
+        return repl.segment(code)
 
     fingertip.util.log.plain()
     with m:
