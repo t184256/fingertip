@@ -166,7 +166,6 @@ def make_m_segment_aware(m):
                 m.log.warning(f'(ignored: {repr(ignored)})')
         else:
             m.console.sendcontrol('d')
-            m.console.sendline('')
         m.log.debug(f'sent {segment.input}')
 
         while True:
@@ -283,6 +282,8 @@ def make_m_segment_aware(m):
             sys.stdout.flush()
         # execute the rest for real
         for j, segment in enumerate(segments[i:], i):
+            if j == 0:
+                sys.stdout.write(m.repl_header)
             last = j == len(segments) - 1
             m.log.debug(f'Executing segment {j} for real:')
             m.execute_segment(segment, no_checkpoint=last)
@@ -308,6 +309,7 @@ class REPLBash:
                 m.apply('ansible', 'package', name='bash', state='installed')
             m('command -v bash')
             INVISIBLE_IN_PS = u'\\[\\]'  # trick taken from pexpect.replwrap
+            m.repl_header = m('bash --version').out.split('\n')[0] + '\n$ '
             m.console.sendline(f'PS1=""')
             m.console.sendline(f'PS1="{INVISIBLE_IN_PS}\u200C$ " '
                                f'PS2="{INVISIBLE_IN_PS}\u200C> " '
@@ -342,6 +344,8 @@ class REPLPython:
             m.console.sendline('sys.ps1, sys.ps2 = "\u200C>>> ", "\u200C... "')
             m.console.sendline('del sys')
             m.console.sendline(r'print("\u200C" + "READY")')
+            m.console.expect(r'\r+\n(Python.*?)\r\n')
+            m.repl_header = f'{m.console.match.group(1)}\n>>> '
             m.console.expect(r'\r+\n\u200CREADY\r+\n')
         return m
 
