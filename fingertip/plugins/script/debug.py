@@ -270,7 +270,13 @@ def make_m_segment_aware(m):
         m.log.debug('---')
         if os.getenv('FINGERTIP_DEBUG') != '1':
             os.system('clear')
+
+        # pseudo-fast-forward
         for j, result in enumerate(m.results[:i]):
+            if j == 0:
+                sys.stdout.write(colorama.Style.DIM +
+                                 m.repl_header +
+                                 colorama.Style.RESET_ALL)
             m.log.debug(f'Output of previously executed segment {j}:')
             sys.stderr.flush()
             # TODO: use strip_control_sequences?
@@ -279,7 +285,8 @@ def make_m_segment_aware(m):
             sys.stdout.write(colorama.Style.DIM +
                              decolored +
                              colorama.Style.RESET_ALL)
-            sys.stdout.flush()
+        sys.stdout.flush()
+
         # execute the rest for real
         for j, segment in enumerate(segments[i:], i):
             if j == 0:
