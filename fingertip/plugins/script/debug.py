@@ -1,6 +1,7 @@
 # Licensed under GNU General Public License v3 or later, see COPYING.
 # Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
 
+import logging
 import os
 import re
 import sys
@@ -105,6 +106,7 @@ def make_m_segment_aware(m):
     m.results = []
     m.checkpoint_sparsity = CHECKPOINT_SPARSITY
     m.never_executed_anything = True
+    m.in_fast_forward = False
 
     def checkpoint_positions():  # which results have checkpoints after them
         return [i for i, res in enumerate(m.results) if res.checkpoint_after]
@@ -225,7 +227,7 @@ def make_m_segment_aware(m):
                 return i
         return len(m.results)
 
-    def reexecute(segments, watcher, reloader):
+    def reexecute(segments, watcher, reloader, terse):
         def change_affects_current_segment():
             # we're in the process of executing a segment, did it change?
             updated_segments = reloader()
@@ -264,36 +266,34 @@ def make_m_segment_aware(m):
             m.log.debug(f'slipping back past uncheckpointed segment {i}')
         # i is now pointing at the closest segment with a checkpoint
         m.rewind_before_segment(i)
+
         # pseudo fast-forward
+        m.in_fast_forward = True
         sys.stderr.flush()
         sys.stdout.flush()
         m.log.debug('---')
         if os.getenv('FINGERTIP_DEBUG') != '1':
             os.system('clear')
-
-        # pseudo-fast-forward
-        for j, result in enumerate(m.results[:i]):
-            if j == 0:
-                sys.stdout.write(colorama.Style.DIM +
-                                 m.repl_header +
-                                 colorama.Style.RESET_ALL)
-            m.log.debug(f'Output of previously executed segment {j}:')
-            sys.stderr.flush()
-            # TODO: use strip_control_sequences?
-            decolored = re.sub(r'\x1B[@-_][0-?]*[ -/]*[@-~]', '',
-                               result.full_output)
-            sys.stdout.write(colorama.Style.DIM +
-                             decolored +
-                             colorama.Style.RESET_ALL)
-        sys.stdout.flush()
+        previous_output = ''.join([
+            result.full_output
+            for result in m.results[:i]
+        ])
+        # TODO: use strip_control_sequences?
+        m.console.logfile_read.write(colorama.Style.DIM +
+                                     previous_output +
+                                     colorama.Style.RESET_ALL)
+        m.in_fast_forward = False
 
         # execute the rest for real
         for j, segment in enumerate(segments[i:], i):
             if j == 0:
-                sys.stdout.write(m.repl_header)
+                m.console.logfile_read.write(m.repl_header)
             last = j == len(segments) - 1
             m.log.debug(f'Executing segment {j} for real:')
             m.execute_segment(segment, no_checkpoint=last)
+            if j == 0:
+                m.results[0].full_output = (m.repl_header +
+                                            m.results[0].full_output)
         return True  # -> Completed till the end
     m.reexecute = reexecute
 
@@ -310,20 +310,24 @@ class REPLBash:
         return segments
 
     @staticmethod
-    def prepare(m, scriptpath):
+    def prepare(m, scriptpath, terse):
         with m:
             if m('command -v bash', check=False).retcode:
                 m.apply('ansible', 'package', name='bash', state='installed')
             m('command -v bash')
             INVISIBLE_IN_PS = u'\\[\\]'  # trick taken from pexpect.replwrap
-            m.repl_header = m('bash --version').out.split('\n')[0] + '\n$ '
+            if terse != 'most':
+                bash_version = m('bash --version').out.split('\n')[0]
+                m.repl_header = bash_version + '\n' + '\u200C$ '
+            else:
+                m.repl_header = bash_version + '\n' + '\u200C$ '
             m.console.sendline(f'PS1=""')
             m.console.sendline(f'PS1="{INVISIBLE_IN_PS}\u200C$ " '
                                f'PS2="{INVISIBLE_IN_PS}\u200C> " '
                                'bash --noprofile --norc; '
                                r'bash -c "echo -e \\\\u200Creturn code $?"')
             m.console.sendline(r'echo -e \\u200C""READY')
-            m.console.expect(r'\u200C\$ echo -e \\\\u200C""READY\r+\n' # \r\r?
+            m.console.expect(r'\u200C\$ echo -e \\\\u200C""READY\r+\n'  # x2?
                              r'\u200CREADY\r+\n')
         return m
 
@@ -332,18 +336,20 @@ class REPLPython:
     @staticmethod
     def segment(code):
         lines = code.rstrip().split('\n')
+        if lines[-1][0].isspace():
+            lines.append('')  # terminate an open '... '
         segments = [Segment(s, [r'\r\n\u200C>>> ', r'\r\n\u200C... '])
                     for s in lines]
         segments.append(Segment(None, [r'\r\n\u200Creturn code \d+\r+\n']))
         return segments
 
     @staticmethod
-    def prepare(m, scriptpath):
+    def prepare(m, scriptpath, terse):
         with m:
             if m('command -v python3', check=False).retcode:
-                m.apply('ansible', 'package', name='python3', state='installed')
+                m.apply('ansible', 'package',
+                        name='python3', state='installed')
             m('command -v bash')
-            INVISIBLE = u'\\[\\]'  # trick taken from pexpect.replwrap
             m.console.sendline(f'PS1=""')
             m.console.sendline('python3; '
                                r'bash -c "echo -e \\\\u200Creturn code $?"')
@@ -352,9 +358,49 @@ class REPLPython:
             m.console.sendline('del sys')
             m.console.sendline(r'print("\u200C" + "READY")')
             m.console.expect(r'\r+\n(Python.*?)\r\n')
-            m.repl_header = f'{m.console.match.group(1)}\n>>> '
+            if terse != 'most':
+                m.repl_header = f'{m.console.match.group(1)}\n\u200C>>> '
+            else:
+                m.repl_header = f'\u200C>>> '
             m.console.expect(r'\r+\n\u200CREADY\r+\n')
         return m
+
+    @staticmethod
+    def format(line, fast_forward):
+        fmt = ''
+        if line == 'Traceback (most recent call last):':
+            fmt = colorama.Fore.RED
+        elif re.match(r'  File ".*", line \d+, in ', line):
+            fmt = colorama.Fore.RED
+        elif re.match(r'\w*Error: ', line):
+            fmt = colorama.Fore.RED
+        elif re.search(r':\d+:.*Warning: ', line):
+            fmt = colorama.Fore.YELLOW
+        elif line.startswith('\u200C>>> ') or line.startswith('\u200C... '):
+            fmt += colorama.Fore.BLUE
+        elif line == '\u200Creturn code 0':
+            fmt += colorama.Fore.GREEN
+        elif re.match(r'\u200Creturn code \d+', line):
+            fmt += colorama.Fore.MAGENTA
+        if fast_forward:
+            fmt = colorama.Style.DIM + fmt
+        return fmt + line + (colorama.Style.RESET_ALL if fmt else '')
+
+    @staticmethod
+    def filter(line, terseness):
+        if terseness and line in ('\u200C>>> ', '\u200C... '):
+            return False
+        if terseness in ('more', 'most'):
+            if line.startswith('\u200C... '):
+                return False
+            if line == 'Traceback (most recent call last):':
+                return False
+        if terseness == 'most':
+            if line.startswith('\u200C>>> ') or line.startswith('\u200C... '):
+                return False
+            if re.match(r'\u200Creturn code \d+', line):
+                return False
+        return True
 
 
 repls = {
@@ -364,14 +410,14 @@ repls = {
 
 
 @fingertip.transient
-def main(m, scriptpath, language='bash', no_unseal=False):
+def main(m, scriptpath, language='bash', no_unseal=False,
+         terse=False, no_color=False):
     if not no_unseal:
         m = m.apply('unseal')
     # m = m.apply('.hooks.disable_proxy')
 
     repl = repls[language]
-
-    m = m.apply(repl.prepare, scriptpath)
+    m = m.apply(repl.prepare, scriptpath, terse)
 
     def reloader():
         with open(scriptpath) as f:
@@ -379,6 +425,18 @@ def main(m, scriptpath, language='bash', no_unseal=False):
         return repl.segment(code)
 
     fingertip.util.log.plain()
+
+    if not no_color and hasattr(repl, 'format'):
+        class Formatter(logging.Formatter):
+            def format(self, record):
+                return repl.format(record.msg, fast_forward=m.in_fast_forward)
+        fingertip.util.log.current_handler.setFormatter(Formatter())
+    if terse and hasattr(repl, 'filter'):
+        class Filter(logging.Filter):
+            def filter(self, record):
+                return repl.filter(record.msg, terse)
+        fingertip.util.log.current_handler.addFilter(Filter())
+
     with m:
         make_m_segment_aware(m)
         # disable input echoing
@@ -392,7 +450,7 @@ def main(m, scriptpath, language='bash', no_unseal=False):
                 watcher = OneOffInotifyWatcher(m.log)
                 watcher.watch(scriptpath)
                 segments = reloader()
-                any_changes = m.reexecute(segments, watcher, reloader)
+                any_changes = m.reexecute(segments, watcher, reloader, terse)
                 if any_changes:
                     m.console.eat_trailing()
                     checkpoints_i = [str(i) for i in m.checkpoint_positions()]
