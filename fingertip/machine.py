@@ -9,7 +9,7 @@ import os
 import cloudpickle
 
 import fingertip.exec
-from fingertip import step_loader, expiration
+from fingertip import step_loader, expiration, time_desync
 from fingertip.util import hooks, lock, log, path, reflink, temp
 
 
@@ -39,6 +39,7 @@ class Machine:
         self._up_counter = 0
         self.sealed = sealed
         self.expiration = expiration.Expiration(expire_in)
+        self.time_desync = time_desync.TimeDesync(self)
         self.backend = backend_name
         self.log = log.Sublogger(f'plugins.backend.{backend_name}',
                                  os.path.join(self.path, 'log.txt'))

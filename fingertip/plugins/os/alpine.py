@@ -109,4 +109,5 @@ def first_boot(m):
         m.expiration.depend_on_a_file(ssh_key_fname)
 
         m.hooks.unseal.append(lambda: m('/etc/init.d/networking restart'))
+        m.hooks.timesync.append(lambda: m('hwclock -s'))
     return m
