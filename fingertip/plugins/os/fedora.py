@@ -124,6 +124,8 @@ def install_in_qemu(m, version, updates=True,
         m.hooks.unseal += [lambda: m('systemctl restart NetworkManager'),
                            lambda: m('nm-online')]
 
+        m.hooks.timesync.append(lambda: m('hwclock -s'))
+
         m.fedora = version
 
         return m

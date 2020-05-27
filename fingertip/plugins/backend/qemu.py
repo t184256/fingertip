@@ -51,6 +51,7 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
     def up():
         if m.qemu.live:
             m.qemu.run()
+            m.time_desync.fix_if_needed()
     m.hooks.up.append(up)
 
     def down():
@@ -103,6 +104,8 @@ class QEMUNamespacedFeatures:
         self._qemu = f'qemu-system-{self.vm.arch}'
 
     def run(self, load=SNAPSHOT_BASE_NAME, guest_forwards=[], extra_args=[]):
+        if load:
+            self.vm.time_desync.report(self.vm.time_desync.LARGE)
         run_args = ['-loadvm', load] if load else []
 
         self.monitor = Monitor(self.vm)
@@ -188,6 +191,7 @@ class SnapshotNamespacedFeatures:
         self.vm = vm
         self.base_name = SNAPSHOT_BASE_NAME
         self.list = [self.base_name]  # FIXME: not always true =/
+        self._frozen = False
 
     def checkpoint(self, name=SNAPSHOT_BASE_NAME):
         self.vm.qemu.monitor.checkpoint(name)
@@ -195,12 +199,17 @@ class SnapshotNamespacedFeatures:
 
     def freeze(self):
         self.vm.qemu.monitor.pause()
+        self._frozen = True
 
     def revert(self, name=SNAPSHOT_BASE_NAME):
         self.vm.qemu.monitor.restore(name)
+        if not self._frozen:
+            self.vm.time_desync.fix_if_needed()
 
     def unfreeze(self):
         self.vm.qemu.monitor.resume()
+        self._frozen = False
+        self.vm.time_desync.fix_if_needed()
 
     def remove(self, name):
         self.vm.qemu.monitor.del_checkpoint(name)
@@ -292,6 +301,7 @@ class Monitor:
         return reply
 
     def resume(self):
+        self.vm.time_desync.report(self.vm.time_desync.SMALL)
         self._execute('cont')
         r = self._expect(None)
         assert set(r.keys()) == {'timestamp', 'event'}
@@ -300,6 +310,7 @@ class Monitor:
 
     def pause(self):
         self.vm.hooks.disrupt()
+        self.vm.time_desync.report(self.vm.time_desync.SMALL)
         self._execute('stop')
         r = self._expect(None)
         assert set(r.keys()) == {'timestamp', 'event'}
@@ -316,6 +327,9 @@ class Monitor:
         self._execute_human_command(f'savevm {name}')
 
     def restore(self, name=SNAPSHOT_BASE_NAME):
+        self.vm.time_desync.report(self.vm.time_desync.SMALL
+                                   if name != SNAPSHOT_BASE_NAME else
+                                   self.vm.time_desync.LARGE)
         self.vm.hooks.disrupt()
         self._execute_human_command(f'loadvm {name}')
 
