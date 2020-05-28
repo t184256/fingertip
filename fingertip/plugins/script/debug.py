@@ -300,68 +300,98 @@ def make_m_segment_aware(m):
 
 # Different REPLs support #
 
-class REPLBash:
-    @staticmethod
-    def segment(code):
-        lines = code.rstrip().split('\n')
-        segments = [Segment(s, [r'\r\n\u200C\$ ', r'\r\n\u200C> '])
+
+class REPLBase:
+    RETCODE_MARKER = '\u200Creturn code: '
+    RETCODE_MATCH = r'\u200Creturn code: \d+'
+
+    @classmethod
+    def segment(cls, code):
+        lines = code.split('\n')
+        segments = [Segment(s, [r'\r\n' + cls.rPS1, r'\r\n' + cls.rPS2])
                     for s in lines]
-        segments.append(Segment(None, [r'\r\n\u200Creturn code \d+\r+\n']))
+        segments.append(Segment(None, [r'\r\n' + cls.RETCODE_MATCH + '\r+\n']))
         return segments
 
-    @staticmethod
-    def prepare(m, scriptpath, terse):
+    @classmethod
+    def install_interpreter_if_missing(cls, m):
+        if m(f'command -v {cls.INTERPRETER}', check=False).retcode:
+            m.apply('ansible', 'package',
+                    name=cls.PACKAGE, state='installed')
+        m(f'command -v {cls.INTERPRETER}')
+
+    @classmethod
+    def launch_interpreter(cls, m, cmd=None):
+        m.console.sendline(f'PS1=""')
+        m.console.sendline(f'{cmd or cls.INTERPRETER}; '
+                           r'bash -c "echo -e \\\\u200Creturn code $?"')
+
+
+class REPLBash(REPLBase):
+    INTERPRETER = PACKAGE = 'bash'
+    INTERPRETER_ARGS = '--noprofile --norc'
+    PS1, PS2 = '\u200C$ ', '\u200C> '
+    rPS1, rPS2 = r'\u200c\$ ', r'\u200c> '
+
+    @classmethod
+    def prepare(cls, m, scriptpath, terse):
         with m:
-            if m('command -v bash', check=False).retcode:
-                m.apply('ansible', 'package', name='bash', state='installed')
-            m('command -v bash')
-            INVISIBLE_IN_PS = u'\\[\\]'  # trick taken from pexpect.replwrap
+            cls.install_interpreter_if_missing(m)
+
             if terse != 'most':
                 bash_version = m('bash --version').out.split('\n')[0]
-                m.repl_header = bash_version + '\n' + '\u200C$ '
+                m.repl_header = bash_version + '\n' + cls.PS1
             else:
-                m.repl_header = bash_version + '\n' + '\u200C$ '
-            m.console.sendline(f'PS1=""')
-            m.console.sendline(f'PS1="{INVISIBLE_IN_PS}\u200C$ " '
-                               f'PS2="{INVISIBLE_IN_PS}\u200C> " '
-                               'bash --noprofile --norc; '
-                               r'bash -c "echo -e \\\\u200Creturn code $?"')
+                m.repl_header = cls.PS1
+
+            # trick taken from pexpect.replwrap
+            # this is not visible in actual PS1, but visible in, e.g., env
+            TRICK = '\\[\\]'
+            cls.launch_interpreter(m, (f'PS1="{TRICK}{cls.PS1}" '
+                                       f'PS2="{TRICK}{cls.PS2}" '
+                                       'bash --noprofile --norc'))
+
             m.console.sendline(r'echo -e \\u200C""READY')
-            m.console.expect(r'\u200C\$ echo -e \\\\u200C""READY\r+\n'  # x2?
-                             r'\u200CREADY\r+\n')
+            m.console.expect(cls.rPS1 + r'echo -e \\\\u200C""READY\r+\n'
+                             r'\u200cREADY\r+\n')
         return m
 
-
-class REPLPython:
     @staticmethod
-    def segment(code):
-        lines = code.rstrip().split('\n')
-        if lines[-1][0].isspace():
-            lines.append('')  # terminate an open '... '
-        segments = [Segment(s, [r'\r\n\u200C>>> ', r'\r\n\u200C... '])
-                    for s in lines]
-        segments.append(Segment(None, [r'\r\n\u200Creturn code \d+\r+\n']))
-        return segments
+    def format(line, fast_forward):
+        fmt = ''
+        if fast_forward:
+            fmt = colorama.Style.DIM + fmt
+        return fmt + line + (colorama.Style.RESET_ALL if fmt else '')
 
-    @staticmethod
-    def prepare(m, scriptpath, terse):
+
+class REPLPython(REPLBase):
+    INTERPRETER = PACKAGE = 'python3'
+    INTERPRETER_ARGS = ''
+    PS1, PS2 = '\u200C>>> ', '\u200C... '
+    rPS1, rPS2 = r'\u200C>>> ', r'\u200C... '
+
+    @classmethod
+    def segment(cls, code):
+        if code.split('\n')[-1][:1].isspace():  # indented last line?
+            code += '\n'  # terminate an open '...' to execute it
+        return super().segment(code)
+
+    @classmethod
+    def prepare(cls, m, scriptpath, terse):
         with m:
-            if m('command -v python3', check=False).retcode:
-                m.apply('ansible', 'package',
-                        name='python3', state='installed')
-            m('command -v bash')
-            m.console.sendline(f'PS1=""')
-            m.console.sendline('python3; '
-                               r'bash -c "echo -e \\\\u200Creturn code $?"')
-            m.console.sendline('import sys')
-            m.console.sendline('sys.ps1, sys.ps2 = "\u200C>>> ", "\u200C... "')
-            m.console.sendline('del sys')
-            m.console.sendline(r'print("\u200C" + "READY")')
+            cls.install_interpreter_if_missing(m)
+            cls.launch_interpreter(m)
+
             m.console.expect(r'\r+\n(Python.*?)\r\n')
             if terse != 'most':
-                m.repl_header = f'{m.console.match.group(1)}\n\u200C>>> '
+                m.repl_header = m.console.match.group(1) + '\n' + cls.PS1
             else:
-                m.repl_header = f'\u200C>>> '
+                m.repl_header = cls.PS1
+
+            m.console.sendline('import sys')
+            m.console.sendline(f'sys.ps1, sys.ps2 = "{cls.PS1}", "{cls.PS2}"')
+            m.console.sendline('del sys')
+            m.console.sendline(r'print("\u200C" + "READY")')
             m.console.expect(r'\r+\n\u200CREADY\r+\n')
         return m
 
@@ -426,16 +456,18 @@ def main(m, scriptpath, language='bash', no_unseal=False,
 
     fingertip.util.log.plain()
 
-    if not no_color and hasattr(repl, 'format'):
-        class Formatter(logging.Formatter):
-            def format(self, record):
-                return repl.format(record.msg, fast_forward=m.in_fast_forward)
-        fingertip.util.log.current_handler.setFormatter(Formatter())
-    if terse and hasattr(repl, 'filter'):
-        class Filter(logging.Filter):
-            def filter(self, record):
-                return repl.filter(record.msg, terse)
-        fingertip.util.log.current_handler.addFilter(Filter())
+    if os.getenv('FINGERTIP_DEBUG') != '1':
+        if not no_color and hasattr(repl, 'format'):
+            class Formatter(logging.Formatter):
+                def format(self, record):
+                    return repl.format(record.msg,
+                                       fast_forward=m.in_fast_forward)
+            fingertip.util.log.current_handler.setFormatter(Formatter())
+        if terse and hasattr(repl, 'filter'):
+            class Filter(logging.Filter):
+                def filter(self, record):
+                    return repl.filter(record.msg, terse)
+            fingertip.util.log.current_handler.addFilter(Filter())
 
     with m:
         make_m_segment_aware(m)
