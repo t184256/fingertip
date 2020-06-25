@@ -302,15 +302,15 @@ def make_m_segment_aware(m):
 
 
 class REPLBase:
-    RETCODE_MARKER = '\u200Creturn code: '
-    RETCODE_MATCH = r'\u200Creturn code: \d+'
+    RETCODE_MARKER = '\u200Creturn code '
+    RETCODE_MATCH = r'\u200Creturn code \d+'
 
     @classmethod
     def segment(cls, code):
         lines = code.split('\n')
         segments = [Segment(s, [r'\r\n' + cls.rPS1, r'\r\n' + cls.rPS2])
                     for s in lines]
-        segments.append(Segment(None, [r'\r\n' + cls.RETCODE_MATCH + '\r+\n']))
+        segments.append(Segment(None, [r'\r+\n' + cls.RETCODE_MATCH + '\r+\n']))
         return segments
 
     @classmethod
@@ -324,7 +324,21 @@ class REPLBase:
     def launch_interpreter(cls, m, cmd=None):
         m.console.sendline(f'PS1=""')
         m.console.sendline(f'{cmd or cls.INTERPRETER}; '
-                           r'bash -c "echo -e \\\\u200Creturn code $?"')
+                           r'bash -c "echo -e ' + cls.RETCODE_MARKER + '$?"')
+
+    @classmethod
+    def _filter_generic(cls, line, terseness):
+        if terseness and line in (cls.PS1, cls.PS2):
+            return False
+        if terseness in ('more', 'most'):
+            if line.startswith(cls.PS2):
+                return False
+        if terseness == 'most':
+            if line.startswith(cls.PS1) or line.startswith(cls.PS2):
+                return False
+            if re.match(cls.RETCODE_MATCH, line):
+                return False
+        return True
 
 
 class REPLBash(REPLBase):
@@ -356,12 +370,22 @@ class REPLBash(REPLBase):
                              r'\u200cREADY\r+\n')
         return m
 
-    @staticmethod
-    def format(line, fast_forward):
+    @classmethod
+    def format(cls, line, fast_forward):
         fmt = ''
+        if line.startswith(cls.PS1) or line.startswith(cls.PS2):
+            fmt += colorama.Fore.BLUE
+        elif line == cls.RETCODE_MARKER + '0':
+            fmt += colorama.Fore.GREEN
+        elif re.match(cls.RETCODE_MATCH, line):
+            fmt += colorama.Fore.MAGENTA
         if fast_forward:
             fmt = colorama.Style.DIM + fmt
         return fmt + line + (colorama.Style.RESET_ALL if fmt else '')
+
+    @classmethod
+    def filter(cls, line, terseness):
+        return cls._filter_generic(line, terseness)
 
 
 class REPLPython(REPLBase):
@@ -395,8 +419,8 @@ class REPLPython(REPLBase):
             m.console.expect(r'\r+\n\u200CREADY\r+\n')
         return m
 
-    @staticmethod
-    def format(line, fast_forward):
+    @classmethod
+    def format(cls, line, fast_forward):
         fmt = ''
         if line == 'Traceback (most recent call last):':
             fmt = colorama.Fore.RED
@@ -406,31 +430,22 @@ class REPLPython(REPLBase):
             fmt = colorama.Fore.RED
         elif re.search(r':\d+:.*Warning: ', line):
             fmt = colorama.Fore.YELLOW
-        elif line.startswith('\u200C>>> ') or line.startswith('\u200C... '):
+        elif line.startswith(cls.PS1) or line.startswith(cls.PS2):
             fmt += colorama.Fore.BLUE
-        elif line == '\u200Creturn code 0':
+        elif line == cls.RETCODE_MARKER + '0':
             fmt += colorama.Fore.GREEN
-        elif re.match(r'\u200Creturn code \d+', line):
+        elif re.match(cls.RETCODE_MATCH, line):
             fmt += colorama.Fore.MAGENTA
         if fast_forward:
             fmt = colorama.Style.DIM + fmt
         return fmt + line + (colorama.Style.RESET_ALL if fmt else '')
 
-    @staticmethod
-    def filter(line, terseness):
-        if terseness and line in ('\u200C>>> ', '\u200C... '):
-            return False
+    @classmethod
+    def filter(cls, line, terseness):
         if terseness in ('more', 'most'):
-            if line.startswith('\u200C... '):
-                return False
             if line == 'Traceback (most recent call last):':
                 return False
-        if terseness == 'most':
-            if line.startswith('\u200C>>> ') or line.startswith('\u200C... '):
-                return False
-            if re.match(r'\u200Creturn code \d+', line):
-                return False
-        return True
+        return cls._filter_generic(line, terseness)
 
 
 repls = {
@@ -446,7 +461,7 @@ def main(m, scriptpath, language='bash', no_unseal=False,
         m = m.apply('unseal')
     # m = m.apply('.hooks.disable_proxy')
 
-    repl = repls[language]
+    repl = repls[language] if isinstance(language, str) else language
     m = m.apply(repl.prepare, scriptpath, terse)
 
     def reloader():
@@ -492,3 +507,5 @@ def main(m, scriptpath, language='bash', no_unseal=False,
                 watcher.rewind_needed.wait()
             except RewindNeededException:
                 continue
+            except KeyboardInterrupt:
+                break
