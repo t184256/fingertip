@@ -149,5 +149,5 @@ $ fingertip cleanup machines all
 Some days the whole `~/.cache/fingertip` has to go.
 
 ``` bash
-$ fingertip cleanup all
+$ fingertip cleanup everything
 ```
