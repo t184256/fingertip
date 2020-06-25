@@ -33,6 +33,7 @@ class HTTPCache:
     def __init__(self, host='127.0.0.1', port=0):
         self.host = host
         self._mocks = []
+        self._local_files_to_serve = {}
         http_cache = self
 
         class Handler(http.server.SimpleHTTPRequestHandler):
@@ -44,7 +45,7 @@ class HTTPCache:
                     self.send_header(k, v)
                 self.end_headers()
 
-            def _serve(self, uri, headers, meth='GET'):
+            def _serve(self, uri, headers, meth='GET'):  # caching proxy
                 sess = http_cache._get_requests_session()
                 basename = os.path.basename(uri)
 
@@ -111,13 +112,22 @@ class HTTPCache:
                 log.info(f'{meth} {basename} served {length} ({uri})')
 
             def do_HEAD(self):
+                if self.path in http_cache._local_files_to_serve:
+                    return super().do_HEAD()  # act as a HTTP server
                 self._serve(uri=self.path, headers=self.headers, meth='HEAD')
 
             def do_GET(self):
+                if self.path in http_cache._local_files_to_serve:
+                    return super().do_GET()  # act as a HTTP server
                 self._serve(uri=self.path, headers=self.headers, meth='GET')
 
             def log_message(self, format, *args):  # supress existing logging
                 return
+
+            def translate_path(self, http_path):  # directly serve local files
+                local_path = http_cache._local_files_to_serve[http_path]
+                log.info(f'serving {http_path} directly from {local_path}')
+                return local_path
 
         httpd = ThreadingHTTPServer((host, port), Handler)
         _, self.port = httpd.socket.getsockname()
@@ -144,14 +154,31 @@ class HTTPCache:
 
     def mock(self, uri, text):
         """
+        Mock a text file at some location.
         Examples:
-          * mock('http://self/test', 'TEST')
-            and access directly as `http://<host>:<port>/test`
-          * mock('http://anything/test', 'ANYTHINGT')
-            and access through proxy as `http://anything/test`
+          * mock('http://self/test', text='TEST')
+            and access through proxy as `http://self/test`
         """
         content_length = {'Content-Length': str(len(text.encode()))}
         self._mocks.append((uri, {'text': text, 'headers': content_length}))
+
+    def mock_custom(self, uri, **kwargs):
+        """
+        Mock a custom HTTP response.
+        See ``help(requests_mock.Adapter.register_uri)`` for parameters.
+        """
+        self._mocks.append((uri, kwargs))
+
+    def serve_local_file(self, http_path, local_path):
+        """
+        Serve this local file as an HTTP server.
+        Examples:
+          * serve('test', '/some/file')
+            and access directly as `http://<host>:<port>/test`
+          * serve('http://test', '/some/file')
+            and access through proxy as `http://test`
+        """
+        self._local_files_to_serve[http_path] = local_path
 
 
 # Hack around requests uncompressing Content-Encoding: gzip
