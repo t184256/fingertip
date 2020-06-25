@@ -20,11 +20,11 @@ def determine_mirror(mirror):
 
 
 def main(m=None, version=32, updates=True,
-         mirror=None, resolve_redirect=False):
+         mirror=None, resolve_redirect=False, fips=False):
     m = m or fingertip.build('backend.qemu')
     if hasattr(m, 'qemu'):
         m = m.apply(install_in_qemu, version=version, updates=updates,
-                    mirror=mirror, resolve_redirect=resolve_redirect)
+                    mirror=mirror, resolve_redirect=resolve_redirect, fips=fips)
     elif hasattr(m, 'container'):
         m = m.apply(m.container.from_image, f'fedora:{version}')
         if updates:
@@ -36,7 +36,7 @@ def main(m=None, version=32, updates=True,
 
 
 def install_in_qemu(m, version, updates=True,
-                    mirror=None, resolve_redirect=False):
+                    mirror=None, resolve_redirect=False, fips=False):
     ml_norm = ('http://mirrors.fedoraproject.org/metalink' +
                f'?repo=fedora-{version}&arch=x86_64&protocol=http')
     ml_upd = ('http://mirrors.fedoraproject.org/metalink' +
@@ -68,9 +68,8 @@ def install_in_qemu(m, version, updates=True,
 
     with m:
         m.qemu.ram_size = '2G'
-        hostname = f'fedora{version}'
+        hostname = f'fedora{version}' + ('-fips' if fips else '')
         fqdn = hostname + '.fingertip.local'
-
         ssh_key_fname = path.fingertip('ssh_key', 'fingertip.pub')
         with open(ssh_key_fname) as f:
             ssh_pubkey = f.read().strip()
@@ -94,7 +93,8 @@ def install_in_qemu(m, version, updates=True,
         append = ('ks=http://ks inst.ksstrict console=ttyS0 inst.notmux '
                   f'proxy={m.http_cache.internal_url} ' +
                   f'inst.proxy={m.http_cache.internal_url} ' +
-                  f'inst.repo={url}')
+                  f'inst.repo={url} ' +
+                  ('fips=1' if fips else ''))
         extra_args = ['-kernel', kernel, '-initrd', initrd, '-append', append]
 
         m.qemu.run(load=None, extra_args=extra_args)
