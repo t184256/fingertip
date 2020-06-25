@@ -30,8 +30,10 @@ def main():
     # Start with plain to get output from setup wizard
     fingertip.util.log.plain()
 
-    fingertip.util.reflink.storage_setup_wizard()
-    fingertip.util.cleanup_job.schedule()
+    if (len(sys.argv) > 1 and
+            sys.argv[1] != 'cleanup'):  # workaround for full filesystems
+        fingertip.util.reflink.storage_setup_wizard()
+        fingertip.util.cleanup_job.schedule()
 
     fingertip.util.log.nicer()
 
