@@ -18,10 +18,20 @@ from fingertip.plugins.backend.qemu import NotEnoughSpaceForSnapshotException
 
 
 WATCHER_DEBOUNCE_TIMEOUT = .25  # seconds
-CHECKPOINT_SPARSITY = 1  # seconds
+CHECKPOINT_SPARSITY = 2  # seconds
 TRAIL_EATING_TIMEOUT = .01  # seconds
 MID_PHASE_TIMEOUT = .25  # seconds
 DELAY_BEFORE_SEND = .01  # seconds
+
+
+# Dimming colors #
+
+def dim(text):
+    text = text.replace(colorama.Style.NORMAL, colorama.Style.DIM)
+    text = text.replace(colorama.Style.BRIGHT, colorama.Style.NORMAL)
+    text = text.replace(colorama.Style.RESET_ALL,
+                        colorama.Style.RESET_ALL + colorama.Style.DIM)
+    return colorama.Style.DIM + text
 
 
 # File monitoring and waiting #
@@ -157,7 +167,7 @@ def make_m_segment_aware(m):
     def execute_segment(segment, no_checkpoint=False):
         start_time = time.time()
 
-        m.log.debug(f'sending {segment.input}')
+        m.log.debug(f'sending {repr(segment.input)}')
         m.never_executed_anything = False
         pre = ''
         if segment.input is not None:
@@ -168,7 +178,7 @@ def make_m_segment_aware(m):
                 m.log.warning(f'(ignored: {repr(ignored)})')
         else:
             m.console.sendcontrol('d')
-        m.log.debug(f'sent {segment.input}')
+        m.log.debug(f'sent {repr(segment.input)}')
 
         while True:
             try:
@@ -279,15 +289,14 @@ def make_m_segment_aware(m):
             for result in m.results[:i]
         ])
         # TODO: use strip_control_sequences?
-        m.console.logfile_read.write(colorama.Style.DIM +
-                                     previous_output +
-                                     colorama.Style.RESET_ALL)
+        m.console.logfile_read.write(dim(previous_output))
         m.in_fast_forward = False
 
         # execute the rest for real
         for j, segment in enumerate(segments[i:], i):
             if j == 0:
                 m.console.logfile_read.write(m.repl_header)
+                m.console.logfile_read.flush()
             last = j == len(segments) - 1
             m.log.debug(f'Executing segment {j} for real:')
             m.execute_segment(segment, no_checkpoint=last)
@@ -328,8 +337,13 @@ class REPLBase:
 
     @classmethod
     def _filter_generic(cls, line, terseness):
-        if terseness and line in (cls.PS1, cls.PS2):
-            return False
+        if terseness:
+            if line in (cls.PS1, cls.PS2):
+                return False
+            if line.startswith(cls.PS1 + cls.COMMENT_SIGN):
+                return False
+            if line.startswith(cls.PS2 + cls.COMMENT_SIGN):
+                return False
         if terseness in ('more', 'most'):
             if line.startswith(cls.PS2):
                 return False
@@ -346,6 +360,7 @@ class REPLBash(REPLBase):
     INTERPRETER_ARGS = '--noprofile --norc'
     PS1, PS2 = '\u200C$ ', '\u200C> '
     rPS1, rPS2 = r'\u200c\$ ', r'\u200c> '
+    COMMENT_SIGN = '#'
 
     @classmethod
     def prepare(cls, m, scriptpath, terse):
@@ -364,24 +379,21 @@ class REPLBash(REPLBase):
             cls.launch_interpreter(m, (f'PS1="{TRICK}{cls.PS1}" '
                                        f'PS2="{TRICK}{cls.PS2}" '
                                        'bash --noprofile --norc'))
-
             m.console.sendline(r'echo -e \\u200C""READY')
             m.console.expect(cls.rPS1 + r'echo -e \\\\u200C""READY\r+\n'
-                             r'\u200cREADY\r+\n')
+                             r'\u200cREADY\r+\n' + cls.rPS1)
         return m
 
     @classmethod
-    def format(cls, line, fast_forward):
-        fmt = ''
+    def format(cls, line):
+        color = ''
         if line.startswith(cls.PS1) or line.startswith(cls.PS2):
-            fmt += colorama.Fore.BLUE
+            color = colorama.Fore.BLUE
         elif line == cls.RETCODE_MARKER + '0':
-            fmt += colorama.Fore.GREEN
+            color = colorama.Fore.GREEN
         elif re.match(cls.RETCODE_MATCH, line):
-            fmt += colorama.Fore.MAGENTA
-        if fast_forward:
-            fmt = colorama.Style.DIM + fmt
-        return fmt + line + (colorama.Style.RESET_ALL if fmt else '')
+            color = colorama.Fore.MAGENTA
+        return color + line
 
     @classmethod
     def filter(cls, line, terseness):
@@ -393,6 +405,7 @@ class REPLPython(REPLBase):
     INTERPRETER_ARGS = ''
     PS1, PS2 = '\u200C>>> ', '\u200C... '
     rPS1, rPS2 = r'\u200C>>> ', r'\u200C... '
+    COMMENT_SIGN = '#'
 
     @classmethod
     def segment(cls, code):
@@ -416,29 +429,27 @@ class REPLPython(REPLBase):
             m.console.sendline(f'sys.ps1, sys.ps2 = "{cls.PS1}", "{cls.PS2}"')
             m.console.sendline('del sys')
             m.console.sendline(r'print("\u200C" + "READY")')
-            m.console.expect(r'\r+\n\u200CREADY\r+\n')
+            m.console.expect(r'\r+\n\u200CREADY\r+\n' + cls.rPS1)
         return m
 
     @classmethod
-    def format(cls, line, fast_forward):
-        fmt = ''
+    def format(cls, line):
+        color = ''
         if line == 'Traceback (most recent call last):':
-            fmt = colorama.Fore.RED
+            color = colorama.Fore.RED
         elif re.match(r'  File ".*", line \d+, in ', line):
-            fmt = colorama.Fore.RED
+            color = colorama.Fore.RED
         elif re.match(r'\w*Error: ', line):
-            fmt = colorama.Fore.RED
+            color = colorama.Fore.RED
         elif re.search(r':\d+:.*Warning: ', line):
-            fmt = colorama.Fore.YELLOW
+            color = colorama.Fore.YELLOW
         elif line.startswith(cls.PS1) or line.startswith(cls.PS2):
-            fmt += colorama.Fore.BLUE
+            color = colorama.Fore.BLUE
         elif line == cls.RETCODE_MARKER + '0':
-            fmt += colorama.Fore.GREEN
+            color = colorama.Fore.GREEN
         elif re.match(cls.RETCODE_MATCH, line):
-            fmt += colorama.Fore.MAGENTA
-        if fast_forward:
-            fmt = colorama.Style.DIM + fmt
-        return fmt + line + (colorama.Style.RESET_ALL if fmt else '')
+            color = colorama.Fore.MAGENTA
+        return color + line
 
     @classmethod
     def filter(cls, line, terseness):
@@ -456,17 +467,19 @@ repls = {
 
 @fingertip.transient
 def main(m, scriptpath, language='bash', no_unseal=False,
-         terse=False, no_color=False):
+         terse=False, no_color=False, script_reading_hook=None):
+    script_reading_hook = script_reading_hook or (lambda m, code: code)
     if not no_unseal:
         m = m.apply('unseal')
     # m = m.apply('.hooks.disable_proxy')
 
     repl = repls[language] if isinstance(language, str) else language
+    repl = repl()
     m = m.apply(repl.prepare, scriptpath, terse)
 
     def reloader():
         with open(scriptpath) as f:
-            code = f.read()
+            code = script_reading_hook(m, f.read())
         return repl.segment(code)
 
     fingertip.util.log.plain()
@@ -475,8 +488,10 @@ def main(m, scriptpath, language='bash', no_unseal=False,
         if not no_color and hasattr(repl, 'format'):
             class Formatter(logging.Formatter):
                 def format(self, record):
-                    return repl.format(record.msg,
-                                       fast_forward=m.in_fast_forward)
+                    formatted = repl.format(record.msg)
+                    if m.in_fast_forward:
+                        formatted = dim(formatted)
+                    return formatted + colorama.Style.RESET_ALL
             fingertip.util.log.current_handler.setFormatter(Formatter())
         if terse and hasattr(repl, 'filter'):
             class Filter(logging.Filter):
@@ -500,6 +515,9 @@ def main(m, scriptpath, language='bash', no_unseal=False,
                 any_changes = m.reexecute(segments, watcher, reloader, terse)
                 if any_changes:
                     m.console.eat_trailing()
+                    if not terse:
+                        m.log.info('(too much output? try --terse,'
+                                   ' --terse=more or --terse=most)')
                     checkpoints_i = [str(i) for i in m.checkpoint_positions()]
                     m.log.info(f'done. checkpoints: {checkpoints_i}, '
                                f'sparsity={m.checkpoint_sparsity}s. '
