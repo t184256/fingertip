@@ -134,21 +134,21 @@ def make_m_segment_aware(m):
             return
         deleted_checkpoints = 0
         m.checkpoint_sparsity *= 2
-        m.log.info(f'checkpoint cleanup, now with {m.checkpoint_sparsity} sec')
+        m.log.debug(f'checkpoint cleanup, now with {m.checkpoint_sparsity} sec')
         for i in range(len(m.results)):
             if m.results[i].checkpoint_after:
                 since_prev_checkpoint = (since_last_checkpoint(m.results[:i])
                                          + m.results[i].duration)
                 if since_prev_checkpoint <= m.checkpoint_sparsity:
-                    m.log.warning(f'deleting checkpoint after {i} ' +
-                                  f'({int(since_prev_checkpoint * 1000)}ms) '
-                                  'to free space')
+                    m.log.debug(f'deleting checkpoint after {i} ' +
+                                f'({int(since_prev_checkpoint * 1000)}ms) '
+                                'to free space')
                     deleted_checkpoints += 1
                     m.snapshot.remove(m.results[i].checkpoint_after)
                     m.results[i].checkpoint_after = None
                 else:
-                    m.log.info(f' keeping checkpoint after {i} '
-                               f'({int(since_prev_checkpoint * 1000)}ms)')
+                    m.log.debug(f' keeping checkpoint after {i} '
+                                f'({int(since_prev_checkpoint * 1000)}ms)')
         if not deleted_checkpoints:
             checkpoint_cleanup()
 
