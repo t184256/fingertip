@@ -163,7 +163,7 @@ class Sublogger:
         # If I don't do this, it assumes that subloggers with the same name
         # are reusable, and logs stuff *somewhere*. Ugh.
         self.sub = logger.getChild(name + '.' + str(random.random()))
-        self.sub.name = self.name = logger.name + '.' + name
+        self.sub.name = self.name = name
         self.path = to_file
         self.used = False
 

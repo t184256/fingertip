@@ -41,7 +41,7 @@ class Machine:
         self.expiration = expiration.Expiration(expire_in)
         self.time_desync = time_desync.TimeDesync(self)
         self.backend = backend_name
-        self.log = log.Sublogger(f'plugins.backend.{backend_name}',
+        self.log = log.Sublogger(f'fingertip.plugins.backend.{backend_name}',
                                  os.path.join(self.path, 'log.txt'))
         self.log.debug(f'created {backend_name}')
         self.hooks.clone.append(
@@ -172,7 +172,8 @@ class Machine:
             else:
                 # loaded, not spun up, step not cached: perform step, cache
                 log.info(f'applying (and, possibly, caching) {tag}')
-                self.log = log.Sublogger('plugins.' + tag.split(':', 1)[0],
+                self.log = log.Sublogger('fingertip.plugins.' +
+                                         tag.split(':', 1)[0],
                                          os.path.join(self.path, 'log.txt'))
                 func = supply_last_step_if_requested(func, last_step)
                 m = func(self, *args, **kwargs)
@@ -208,7 +209,7 @@ def _load_from_path(data_dir_path):
         m = cloudpickle.load(f)
     assert m._state == 'saving'
     m._state = 'loading'
-    m.log = log.Sublogger('<unknown>')
+    m.log = log.Sublogger('fingertip.<unknown>')
     assert m.path == data_dir_path
     assert m._parent_path == os.path.realpath(os.path.dirname(data_dir_path))
     m.hooks.load()
@@ -223,7 +224,7 @@ def clone_and_load(from_path, name_hint=None):
     os.makedirs(temp_path, exist_ok=True)
     with open(os.path.join(from_path, 'machine.clpickle'), 'rb') as f:
         m = cloudpickle.load(f)
-    m.log = log.Sublogger('<cloning>')
+    m.log = log.Sublogger('fingertip.<cloning>')
     m.hooks.clone(temp_path)
     m._parent_path = os.path.realpath(from_path)
     m.path = temp_path
@@ -277,7 +278,8 @@ def build(first_step, *args, fingertip_last_step=False, **kwargs):
     if fingertip_last_step:
         return os.path.join(mpath, 'log.txt')
     m = clone_and_load(mpath)
-    m.log = log.Sublogger('<just built>', os.path.join(m.path, 'log.txt'))
+    m.log = log.Sublogger('fingertip.<just built>',
+                          os.path.join(m.path, 'log.txt'))
     return m
 
 
