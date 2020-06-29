@@ -303,7 +303,7 @@ def make_m_segment_aware(m):
             if j == 0:
                 m.results[0].full_output = (m.repl_header +
                                             m.results[0].full_output)
-        return True  # -> Completed till the end
+        return True  # -> Completed till the end, executing some changes
     m.reexecute = reexecute
 
 
@@ -354,6 +354,28 @@ class REPLBase:
                 return False
         return True
 
+    @classmethod
+    def format(cls, line):
+        if cls.line_is_an_input(line):
+            return colorama.Fore.BLUE + line
+        elif line == cls.RETCODE_MARKER + '0':
+            return colorama.Fore.GREEN + line
+        elif re.match(cls.RETCODE_MATCH, line):
+            return colorama.Fore.MAGENTA + line
+        elif cls.line_is_an_error(line):
+            return colorama.Fore.RED + line
+        elif cls.line_is_a_warning(line):
+            return colorama.Fore.YELLOW + line
+        return line
+
+    @staticmethod
+    def line_is_a_warning(l):
+        return False
+
+    @staticmethod
+    def line_is_an_error(l):
+        return False
+
 
 class REPLBash(REPLBase):
     INTERPRETER = PACKAGE = 'bash'
@@ -385,15 +407,8 @@ class REPLBash(REPLBase):
         return m
 
     @classmethod
-    def format(cls, line):
-        color = ''
-        if line.startswith(cls.PS1) or line.startswith(cls.PS2):
-            color = colorama.Fore.BLUE
-        elif line == cls.RETCODE_MARKER + '0':
-            color = colorama.Fore.GREEN
-        elif re.match(cls.RETCODE_MATCH, line):
-            color = colorama.Fore.MAGENTA
-        return color + line
+    def line_is_an_input(cls, line):
+        return line.startswith(cls.PS1) or line.startswith(cls.PS2)
 
     @classmethod
     def filter(cls, line, terseness):
@@ -432,24 +447,25 @@ class REPLPython(REPLBase):
             m.console.expect(r'\r+\n\u200CREADY\r+\n' + cls.rPS1)
         return m
 
+    @staticmethod
+    def line_is_an_error(line):
+        return bool(re.match(r'\w*Error: ', line))
+
+    @staticmethod
+    def line_is_a_warning(line):
+        return bool(re.search(r':\d+:.*Warning: ', line))
+
+    @classmethod
+    def line_is_an_input(cls, line):
+        return line.startswith(cls.PS1) or line.startswith(cls.PS2)
+
     @classmethod
     def format(cls, line):
-        color = ''
-        if line == 'Traceback (most recent call last):':
-            color = colorama.Fore.RED
-        elif re.match(r'  File ".*", line \d+, in ', line):
-            color = colorama.Fore.RED
-        elif re.match(r'\w*Error: ', line):
-            color = colorama.Fore.RED
-        elif re.search(r':\d+:.*Warning: ', line):
-            color = colorama.Fore.YELLOW
-        elif line.startswith(cls.PS1) or line.startswith(cls.PS2):
-            color = colorama.Fore.BLUE
-        elif line == cls.RETCODE_MARKER + '0':
-            color = colorama.Fore.GREEN
-        elif re.match(cls.RETCODE_MATCH, line):
-            color = colorama.Fore.MAGENTA
-        return color + line
+        if line == 'Traceback (most recent call last):':  # not an error yet
+            return colorama.Fore.RED + line
+        elif re.match(r'  File ".*", line \d+, in ', line):  # not an error yet
+            return colorama.Fore.RED + line
+        return super().format(line)
 
     @classmethod
     def filter(cls, line, terseness):
