@@ -26,6 +26,7 @@ $ fingertip os.fedora + ssh  # install Fedora and SSH into it
 $ fingertip os.alpine + console  # install Alpine, access serial console
 $ fingertip os.alpine + ansible package --state=present --name=patch + ssh
 $ fingertip backend.podman-criu + os.alpine + console  # containers!
+$ fingertip os.fedora + script.debug myscript.sh  # checkpoint-powered debugger
 ```
 
 An example of Python usage and writing your own steps:
