@@ -237,7 +237,7 @@ def make_m_segment_aware(m):
                 return i
         return len(m.results)
 
-    def reexecute(segments, watcher, reloader, terse):
+    def reexecute(segments, watcher, reloader, terse, halt):
         def change_affects_current_segment():
             # we're in the process of executing a segment, did it change?
             updated_segments = reloader()
@@ -303,6 +303,10 @@ def make_m_segment_aware(m):
             if j == 0:
                 m.results[0].full_output = (m.repl_header +
                                             m.results[0].full_output)
+            if any((halt(l) for l in m.results[-1].full_output.split('\n'))):
+                m.log.warning('halting (use --halt-on to configure that, '
+                              'e.g., --halt-on=nothing)')
+                return True
         return True  # -> Completed till the end, executing some changes
     m.reexecute = reexecute
 
@@ -483,7 +487,8 @@ repls = {
 
 @fingertip.transient
 def main(m, scriptpath, language='bash', no_unseal=False,
-         terse=False, no_color=False, script_reading_hook=None):
+         terse=False, no_color=False, script_reading_hook=None,
+         halt_on='warning'):
     script_reading_hook = script_reading_hook or (lambda m, code: code)
     if not no_unseal:
         m = m.apply('unseal')
@@ -497,6 +502,15 @@ def main(m, scriptpath, language='bash', no_unseal=False,
         with open(scriptpath) as f:
             code = script_reading_hook(m, f.read())
         return repl.segment(code)
+
+    if halt_on == 'warning':
+        def halt(line):
+            return repl.line_is_an_error(line) or repl.line_is_a_warning(line)
+    elif halt_on == 'error':
+        halt = repl.line_is_an_error
+    else:
+        def halt(line):
+            return False
 
     fingertip.util.log.plain()
 
@@ -528,7 +542,8 @@ def main(m, scriptpath, language='bash', no_unseal=False,
                 watcher = OneOffInotifyWatcher(m.log)
                 watcher.watch(scriptpath)
                 segments = reloader()
-                any_changes = m.reexecute(segments, watcher, reloader, terse)
+                any_changes = m.reexecute(segments, watcher, reloader, terse,
+                                          halt)
                 if any_changes:
                     m.console.eat_trailing()
                     if not terse:
