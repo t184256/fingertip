@@ -405,6 +405,7 @@ class REPLBash(REPLBase):
             cls.launch_interpreter(m, (f'PS1="{TRICK}{cls.PS1}" '
                                        f'PS2="{TRICK}{cls.PS2}" '
                                        'bash --noprofile --norc'))
+            m.console.sendline(f'BASH_SOURCE="{scriptpath}"')
             m.console.sendline(r'echo -e \\u200C""READY')
             m.console.expect(cls.rPS1 + r'echo -e \\\\u200C""READY\r+\n'
                              r'\u200cREADY\r+\n' + cls.rPS1)
