@@ -531,6 +531,10 @@ def main(m, scriptpath, language='bash', no_unseal=False,
 
     with m:
         make_m_segment_aware(m)
+
+        # FIXME: changes aren't reuploaded!
+        m.ssh.upload(scriptpath)  # make self-referential code a bit happier
+
         # disable input echoing
         m.console.logfile_read = m.console.logfile
         m.console.logfile = None
