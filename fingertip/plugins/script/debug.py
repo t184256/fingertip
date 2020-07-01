@@ -329,13 +329,14 @@ class REPLBase:
     def install_interpreter_if_missing(cls, m):
         if m(f'command -v {cls.INTERPRETER}', check=False).retcode:
             m.apply('ansible', 'package',
-                    name=cls.PACKAGE, state='installed')
+                    name=['bash', cls.PACKAGE], state='installed')
         m(f'command -v {cls.INTERPRETER}')
 
     @classmethod
-    def launch_interpreter(cls, m, cmd=None):
+    def launch_interpreter(cls, m, scriptpath, cmd=None, pre=''):
         m.console.sendline(f'PS1=""')
-        m.console.sendline(f'{cmd or cls.INTERPRETER}; '
+        m.console.sendline(f"bash -c '{pre} exec -a {scriptpath} "
+                           f"{cmd or cls.INTERPRETER}'; "
                            r'bash -c "echo -e ' + cls.RETCODE_MARKER + '$?"')
 
     @classmethod
@@ -401,10 +402,9 @@ class REPLBash(REPLBase):
             # trick taken from pexpect.replwrap
             # this is not visible in actual PS1, but visible in, e.g., env
             TRICK = '\\[\\]'
-            cls.launch_interpreter(m, (f'PS1="{TRICK}{cls.PS1}" '
-                                       f'PS2="{TRICK}{cls.PS2}" '
-                                       'bash --noprofile --norc'))
-            m.console.sendline(f'BASH_SOURCE="{scriptpath}"')
+            cls.launch_interpreter(m, scriptpath, 'bash --noprofile --norc',
+                                   pre=(f'PS1="{TRICK}{cls.PS1}" '
+                                        f'PS2="{TRICK}{cls.PS2}"'))
             m.console.sendline(r'echo -e \\u200C""READY')
             m.console.expect(cls.rPS1 + r'echo -e \\\\u200C""READY\r+\n'
                              r'\u200cREADY\r+\n' + cls.rPS1)
@@ -436,7 +436,7 @@ class REPLPython(REPLBase):
     def prepare(cls, m, scriptpath, terse):
         with m:
             cls.install_interpreter_if_missing(m)
-            cls.launch_interpreter(m)
+            cls.launch_interpreter(m, scriptpath)
 
             m.console.expect(r'\r+\n(Python.*?)\r\n')
             if terse != 'most':
