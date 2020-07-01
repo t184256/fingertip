@@ -321,9 +321,8 @@ class REPLBase:
     @classmethod
     def segment(cls, code):
         lines = code.split('\n')
-        segments = [Segment(s, [r'\r\n' + cls.rPS1, r'\r\n' + cls.rPS2])
-                    for s in lines]
-        segments.append(Segment(None, [r'\r+\n' + cls.RETCODE_MATCH + '\r+\n']))
+        segments = [Segment(s, [cls.rPS1, cls.rPS2]) for s in lines]
+        segments.append(Segment(None, [cls.RETCODE_MATCH + '\r+\n']))
         return segments
 
     @classmethod
