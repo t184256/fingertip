@@ -129,7 +129,7 @@ class QEMUNamespacedFeatures:
 
         image = os.path.join(self.vm.path, 'image.qcow2')
         if self._image_to_clone:
-            required_space = os.path.getsize(self._image_to_clone) + 2**30
+            required_space = os.path.getsize(self._image_to_clone) + 2 * 2**30
             lock = fasteners.process_lock.InterProcessLock('/tmp/.fingertip')
             lock.acquire()
             if self.vm._transient and temp.has_space(required_space):

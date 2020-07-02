@@ -64,7 +64,7 @@ def disappearing_dir(dstdir=None, hint=''):
     return temp_dir_path
 
 
-def has_space(how_much='2G', reserve_fraction=.3, where='/tmp'):
+def has_space(how_much='2G', reserve_fraction=.5, where='/tmp'):
     for suffix, power in {'G': 30, 'M': 20, 'K': 10}.items():
         if isinstance(how_much, str) and how_much.endswith(suffix):
             how_much = float(how_much[:-1]) * 2 ** power
