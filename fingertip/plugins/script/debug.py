@@ -172,7 +172,8 @@ def make_m_segment_aware(m):
         pre = ''
         if segment.input is not None:
             m.console.sendline(segment.input)
-            m.console.expect_exact(segment.input[:40])  # avoid line-wrapping
+            # expect the input to appear (why not), but avoid line-wrapping
+            m.console.expect_exact(segment.input.lstrip()[:40])
             ignored, pre = m.console.before, m.console.after
             if ignored:
                 m.log.warning(f'(ignored: {repr(ignored)})')
