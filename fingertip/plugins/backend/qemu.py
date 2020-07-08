@@ -402,7 +402,8 @@ class SSH:
         self._transport = None
         atexit.unregister(self.invalidate)
 
-    def _stream_out_and_err(self, channel):
+    def _stream_out_and_err(self, channel, quiet=False):
+        m_log = self.m.log.info if not quiet else self.m.log.debug
         sel = selectors.DefaultSelector()
         sel.register(channel, selectors.EVENT_READ)
         out, err, out_buf, err_buf = b'', b'', b'', b''
@@ -417,7 +418,7 @@ class SSH:
                 out_buf += r
                 out_lines = out_buf.split(b'\n')
                 for out_line in out_lines[:-1]:
-                    self.m.log.info(log.strip_control_sequences(out_line))
+                    m_log(log.strip_control_sequences(out_line))
                 out_buf = out_lines[-1]
             elif channel.recv_stderr_ready():
                 r = channel.recv_stderr(512)
@@ -426,7 +427,7 @@ class SSH:
                 err_buf += r
                 err_lines = err_buf.split(b'\n')
                 for err_line in err_lines[:-1]:
-                    self.m.log.info(log.strip_control_sequences(err_line))
+                    m_log(log.strip_control_sequences(err_line))
                 err_buf = err_lines[-1]
             elif channel.exit_status_ready():
                 return out, err
@@ -436,7 +437,7 @@ class SSH:
                     silence_min = new_silence_min
                     self.m.log.debug(f'- no output for {silence_min} min -')
 
-    def exec(self, *cmd, shell=False):
+    def exec(self, *cmd, shell=False, quiet=False):
         cmd = (' '.join(["'" + a.replace("'", r"\'") + "'" for a in cmd])
                if not shell else cmd[0])
         self.connect()
@@ -447,7 +448,10 @@ class SSH:
             time.sleep(2)
             self.connect(force_reconnect=True)
             channel = self._transport.open_session()
-        self.m.log.info(f'ssh command: {cmd}')
+        if quiet:
+            self.m.log.debug(f'ssh command: {cmd}')
+        else:
+            self.m.log.info(f'ssh command: {cmd}')
         channel.exec_command(cmd)
         out, err = self._stream_out_and_err(channel)
         retval = channel.recv_exit_status()
