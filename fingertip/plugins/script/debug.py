@@ -175,7 +175,7 @@ def make_m_segment_aware(m):
             # expect the input to appear (why not), but avoid line-wrapping
             m.console.expect_exact(segment.input.lstrip()[:40])
             ignored, pre = m.console.before, m.console.after
-            if ignored:
+            if ignored.lstrip():
                 m.log.warning(f'(ignored: {repr(ignored)})')
         else:
             m.console.sendcontrol('d')
