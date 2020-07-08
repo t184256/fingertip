@@ -52,14 +52,14 @@ class Repo(git.Repo):
         self.lock.release()
 
 
-def cached_clone(m, url, path_in_m, rev=None, rev_is_enough=True):
+def upload_clone(m, url, path_in_m, rev=None, rev_is_enough=True):
     assert hasattr(m, 'ssh')
     with m:
         kwa = {} if not rev_is_enough else {'enough_to_have': rev}
         with Repo(url, url.replace('/', '::'), **kwa) as repo:
             tar = temp.disappearing_file()
-            tar_in_m = f'/tmp/{os.path.basename(tar)}'
-            extracted_in_m = f'/tmp/{os.path.basename(tar)}-extracted'
+            tar_in_m = f'/.tmp-{os.path.basename(tar)}'
+            extracted_in_m = f'/.tmp-{os.path.basename(tar)}-extracted'
             log.info(f'packing {url} checkout...')
             with tarfile.open(tar, 'w') as tf:
                 tf.add(repo.path, arcname=extracted_in_m)
@@ -68,7 +68,7 @@ def cached_clone(m, url, path_in_m, rev=None, rev_is_enough=True):
         log.info(f'performing {url} checkout...')
         m(f'''
             set -uex
-            tar xmvf {tar_in_m} -C /
+            tar xmf {tar_in_m} -C /
             mkdir -p {path_in_m}
             git clone -n {extracted_in_m} {path_in_m}
             cd {path_in_m}
