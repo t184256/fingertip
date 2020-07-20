@@ -16,6 +16,7 @@ import fingertip.util.lock as util_lock
 
 FINGERTIP = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 CACHE = os.path.join(xdg.BaseDirectory.xdg_cache_home, 'fingertip')
+COW_IMAGE = os.path.join(CACHE, 'cow.xfs.img')
 DOWNLOADS = os.path.join(CACHE, 'downloads')
 MACHINES = os.path.join(CACHE, 'machines')
 SHARED = os.path.join(CACHE, 'shared')

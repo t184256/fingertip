@@ -66,11 +66,10 @@ def storage_setup_wizard():
         log.warning(f'images directory {path.MACHINES} lacks reflink support')
         log.warning('without it, fingertip will thrash and fill up your SSD '
                     'in no time')
-        backing_file = os.path.join(path.CACHE, 'for-machines.xfs')
-        if not os.path.exists(backing_file):
+        if not os.path.exists(path.COW_IMAGE):
             if SETUP == 'suggest':
                 log.info(f'would you like to allow fingertip '
-                         f'to allocate {size} at {backing_file} '
+                         f'to allocate {size} at {path.COW_IMAGE} '
                          'for a reflink-enabled XFS loop mount?')
                 log.info('(set FINGERTIP_SETUP="auto" environment variable'
                          ' to do it automatically)')
@@ -81,11 +80,11 @@ def storage_setup_wizard():
                 elif i == 'ignore':
                     return
                 size = i or size
-            tmp = temp.disappearing_file(path.CACHE)
+            tmp = temp.disappearing_file(os.path.dirname(path.COW_IMAGE))
             create_supported_fs(tmp, size)
-            os.rename(tmp, backing_file)
+            os.rename(tmp, path.COW_IMAGE)
 
-        log.info(f'fingertip will now mount the XFS image at {backing_file}')
+        log.info(f'fingertip will now mount the XFS image at {path.COW_IMAGE}')
         if SETUP == 'suggest':
             i = input(f'[ok]/skip/cancel> ').strip()
             if i == 'skip':
@@ -97,23 +96,21 @@ def storage_setup_wizard():
                 log.error('cancelled')
                 sys.exit(1)
 
-        mount_supported_fs(backing_file, path.MACHINES)
+        mount_supported_fs(path.COW_IMAGE, path.CACHE)
 
 
 def storage_unmount():
     log.plain()
-    log.info(f'unmounting {path.MACHINES} ...')
-    subprocess.run(['sudo', 'umount', '-l', path.MACHINES])
+    log.info(f'unmounting {path.CACHE} ...')
+    subprocess.run(['sudo', 'umount', '-l', path.CACHE])
     log.nicer()
 
 
 def storage_destroy():
-    backing_file = os.path.join(path.CACHE, 'for-machines.xfs')
-    if os.path.exists(backing_file):
-        # we should not remove the file if it is mounted
-        mount = subprocess.run(['mount'], capture_output=True)
-        if backing_file in mount.stdout.decode():
-            log.warning('Filesystem is still mounted. Trying to unmount.')
-            storage_unmount()
+    mount = subprocess.run(['mount'], capture_output=True)
+    if path.COW_IMAGE in mount.stdout.decode():
+        log.warning('Filesystem is still mounted. Trying to unmount.')
+        storage_unmount()
 
-    os.unlink(backing_file)
+    if os.path.exists(path.COW_IMAGE):
+        os.unlink(path.COW_IMAGE)
