@@ -18,13 +18,14 @@ FINGERTIP = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 CACHE = os.path.join(xdg.BaseDirectory.xdg_cache_home, 'fingertip')
 COW_IMAGE = os.path.join(CACHE, 'cow.xfs.img')
 DOWNLOADS = os.path.join(CACHE, 'downloads')
+SAVIOUR = os.path.join(CACHE, 'saviour')
 MACHINES = os.path.join(CACHE, 'machines')
 SHARED = os.path.join(CACHE, 'shared')
 LOGS = os.path.join(CACHE, 'logs')
 
 
 def easy_accessor(root_path):
-    def easy_access_func(*more_path_components, makedirs=False, mkdir=False):
+    def easy_access_func(*more_path_components, makedirs=False):
         if makedirs:
             os.makedirs(os.path.join(root_path, *more_path_components[:-1]),
                         exist_ok=True)
@@ -35,6 +36,7 @@ def easy_accessor(root_path):
 fingertip = easy_accessor(FINGERTIP)
 downloads = easy_accessor(DOWNLOADS)
 machines = easy_accessor(MACHINES)
+saviour = easy_accessor(SAVIOUR)
 shared = easy_accessor(SHARED)
 logs = easy_accessor(LOGS)
 

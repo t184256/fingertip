@@ -56,4 +56,5 @@ in
   pyxdg
   requests
   requests-mock
+  ruamel_yaml
 ])).env

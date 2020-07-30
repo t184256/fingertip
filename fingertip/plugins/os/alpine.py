@@ -8,8 +8,8 @@ from fingertip.util import path
 
 
 MIRROR = 'http://dl-cdn.alpinelinux.org/alpine'
-ISO = MIRROR + '/v3.10/releases/x86_64/alpine-virt-3.10.3-x86_64.iso'
-REPO = MIRROR + '/v3.10/main/'
+ISO = MIRROR + '/v3.12/releases/x86_64/alpine-virt-3.12.0-x86_64.iso'
+REPO = MIRROR + '/v3.12/main/'
 
 
 def main(m=None):

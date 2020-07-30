@@ -12,14 +12,8 @@ import fingertip.machine
 from fingertip.util import log, path
 
 
-OFFLINE = os.getenv('FINGERTIP_OFFLINE', '0') != '0'
-
-
 @fingertip.transient
 def main(what=None, older_than=0):
-    if OFFLINE:
-        log.error('FINGERTIP_OFFLINE set to 1, no cleanup')
-        return
     if what == 'everything':
         return everything()
     if what == 'periodic':

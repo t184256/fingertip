@@ -283,9 +283,6 @@ def build(first_step, *args, fingertip_last_step=False, **kwargs):
     return m
 
 
-OFFLINE = os.getenv('FINGERTIP_OFFLINE', '0') != '0'
-
-
 def needs_a_rebuild(mpath, by=None):
     with open(os.path.join(mpath, 'machine.clpickle'), 'rb') as f:
         m = cloudpickle.load(f)
@@ -296,7 +293,4 @@ def needs_a_rebuild(mpath, by=None):
         log.debug(f'{mpath} has expired at {m.expiration.pretty()}')
     else:
         log.debug(f'{mpath} is valid until {m.expiration.pretty()}')
-    if OFFLINE and expired:
-        log.warning(f'{mpath} expired at {m.expiration.pretty()}, '
-                    'but offline mode is enabled, so, reusing it')
-    return expired and not OFFLINE
+    return expired

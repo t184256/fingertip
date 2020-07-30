@@ -8,21 +8,41 @@ import shutil
 import socketserver
 import threading
 import time
+import urllib3
 
 import requests
 import requests_mock
 import cachecontrol
 import cachecontrol.caches
 
-from fingertip.util import path, log
+from fingertip.util import log, path, reflink
 
 
-OFFLINE = os.getenv('FINGERTIP_OFFLINE', '0') != '0'
 BIG = 2**30  # too big for caching
-STRIP_IF_OFFLINE = ('Cache-Control', 'Pragma')
-STRIP_ALWAYS = ('TE', 'Transfer-Encoding', 'Keep-Alive', 'Trailer', 'Upgrade',
-                'Connection', 'Host', 'Accept')
-STRIP_HEADERS = STRIP_ALWAYS + STRIP_IF_OFFLINE if OFFLINE else STRIP_ALWAYS
+STRIP_HEADERS = ('TE', 'Transfer-Encoding', 'Keep-Alive', 'Trailer', 'Upgrade',
+                 'Connection', 'Host', 'Accept')
+SAVIOUR_DEFAULTS = 'local,cached+direct'
+
+
+def saviour_sources():
+    return [(t[len('cached+'):] if t.startswith('cached+') else t,
+             t.startswith('cached+'))
+            for t in
+            os.getenv('FINGERTIP_SAVIOUR', SAVIOUR_DEFAULTS).split(',')]
+
+
+def is_fetcheable(source, url):
+    if source == 'local':
+        return os.path.exists(path.saviour(url))
+    elif source != 'direct':
+        url = source + '/' + url
+    try:
+        r = requests.head(url, allow_redirects=False)
+        return r.status_code < 400
+    except (requests.exceptions.BaseHTTPError, urllib3.exceptions.HTTPError,
+            OSError):
+        return False
+    return False
 
 
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
@@ -39,13 +59,35 @@ class HTTPCache:
         class Handler(http.server.SimpleHTTPRequestHandler):
             protocol_version = 'HTTP/1.1'
 
+            def __init__(self, *args, directory=None, **kwargs):
+                super().__init__(*args, directory=path.SAVIOUR, **kwargs)
+
             def _status_and_headers(self, status_code, headers):
                 self.send_response(status_code)
                 for k, v in headers.items():
                     self.send_header(k, v)
                 self.end_headers()
 
-            def _serve(self, uri, headers, meth='GET'):  # caching proxy
+            def _serve(self, uri, headers, meth='GET', ):
+                sources = saviour_sources()
+                for i, (source, cache) in enumerate(sources):
+                    if is_fetcheable(source, uri) or i == len(sources) - 1:
+                        log.debug(f'will use {source} for {uri}')
+                        if source == 'local':
+                            if meth == 'GET':
+                                super().do_GET()
+                            elif meth == 'HEAD':
+                                super().do_HEAD()
+                            return
+                        elif source == 'direct':
+                            return self._serve_http(uri, headers, meth,
+                                                    no_cache=(not cache))
+                        else:
+                            return self._serve_http(source + '/' + uri,
+                                                    headers, meth,
+                                                    no_cache=(not cache))
+
+            def _serve_http(self, uri, headers, meth='GET', no_cache=False):
                 sess = http_cache._get_requests_session()
                 basename = os.path.basename(uri)
 
@@ -57,11 +99,13 @@ class HTTPCache:
                     log.debug(f'{k}: {v}')
 
                 try:
-                    if meth == 'GET' and not OFFLINE:
+                    if meth == 'GET':
                         # direct streaming might be required...
                         preview = sess.head(uri, headers=headers,
                                             allow_redirects=False)
                         direct = None
+                        if no_cache:
+                            direct = 'caching disabled for this source'
                         if int(preview.headers.get('Content-Length', 0)) > BIG:
                             direct = f'file bigger than {BIG}'
                         if 'Range' in headers:
@@ -125,8 +169,12 @@ class HTTPCache:
                 return
 
             def translate_path(self, http_path):  # directly serve local files
-                local_path = http_cache._local_files_to_serve[http_path]
-                log.info(f'serving {http_path} directly from {local_path}')
+                if http_path in http_cache._local_files_to_serve:
+                    local_path = http_cache._local_files_to_serve[http_path]
+                else:
+                    local_path = super().translate_path(http_path)
+                log.info(f'serving {os.path.basename(http_path)} '
+                         f'directly from {local_path}')
                 return local_path
 
         httpd = ThreadingHTTPServer((host, port), Handler)
@@ -147,10 +195,23 @@ class HTTPCache:
         return sess
 
     def fetch(self, url, out_path):
-        sess = self._get_requests_session()
-        r = sess.get(url)
-        with open(out_path, 'wb') as f:
-            f.write(r.content)
+        sources = saviour_sources()
+        for i, (source, cache) in enumerate(sources):
+            if is_fetcheable(source, url) or i == len(sources) - 1:
+                log.debug(f'fetch will use {source} for {url}')
+                if source == 'local':
+                    reflink.auto(path.saviour(url), out_path)
+                    return
+                elif source == 'direct':
+                    sess = requests.session()
+                    surl = url
+                else:
+                    sess = self._get_requests_session()
+                    surl = source + '/' + url
+                    surl = 'http://' + surl if '://' not in source else surl
+                r = sess.get(surl)
+                with open(out_path, 'wb') as f:
+                    f.write(r.content)
 
     def mock(self, uri, text):
         """
@@ -195,25 +256,3 @@ def hack_around_unpacking(uri, headers, wrong_content):
                 shutil.copyfileobj(r.raw, f)
     with open(cachefile, 'rb') as f:
         return f.read()
-
-
-# Fully offline cache utilization functionality
-
-
-def c_r_offline(self, request):
-    cache_url = self.cache_url(request.url)
-    log.debug(f'looking up {cache_url} in the cache')
-    cache_data = self.cache.get(cache_url)
-    if cache_data is None:
-        log.error(f'{cache_url} not in cache and fingertip is offline')
-        return False
-    resp = self.serializer.loads(request, cache_data)
-    if not resp:
-        log.error(f'{cache_url} cache entry deserialization failed, ignored')
-        return False
-    log.warning(f'Using {cache_url} from offline cache')
-    return resp
-
-
-if OFFLINE:
-    cachecontrol.controller.CacheController.cached_request = c_r_offline

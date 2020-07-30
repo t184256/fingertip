@@ -29,10 +29,14 @@ Requires:	python3-pexpect
 Requires:	python3-pyxdg
 Requires:	python3-requests
 Requires:	python3-requests-mock
+Requires:	python3-ruamel-yaml
 Requires:	qemu-system-x86
 Requires:	qemu-img
+Requires:	rsync
 Requires:	util-linux
 Requires:	xfsprogs
+Recommends:	duperemove
+Recommends:	fdupes
 Recommends:	podman
 
 %description

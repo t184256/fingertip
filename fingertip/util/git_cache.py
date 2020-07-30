@@ -1,55 +1,103 @@
 # Licensed under GNU General Public License v3 or later, see COPYING.
 # Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
 
-import fasteners
 import git
 
 import os
+import shutil
 import tarfile
 
 
-from fingertip.util import log, path, temp
+from fingertip.util import log, lock, path, reflink, temp
 
 
-OFFLINE = os.getenv('FINGERTIP_OFFLINE', '0') != '0'
-DIR = path.downloads('git')
+SAVIOUR_DEFAULTS = 'local,cached+direct'
 
 
-class Repo(git.Repo):
+def saviour_sources():
+    return [(t[len('cached+'):] if t.startswith('cached+') else t,
+             t.startswith('cached+'))
+            for t in
+            os.getenv('FINGERTIP_SAVIOUR', SAVIOUR_DEFAULTS).split(',')]
+
+
+def _remove(p):
+    assert p.startswith(path.DOWNLOADS)
+    if os.path.exists(p):
+        shutil.rmtree(p)
+
+
+class Repo(git.Repo, lock.Lock):
     def __init__(self, url, *path_components, enough_to_have=None):
         self.url = url
-        self.path = os.path.join(DIR, *path_components)
+        cache_path = path.downloads('git', *path_components)
+        cache_exists = os.path.exists(cache_path)
+        log.error(cache_path)
+        self.path = cache_path + '-working-copy'
         lock_path = self.path + '-lock'
-        self.lock = fasteners.process_lock.InterProcessLock(lock_path)
-        self.lock.acquire()
-        if not os.path.exists(self.path):
-            log.info(f'cloning {url}...')
-            git.Repo.clone_from(url, self.path, mirror=True)  # TODO: use bare
-            super().__init__(self.path)
-        else:
-            super().__init__(self.path)
-            update_not_needed = enough_to_have and (
-                enough_to_have in (t.name for t in self.tags) or
-                enough_to_have in (h.name for h in self.heads) or
-                enough_to_have in (c.hexsha for c in self.iter_commits())
-                # that's not all commits, but best-effort should be fine here
-            )
-            if update_not_needed:
-                log.info(f'not re-fetching {url} '
-                         f'because {enough_to_have} is already present')
-            if OFFLINE:
-                log.info(f'not re-fetching {url} because of offline mode')
-            if not OFFLINE and not update_not_needed:
-                log.info(f'updating {url}...')
-                self.remote().fetch(tags=True)
-        self.lock.release()
+        lock.Lock.__init__(self, lock_path)
+        update_not_needed = None
+        sources = saviour_sources()
+        self.self_destruct = False
+        with self:
+            _remove(self.path)
 
-    def __enter__(self):
-        self.lock.acquire()
-        return self
+            for i, (source, cache) in enumerate(sources):
+                last_source = i == len(sources) - 1
 
-    def __exit__(self, *_):
-        self.lock.release()
+                if cache and cache_exists and update_not_needed is None:
+                    cr = git.Repo(cache_path)
+                    update_not_needed = enough_to_have and (
+                        enough_to_have in (t.name for t in cr.tags) or
+                        enough_to_have in (h.name for h in cr.heads) or
+                        enough_to_have in (c.hexsha for c in cr.iter_commits())
+                        # that's not all revspecs, but best-effort is fine
+                    )
+                    if update_not_needed:
+                        log.info(f'not re-fetching {url} from {source} '
+                                 f'because {enough_to_have} '
+                                 'is already present in cache')
+                        git.Repo.clone_from(cache_path, self.path, mirror=True)
+                        break
+
+                if source == 'local':
+                    surl = path.saviour(url).replace('//', '/')  # workaround
+                    if not os.path.exists(surl) and not last_source:
+                        continue
+                    log.info(f'cloning {url} from local saviour mirror')
+                    git.Repo.clone_from(surl, self.path, mirror=True)
+                    break
+                elif source == 'direct':
+                    surl = url
+                else:
+                    surl = source + '/' + url
+                    surl = 'http://' + surl if '://' not in source else surl
+
+                log.info(f'cloning {url} from {source} '
+                         f'cache_exists={cache_exists}...')
+                try:
+                    # TODO: bare clone
+                    # no harm in referencing cache, even w/o cached+
+                    git.Repo.clone_from(surl, self.path, mirror=True,
+                                        dissociate=True,
+                                        reference_if_able=cache_path)
+                except git.GitError:
+                    log.warning(f'could not clone {url} from {source}')
+                    if last_source:
+                        raise
+                    continue
+                break
+
+            _remove(cache_path)
+            reflink.auto(self.path, cache_path)
+            super().__init__(self.path)
+            self.remotes[0].set_url(url)
+        self.self_destruct = True
+
+    def __exit__(self, *args):
+        if self.self_destruct:
+            _remove(self.path)
+        super().__exit__(*args)
 
 
 def upload_clone(m, url, path_in_m, rev=None, rev_is_enough=True):

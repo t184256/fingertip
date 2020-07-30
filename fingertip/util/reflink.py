@@ -18,11 +18,11 @@ SIZE = os.getenv('FINGERTIP_SETUP_SIZE', '25G')
 
 
 def always(src, dst):
-    subprocess.run(['cp', '--reflink=always', src, dst], check=True)
+    subprocess.run(['cp', '-rT', '--reflink=always', src, dst], check=True)
 
 
 def auto(src, dst):
-    subprocess.run(['cp', '--reflink=auto', src, dst], check=True)
+    subprocess.run(['cp', '-rT', '--reflink=auto', src, dst], check=True)
 
 
 def is_supported(dirpath):
@@ -54,6 +54,10 @@ def mount_supported_fs(backing_file, tgt):
         log.debug(f'fixing owner:group ({tgt_uid}:{tgt_gid})')
         subprocess.run(['sudo', 'chown', f'{tgt_uid}:{tgt_gid}', tgt],
                        check=True)
+        if tgt.startswith('/home'):
+            subprocess.run(['sudo', 'semanage', 'fcontext', '-a', '-t',
+                            'user_home_dir_t', tgt + '(/.*)?'])
+            subprocess.run(['sudo', 'restorecon', '-v', tgt])
 
 
 def storage_setup_wizard():
