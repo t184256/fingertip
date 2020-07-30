@@ -83,8 +83,9 @@ class HTTPCache:
                             return self._serve_http(uri, headers, meth,
                                                     no_cache=(not cache))
                         else:
-                            return self._serve_http(source + '/' + uri,
-                                                    headers, meth,
+                            su = source + '/' + uri
+                            su = 'http://' + su if '://' not in source else su
+                            return self._serve_http(su, headers, meth,
                                                     no_cache=(not cache))
 
             def _serve_http(self, uri, headers, meth='GET', no_cache=False):
