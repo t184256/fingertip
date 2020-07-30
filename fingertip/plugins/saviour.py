@@ -50,7 +50,7 @@ def _remove(tgt):
 
 
 def method_rsync(log, src, base, dst, options=[], excludes=[]):
-    if os.path.exists(base):
+    if os.path.exists(base) and not os.path.exists(dst):
         reflink.always(base, dst)
     run = log.pipe_powered(subprocess.run,
                            stdout=logging.INFO, stderr=logging.WARNING)
@@ -60,6 +60,8 @@ def method_rsync(log, src, base, dst, options=[], excludes=[]):
 
 
 def method_git(log, src, base, dst):
+    fingertip.util.log.info(f'removing {dst}...')
+    _remove(dst)
     r = git.Repo.clone_from(src, dst, mirror=True,
                             dissociate=True, reference_if_able=base)
     r.git.update_server_info()
@@ -69,7 +71,7 @@ def method_git(log, src, base, dst):
 
 def method_reposync(log, src, base, dst,
                     arches=['noarch', 'x86_64'], source=True, options=[]):
-    if os.path.exists(base):
+    if os.path.exists(base) and not os.path.exists(dst):
         reflink.always(base, dst)
     repo_id, parent_dir = os.path.basename(dst), os.path.dirname(dst)
     repo_desc_for_mirroring = textwrap.dedent(f'''
@@ -92,6 +94,8 @@ def method_reposync(log, src, base, dst,
 
 
 def method_command(log, src, base, dst, command='false', reuse=True):
+    fingertip.util.log.info(f'removing {dst}...')
+    _remove(dst)
     if reuse and os.path.exists(base):
         reflink.always(base, dst)
     env = os.environ.copy()
@@ -161,7 +165,6 @@ def mirror(config, *what_to_mirror):
 
         log.info(f'locking {resource_name}...')
         with lock.Lock(lockfile):
-            _remove(back)
             os.makedirs(os.path.dirname(back), exist_ok=True)
 
             fingertip.util.log.info(f'mirroring {resource_name}...')
