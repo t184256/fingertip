@@ -37,7 +37,6 @@ def is_fetcheable(source, url):
     elif source != 'direct':
         url = source + '/' + url
     url = 'http://' + url if '://' not in source else url
-    log.error(url)
     try:
         r = requests.head(url, allow_redirects=False)
         return r.status_code < 400
@@ -54,7 +53,7 @@ class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
 class HTTPCache:
     def __init__(self, host='127.0.0.1', port=0):
         self.host = host
-        self._mocks = []
+        self._mocks = {}
         self._local_files_to_serve = {}
         http_cache = self
 
@@ -70,28 +69,28 @@ class HTTPCache:
                     self.send_header(k, v)
                 self.end_headers()
 
-            def _serve(self, uri, headers, meth='GET', ):
+            def _serve(self, uri, headers, meth='GET'):
+                if uri in http_cache._mocks:
+                    return self._serve_http(uri, headers, meth, no_cache=True)
                 sources = saviour_sources()
                 for i, (source, cache) in enumerate(sources):
                     if is_fetcheable(source, uri) or i == len(sources) - 1:
-                        log.debug(f'will use {source} for {uri}')
                         if source == 'local':
                             if meth == 'GET':
-                                super().do_GET()
+                                return super().do_GET()
                             elif meth == 'HEAD':
-                                super().do_HEAD()
-                            return
+                                return super().do_HEAD()
                         elif source == 'direct':
-                            return self._serve_http(uri, headers, meth,
-                                                    no_cache=(not cache))
+                            su = uri
                         else:
                             su = source + '/' + uri
                             su = 'http://' + su if '://' not in source else su
-                            return self._serve_http(su, headers, meth,
-                                                    no_cache=(not cache))
+                        return self._serve_http(su, headers, meth,
+                                                no_cache=(not cache))
 
             def _serve_http(self, uri, headers, meth='GET', no_cache=False):
-                sess = http_cache._get_requests_session()
+                sess = http_cache._get_requests_session(direct=no_cache)
+                sess_dir = http_cache._get_requests_session(direct=True)
                 basename = os.path.basename(uri)
 
                 headers = {k: v for k, v in headers.items() if
@@ -118,9 +117,9 @@ class HTTPCache:
                             direct = f'ranged request, playing safe'
                         if direct:
                             # Don't cache, don't reencode, stream it as is
-                            log.info(f'{basename} streaming directly '
+                            log.info(f'streaming {basename} directly '
                                      f'from {uri} ({direct})')
-                            r = requests.get(uri, headers=headers, stream=True)
+                            r = sess_dir.get(uri, headers=headers, stream=True)
                             self._status_and_headers(r.status_code, r.headers)
                             self.copyfile(r.raw, self.wfile)
                             return
@@ -191,7 +190,7 @@ class HTTPCache:
             sess = cachecontrol.CacheControl(requests.Session(), cache=cache)
         else:
             sess = requests.Session()
-        for uri, kwargs in self._mocks:
+        for uri, kwargs in self._mocks.items():
             adapter = requests_mock.Adapter()
             adapter.register_uri('HEAD', uri, **kwargs)
             adapter.register_uri('GET', uri, **kwargs)
@@ -205,16 +204,14 @@ class HTTPCache:
                 if source == 'local':
                     reflink.auto(path.saviour(url), out_path)
                     return
-                sess = (self._get_requests_session() if cache else
-                        requests.session())
+                sess = self._get_requests_session(direct=not cache)
                 if source == 'direct':
                     surl = url
                 else:
                     surl = source + '/' + url
                     surl = 'http://' + surl if '://' not in source else surl
-                log.debug(f'{os.path.basename(url)} fetching'
-                          f'{"/caching" if cache else ""} '
-                          f'from ({surl})')
+                log.debug(f'fetching{"/caching" if cache else ""} '
+                          f'{os.path.basename(url)} from {surl}')
                 r = sess.get(surl)
                 with open(out_path, 'wb') as f:
                     f.write(r.content)
@@ -227,14 +224,14 @@ class HTTPCache:
             and access through proxy as `http://self/test`
         """
         content_length = {'Content-Length': str(len(text.encode()))}
-        self._mocks.append((uri, {'text': text, 'headers': content_length}))
+        self._mocks[uri] = {'text': text, 'headers': content_length}
 
     def mock_custom(self, uri, **kwargs):
         """
         Mock a custom HTTP response.
         See ``help(requests_mock.Adapter.register_uri)`` for parameters.
         """
-        self._mocks.append((uri, kwargs))
+        self._mocks[uri] = kwargs
 
     def serve_local_file(self, http_path, local_path):
         """

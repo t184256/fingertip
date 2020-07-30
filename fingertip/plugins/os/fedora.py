@@ -83,14 +83,14 @@ def install_in_qemu(m, version, updates=True,
                                       REPOS=repos)
         m.expiration.depend_on_a_file(ks_fname)
 
-        m.http_cache.mock('http://ks', text=ks_text)
+        m.http_cache.mock('http://mock/ks', text=ks_text)
         m.log.info(f'fetching kernel: {url}/isolinux/vmlinuz')
         kernel = os.path.join(m.path, 'kernel')
         m.http_cache.fetch(f'{url}/isolinux/vmlinuz', kernel)
         m.log.info(f'fetching initrd: {url}/isolinux/initrd.img')
         initrd = os.path.join(m.path, 'initrd')
         m.http_cache.fetch(f'{url}/isolinux/initrd.img', initrd)
-        append = ('ks=http://ks inst.ksstrict console=ttyS0 inst.notmux '
+        append = ('ks=http://mock/ks inst.ksstrict console=ttyS0 inst.notmux '
                   f'proxy={m.http_cache.internal_url} ' +
                   f'inst.proxy={m.http_cache.internal_url} ' +
                   f'inst.repo={url} ' +
