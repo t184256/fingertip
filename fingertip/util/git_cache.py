@@ -32,7 +32,6 @@ class Repo(git.Repo, lock.Lock):
         self.url = url
         cache_path = path.downloads('git', *path_components)
         cache_exists = os.path.exists(cache_path)
-        log.error(cache_path)
         self.path = cache_path + '-working-copy'
         lock_path = self.path + '-lock'
         lock.Lock.__init__(self, lock_path)
