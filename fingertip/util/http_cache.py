@@ -36,6 +36,8 @@ def is_fetcheable(source, url):
         return os.path.exists(path.saviour(url))
     elif source != 'direct':
         url = source + '/' + url
+    url = 'http://' + url if '://' not in source else url
+    log.error(url)
     try:
         r = requests.head(url, allow_redirects=False)
         return r.status_code < 400
@@ -200,17 +202,19 @@ class HTTPCache:
         sources = saviour_sources()
         for i, (source, cache) in enumerate(sources):
             if is_fetcheable(source, url) or i == len(sources) - 1:
-                log.debug(f'fetch will use {source} for {url}')
                 if source == 'local':
                     reflink.auto(path.saviour(url), out_path)
                     return
-                elif source == 'direct':
-                    sess = requests.session()
+                sess = (self._get_requests_session() if cache else
+                        requests.session())
+                if source == 'direct':
                     surl = url
                 else:
-                    sess = self._get_requests_session()
                     surl = source + '/' + url
                     surl = 'http://' + surl if '://' not in source else surl
+                log.debug(f'{os.path.basename(url)} fetching'
+                          f'{"/caching" if cache else ""} '
+                          f'from ({surl})')
                 r = sess.get(surl)
                 with open(out_path, 'wb') as f:
                     f.write(r.content)
