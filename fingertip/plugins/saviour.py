@@ -114,7 +114,7 @@ def main(*args):
     if len(args) >= 2:
         subcmd, config, *what_to_mirror = args
         if subcmd == 'mirror' and os.path.exists(config):
-            return mirror(config, args)
+            return mirror(config, *args[2:])
     log.error('usage: ')
     log.error('    fingertip saviour mirror <config-file> [<what-to-mirror>]')
     raise SystemExit()
@@ -126,7 +126,8 @@ def mirror(config, *what_to_mirror):
     with open(config) as f:
         config = ruamel.yaml.YAML(typ='safe').load(f)
     hows, whats = config['how'], config['what']
-    for resource_name, s in whats.items():
+    for resource_name in what_to_mirror or whats.keys():
+        s = whats[resource_name]
         log.debug(f'processing {resource_name}...')
 
         if s is None:
