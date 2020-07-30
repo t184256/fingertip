@@ -55,6 +55,7 @@ def method_rsync(log, src, base, dst, options=[], excludes=[]):
     run = log.pipe_powered(subprocess.run,
                            stdout=logging.INFO, stderr=logging.WARNING)
     run(['rsync', '-rv', '--partial', '--del', '--delete-excluded'] +
+        (['--copy-dest', base] if os.path.isdir(base) else []) +
         sum([['--exclude', e] for e in excludes], []) + options +
         [src, dst], check=True)
 
