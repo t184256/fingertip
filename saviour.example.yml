@@ -34,7 +34,7 @@ what:
   alpine-3.12: alpine/v3.12/main/x86_64/
   alpine-3.12-iso: alpine/v3.12/releases/x86_64/alpine-virt-3.12.0-x86_64.iso
   fedpkgs-libxcrypt: fedpkgs/libxcrypt
-# f32: fedora/releases/32/Everything
-# f32-updates: fedora/updates/32/Everything
-# rawhide: fedora/development/rawhide/Everything
+# f32: fedora/releases/32/Everything/
+# f32-updates: fedora/updates/32/Everything/
+# rawhide: fedora/development/rawhide/Everything/
   copr-fingertip-f32: copr/asosedkin/fingertip/fedora-32-x86_64
