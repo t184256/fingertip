@@ -206,4 +206,4 @@ def mirror(config, *what_to_mirror):
         fingertip.util.log.error(f'failed: {", ".join(total_failures)}')
         raise SystemExit()
 
-    os.system('fdupes -r . | duperemove --fdupes')
+    os.system(f'fdupes -r "{path.SAVIOUR}" | duperemove --fdupes')
