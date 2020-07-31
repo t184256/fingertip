@@ -111,12 +111,15 @@ def method_command(log, src, base, dst, command='false', reuse=True):
 
 @fingertip.transient
 def main(*args):
-    if len(args) >= 2:
-        subcmd, config, *what_to_mirror = args
-        if subcmd == 'mirror' and os.path.exists(config):
-            return mirror(config, *args[2:])
+    if len(args) >= 1:
+        subcmd, *args = args
+        if subcmd == 'mirror':
+            return mirror(*args)
+        if subcmd == 'deduplicate' and not args:
+            return deduplicate()
     log.error('usage: ')
     log.error('    fingertip saviour mirror <config-file> [<what-to-mirror>]')
+    log.error('    fingertip saviour deduplicate')
     raise SystemExit()
 
 
@@ -211,4 +214,6 @@ def mirror(config, *what_to_mirror):
         fingertip.util.log.error(f'failed: {", ".join(total_failures)}')
         raise SystemExit()
 
+
+def deduplicate():
     os.system(f'fdupes -r "{path.SAVIOUR}" | duperemove --fdupes')
