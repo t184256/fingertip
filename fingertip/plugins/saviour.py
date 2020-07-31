@@ -51,7 +51,7 @@ def _remove(tgt):
 
 def method_rsync(log, src, base, dst, options=[], excludes=[]):
     if os.path.exists(base) and not os.path.exists(dst):
-        reflink.always(base, dst)
+        reflink.always(base, dst, preserve=True)
     run = log.pipe_powered(subprocess.run,
                            stdout=logging.INFO, stderr=logging.WARNING)
     run(['rsync', '-rvt', '--partial', '--del', '--delete-excluded'] +
@@ -73,7 +73,7 @@ def method_git(log, src, base, dst):
 def method_reposync(log, src, base, dst,
                     arches=['noarch', 'x86_64'], source=True, options=[]):
     if os.path.exists(base) and not os.path.exists(dst):
-        reflink.always(base, dst)
+        reflink.always(base, dst, preserve=True)
     repo_id, parent_dir = os.path.basename(dst), os.path.dirname(dst)
     repo_desc_for_mirroring = textwrap.dedent(f'''
         [{repo_id}]
@@ -98,7 +98,7 @@ def method_command(log, src, base, dst, command='false', reuse=True):
     fingertip.util.log.info(f'removing {dst}...')
     _remove(dst)
     if reuse and os.path.exists(base):
-        reflink.always(base, dst)
+        reflink.always(base, dst, preserve=True)
     env = os.environ.copy()
     env['SRC'], env['BASE'], env['DST'] = src, base, dst
     run = log.pipe_powered(subprocess.run,
@@ -201,7 +201,7 @@ def mirror(config, *what_to_mirror):
                 assert front.startswith(path.SAVIOUR)
                 _remove(front)
 
-            reflink.always(back, front)
+            reflink.always(back, front, preserve=True)
 
             if not os.path.lexists(front_symlink):
                 os.symlink(front, front_symlink)
