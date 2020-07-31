@@ -30,7 +30,7 @@ how:
     sources:
       - https://src.fedoraproject.org/rpms
   fedora-lookaside:
-    url: https://src.fedoraproject.org/repo/pkgs/rpms
+    url: http://src.fedoraproject.org/repo/pkgs/rpms
     method: command
     command: '[ -e $DST ] || (wget -q $SRC -O $DST-tmp && mv $DST-tmp $DST)'
 what:
