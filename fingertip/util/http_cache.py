@@ -105,20 +105,20 @@ class HTTPCache:
                         # direct streaming might be required...
                         preview = sess.head(uri, headers=headers,
                                             allow_redirects=False)
-                        direct = None
+                        direct = []
                         if no_cache:
-                            direct = 'caching disabled for this source'
+                            direct.append('caching disabled for this source')
                         if int(preview.headers.get('Content-Length', 0)) > BIG:
-                            direct = f'file bigger than {BIG}'
+                            direct.append(f'file bigger than {BIG}')
                         if 'Range' in headers:
                             # There seems to be a bug in CacheControl
                             # that serves contents in full if a range request
                             # hits a non-ranged cached entry.
-                            direct = f'ranged request, playing safe'
+                            direct.append('ranged request, playing safe')
                         if direct:
                             # Don't cache, don't reencode, stream it as is
                             log.info(f'streaming {basename} directly '
-                                     f'from {uri} ({direct})')
+                                     f'from {uri} ({", ".join(direct)})')
                             r = sess_dir.get(uri, headers=headers, stream=True)
                             self._status_and_headers(r.status_code, r.headers)
                             self.copyfile(r.raw, self.wfile)
