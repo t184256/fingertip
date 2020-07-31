@@ -17,12 +17,18 @@ SETUP = os.getenv('FINGERTIP_SETUP', 'suggest')
 SIZE = os.getenv('FINGERTIP_SETUP_SIZE', '25G')
 
 
-def always(src, dst):
-    subprocess.run(['cp', '-rT', '--reflink=always', src, dst], check=True)
+def _cp_reflink(src, dst, *args):
+    subprocess.run(['cp', '-rT', *args, src, dst], check=True)
 
 
-def auto(src, dst):
-    subprocess.run(['cp', '-rT', '--reflink=auto', src, dst], check=True)
+def always(src, dst, preserve=False):
+    args = ['--preserve'] if preserve else []
+    _cp_reflink(src, dst, '--reflink=always', *args)
+
+
+def auto(src, dst, preserve=False):
+    args = ['--preserve'] if preserve else []
+    _cp_reflink(src, dst, '--reflink=auto', *args)
 
 
 def is_supported(dirpath):
