@@ -24,17 +24,22 @@ how:
     source: False
     sources:
       - https://download.copr.fedorainfracloud.org/results
-  fedpkgs:
+  fedora-pkgs:
     url: http://src.fedoraproject.org/rpms
     method: git
     sources:
       - https://src.fedoraproject.org/rpms
+  fedora-lookaside:
+    url: https://src.fedoraproject.org/repo/pkgs/rpms
+    method: command
+    command: '[ -e $DST ] || (wget -q $SRC -O $DST-tmp && mv $DST-tmp $DST)'
 what:
   custom: ~
   alpine-3.12: alpine/v3.12/main/x86_64/
   alpine-3.12-iso: alpine/v3.12/releases/x86_64/alpine-virt-3.12.0-x86_64.iso
-  fedpkgs-libxcrypt: fedpkgs/libxcrypt
-# f32: fedora/releases/32/Everything/
-# f32-updates: fedora/updates/32/Everything/
-# rawhide: fedora/development/rawhide/Everything/
+  fedora-pkgs-libxcrypt: fedpkgs/libxcrypt
+  libxcrypt-4.4.16.tar.gz: fedora-lookaside/libxcrypt/libxcrypt-4.4.16.tar.gz/sha512/e1d3b1262c6be7c6c8847b8c4eb8191d9e5e482798be6f1186876c72f3d8c737124378ec45a38aa464f556e10a557b96f855bd371f03c3611eada27904bf6781/libxcrypt-4.4.16.tar.gz
+# f32: fedora/releases/32/
+# f32-updates: fedora/updates/32/
+# rawhide: fedora/development/rawhide/
   copr-fingertip-f32: copr/asosedkin/fingertip/fedora-32-x86_64

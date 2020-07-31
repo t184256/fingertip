@@ -149,7 +149,7 @@ def mirror(config, *what_to_mirror):
 
         url = how['url'] + suffix
         method = how['method']
-        sources = (how['sources'] if 'sources' in how else [url])
+        sources = (how['sources'] if 'sources' in how else [how['url']])
         sources = [s + suffix for s in sources]
         extra_args = {k: v for k, v in how.items()
                       if k not in ('url', 'sources', 'method')}
