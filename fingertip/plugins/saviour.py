@@ -192,7 +192,7 @@ def mirror(config, *what_to_mirror):
                 total_failures.append(resource_name)
                 continue
 
-            log.info(f'removing old front for {resource_name}...')
+            sublog.info('removing old front...')
             os.makedirs(os.path.dirname(symlink), exist_ok=True)
             os.makedirs(os.path.dirname(front), exist_ok=True)
             if not os.path.lexists(back_symlink):
@@ -202,13 +202,13 @@ def mirror(config, *what_to_mirror):
                 assert front.startswith(path.SAVIOUR)
                 _remove(front)
 
-            log.info(f'setting up new front for {resource_name}...')
+            sublog.info('setting up a new front...')
             reflink.always(back, front, preserve=True)
             if not os.path.lexists(front_symlink):
                 os.symlink(front, front_symlink)
             os.replace(front_symlink, symlink)
 
-            log.info(f'removing old back for {resource_name}...')
+            sublog.info('removing old back...')
             if os.path.exists(back):
                 assert back.startswith(path.SAVIOUR)
                 _remove(back)
