@@ -212,10 +212,10 @@ def mirror(config, *what_to_mirror):
             if os.path.exists(back):
                 assert back.startswith(path.SAVIOUR)
                 _remove(back)
-
     if total_failures:
         fingertip.util.log.error(f'failed: {", ".join(total_failures)}')
         raise SystemExit()
+    log.info('saviour has completed mirroring')
 
 
 def deduplicate():
