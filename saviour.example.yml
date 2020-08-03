@@ -21,7 +21,6 @@ how:
   copr:
     url: http://download.copr.fedorainfracloud.org/results
     method: reposync
-    source: False
     sources:
       - https://download.copr.fedorainfracloud.org/results
   fedora-pkgs:

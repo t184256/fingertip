@@ -71,7 +71,7 @@ def method_git(log, src, base, dst):
 
 
 def method_reposync(log, src, base, dst,
-                    arches=['noarch', 'x86_64'], source=True, options=[]):
+                    arches=['noarch', 'x86_64'], source=False, options=[]):
     if os.path.exists(base) and not os.path.exists(dst):
         reflink.always(base, dst, preserve=True)
     repo_desc_for_mirroring = textwrap.dedent(f'''
@@ -86,7 +86,7 @@ def method_reposync(log, src, base, dst,
         f.write(repo_desc_for_mirroring)
     run = log.pipe_powered(subprocess.run,
                            stdout=logging.INFO, stderr=logging.WARNING)
-    run(['dnf', f'--setopt=reposdir={repodir}', 'reposync', '--newest-only',
+    run(['dnf', f'--setopt=reposdir={repodir}', 'reposync',
          f'--download-path={dst}', '--norepopath',
          '--download-metadata', '--delete', '--repoid=repo'] +
         [f'--arch={arch}' for arch in arches] + options +
