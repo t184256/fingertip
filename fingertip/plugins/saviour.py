@@ -74,13 +74,12 @@ def method_reposync(log, src, base, dst,
                     arches=['noarch', 'x86_64'], source=True, options=[]):
     if os.path.exists(base) and not os.path.exists(dst):
         reflink.always(base, dst, preserve=True)
-    repo_id, parent_dir = os.path.basename(dst), os.path.dirname(dst)
     repo_desc_for_mirroring = textwrap.dedent(f'''
-        [{repo_id}]
+        [repo]
         baseurl = {src}
+        name = repo
         enabled = 1
         gpgcheck = 0
-        name = {repo_id}
     ''')
     repodir = temp.disappearing_dir()
     with open(os.path.join(repodir, f'whatever.repo'), 'w') as f:
@@ -88,10 +87,11 @@ def method_reposync(log, src, base, dst,
     run = log.pipe_powered(subprocess.run,
                            stdout=logging.INFO, stderr=logging.WARNING)
     run(['dnf', f'--setopt=reposdir={repodir}', 'reposync', '--newest-only',
-         '--download-metadata', '--delete', '--repoid', f'{repo_id}'] +
+         f'--download-path={dst}', '--norepopath',
+         '--download-metadata', '--delete', '--repoid=repo'] +
         [f'--arch={arch}' for arch in arches] + options +
         (['--source'] if source else []),
-        cwd=parent_dir, check=True)
+        check=True)
 
 
 def method_command(log, src, base, dst, command='false', reuse=True):
