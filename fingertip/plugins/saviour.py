@@ -71,9 +71,11 @@ def method_git(log, src, base, dst):
 
 
 def method_reposync(log, src, base, dst,
-                    arches=['noarch', 'x86_64'], source=False, options=[]):
+                    arches=['noarch', 'x86_64'], source='auto', options=[]):
     if os.path.exists(base) and not os.path.exists(dst):
         reflink.always(base, dst, preserve=True)
+    if source == 'auto':
+        source = '/source' in src or '/SRPM' in src
     repo_desc_for_mirroring = textwrap.dedent(f'''
         [repo]
         baseurl = {src}
