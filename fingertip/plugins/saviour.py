@@ -24,6 +24,7 @@ Requires git and rsync, also dnf for dnf method.
 """
 
 import collections
+import fnmatch
 import logging
 import os
 import shutil
@@ -63,6 +64,7 @@ def method_rsync(log, src, base, dst, options=[], excludes=[]):
 def method_git(log, src, base, dst):
     fingertip.util.log.info(f'removing {dst}...')
     _remove(dst)
+    fingertip.util.log.info(f'cloning {src}...')
     r = git.Repo.clone_from(src, dst, mirror=True,
                             dissociate=True, reference_if_able=base)
     r.git.update_server_info()
@@ -128,9 +130,17 @@ def main(*args):
 def mirror(config, *what_to_mirror):
     total_failures = []
     failures = collections.defaultdict(list)
+
     with open(config) as f:
         config = ruamel.yaml.YAML(typ='safe').load(f)
     hows, whats = config['how'], config['what']
+    if not what_to_mirror:
+        what_to_mirror = whats.keys()
+    else:
+        what_to_mirror = [k for k in whats.keys()
+                          if any((fnmatch.fnmatch(k, req)
+                                  for req in what_to_mirror))]
+
     for resource_name in what_to_mirror or whats.keys():
         s = whats[resource_name]
         log.debug(f'processing {resource_name}...')
