@@ -116,7 +116,7 @@ def main(*args):
         if subcmd == 'mirror':
             return mirror(*args)
         if subcmd == 'deduplicate' and not args:
-            return deduplicate()
+            return deduplicate(log.Sublogger('deduplicate'))
     log.error('usage: ')
     log.error('    fingertip saviour mirror <config-file> [<what-to-mirror>]')
     log.error('    fingertip saviour deduplicate')
@@ -226,15 +226,17 @@ def mirror(config, *what_to_mirror):
                 os.rename(snap, temp)  # move it out the way asap
                 sublog.info('removing now obsolete snapshot...')
                 _remove(temp)
+
+            deduplicate(sublog, resource_name)
     if total_failures:
         fingertip.util.log.error(f'failed: {", ".join(total_failures)}')
         raise SystemExit()
     log.info('saviour has completed mirroring')
 
 
-def deduplicate():
-    sublog = log.Sublogger('deduplicate')
-    run = sublog.pipe_powered(subprocess.run,
-                              stdout=logging.INFO, stderr=logging.WARNING)
-    run(['duperemove', '--hashfile', path.saviour('.duperemove.hashfile'),
-         '-hdr', path.saviour('_')], check=True)
+def deduplicate(log, *subpath):
+    run = log.pipe_powered(subprocess.run,
+                           stdout=logging.INFO, stderr=logging.WARNING)
+    r = run(['duperemove', '--hashfile', path.saviour('.duperemove.hashfile'),
+             '-hdr', path.saviour('_', *subpath)])
+    assert r.returncode in (0, 22)  # nothing to deduplicate
