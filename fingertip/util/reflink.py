@@ -22,12 +22,12 @@ def _cp_reflink(src, dst, *args):
 
 
 def always(src, dst, preserve=False):
-    args = ['--preserve'] if preserve else []
+    args = ['--preserve=all'] if preserve else []
     _cp_reflink(src, dst, '--reflink=always', *args)
 
 
 def auto(src, dst, preserve=False):
-    args = ['--preserve'] if preserve else []
+    args = ['--preserve=all'] if preserve else []
     _cp_reflink(src, dst, '--reflink=auto', *args)
 
 
