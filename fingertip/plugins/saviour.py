@@ -236,10 +236,15 @@ def mirror(config, *what_to_mirror):
 
 def deduplicate(log, *subpath):
     log.info('locking the deduplication db...')
-    with lock.Lock(path.saviour('.duperemove.hashfile-lock')):
-        run = log.pipe_powered(subprocess.run,
-                               stdout=logging.INFO, stderr=logging.WARNING)
-        r = run(['duperemove',
-                 '--hashfile', path.saviour('.duperemove.hashfile'),
-                 '-hdr', path.saviour('_', *subpath)])
-        assert r.returncode in (0, 22)  # nothing to deduplicate
+    try:
+        with lock.Lock(path.saviour('.duperemove.hashfile-lock'), timeout=1):
+            log.info('deduplicating...')
+            run = log.pipe_powered(subprocess.run,
+                                   stdout=logging.INFO, stderr=logging.WARNING)
+            r = run(['duperemove',
+                     '--hashfile', path.saviour('.duperemove.hashfile'),
+                     '-hdr', path.saviour('_', *subpath)])
+            assert r.returncode in (0, 22)  # nothing to deduplicate
+            import time; time.sleep(4)
+    except lock.LockTimeout:
+        log.warning('skipped deduplication, did not wait for db unlocking')
