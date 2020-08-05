@@ -36,7 +36,6 @@ Requires:	rsync
 Requires:	util-linux
 Requires:	xfsprogs
 Recommends:	duperemove
-Recommends:	fdupes
 Recommends:	podman
 
 %description

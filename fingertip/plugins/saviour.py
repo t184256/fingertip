@@ -50,9 +50,8 @@ def _remove(tgt):
         os.unlink(tgt)
 
 
+# base is a previous consistent snapshot, dst is a WIP directory
 def method_rsync(log, src, base, dst, options=[], excludes=[]):
-    if os.path.exists(base) and not os.path.exists(dst):
-        reflink.always(base, dst, preserve=True)
     run = log.pipe_powered(subprocess.run,
                            stdout=logging.INFO, stderr=logging.WARNING)
     run(['rsync', '-rvt', '--partial', '--del', '--delete-excluded'] +
@@ -74,8 +73,6 @@ def method_git(log, src, base, dst):
 
 def method_reposync(log, src, base, dst,
                     arches=['noarch', 'x86_64'], source='auto', options=[]):
-    if os.path.exists(base) and not os.path.exists(dst):
-        reflink.always(base, dst, preserve=True)
     if source == 'auto':
         source = '/source' in src or '/SRPM' in src
     repo_desc_for_mirroring = textwrap.dedent(f'''
@@ -99,10 +96,9 @@ def method_reposync(log, src, base, dst,
 
 
 def method_command(log, src, base, dst, command='false', reuse=True):
-    fingertip.util.log.info(f'removing {dst}...')
-    _remove(dst)
-    if reuse and os.path.exists(base):
-        reflink.always(base, dst, preserve=True)
+    if not reuse:
+        fingertip.util.log.info(f'removing {dst}...')
+        _remove(dst)
     env = os.environ.copy()
     env['SRC'], env['BASE'], env['DST'] = src, base, dst
     run = log.pipe_powered(subprocess.run,
@@ -125,6 +121,14 @@ def main(*args):
     log.error('    fingertip saviour mirror <config-file> [<what-to-mirror>]')
     log.error('    fingertip saviour deduplicate')
     raise SystemExit()
+
+
+def _symlink(src, dst):
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    tmp = dst + '-tmp'
+    if not os.path.lexists(tmp):
+        os.symlink(src, tmp)
+    os.replace(tmp, dst)
 
 
 def mirror(config, *what_to_mirror):
@@ -172,26 +176,39 @@ def mirror(config, *what_to_mirror):
 
         meth = globals()[f'method_{method}']
         symlink = path.saviour(url.rstrip('/'))
-        front_symlink = path.saviour('_', resource_name) + '-FRONT'
-        back_symlink = path.saviour('_', resource_name) + '-BACK'
-        front = path.saviour('_', resource_name, 'front')
-        back = path.saviour('_', resource_name, 'back')
+        # usually symlink points to data, but while we're working on it,
+        # it temporarily points to a consistent snapshot of it named `snap`
+        data = path.saviour('_', resource_name, 'data')
+        snap = path.saviour('_', resource_name, 'snap')
+        temp = path.saviour('_', resource_name, 'temp')
         lockfile = path.saviour('_', resource_name) + '-lock'
-        assert front.startswith(path.SAVIOUR)
-        assert back.startswith(path.SAVIOUR)
+        assert data.startswith(path.SAVIOUR)
+        assert snap.startswith(path.SAVIOUR)
+        assert temp.startswith(path.SAVIOUR)
 
-        log.info(f'locking {resource_name}...')
+        sublog = log.Sublogger(f'{method} {resource_name}')
+        sublog.info('locking...')
         with lock.Lock(lockfile):
-            os.makedirs(os.path.dirname(back), exist_ok=True)
+            os.makedirs(os.path.dirname(snap), exist_ok=True)
 
-            fingertip.util.log.info(f'mirroring {resource_name}...')
-            sublog = log.Sublogger(f'{method} {resource_name}')
+            if os.path.exists(temp):
+                sublog.info('removing stale temp...')
+                _remove(temp)
+            if os.path.exists(symlink):  # it's already published
+                if os.path.exists(data) and not os.path.exists(snap):
+                    # `data` is present and is the best we have to publish
+                    sublog.info('snapshotting...')
+                    reflink.always(data, temp, preserve=True)
+                    os.rename(temp, snap)
+                if os.path.exists(snap):
+                    # link to a consistent snapshot while we work on `data`
+                    _symlink(snap, symlink)
 
             for source in sources:
-                fingertip.util.log.info(f'trying {source}...')
+                sublog.info(f'trying {source}...')
                 try:
-                    meth(sublog, source, front, back, **extra_args)
-                    assert os.path.exists(back)
+                    meth(sublog, source, snap, data, **extra_args)
+                    assert os.path.exists(data)
                     break
                 except Exception as _:
                     traceback.print_exc()
@@ -199,31 +216,16 @@ def mirror(config, *what_to_mirror):
                     fingertip.util.log.warning(f'failed to mirror {source}')
 
             if len(failures[resource_name]) == len(sources):
-                fingertip.util.log.error(f'failed to mirror {resource_name} '
-                                         f'from all {len(sources)} sources')
+                sublog.error(f'failed to mirror '
+                             f'from all {len(sources)} sources')
                 total_failures.append(resource_name)
                 continue
 
-            sublog.info('removing old front...')
-            os.makedirs(os.path.dirname(symlink), exist_ok=True)
-            os.makedirs(os.path.dirname(front), exist_ok=True)
-            if not os.path.lexists(back_symlink):
-                os.symlink(back, back_symlink)
-            os.replace(back_symlink, symlink)
-            if os.path.exists(front):
-                assert front.startswith(path.SAVIOUR)
-                _remove(front)
-
-            sublog.info('setting up a new front...')
-            reflink.always(back, front, preserve=True)
-            if not os.path.lexists(front_symlink):
-                os.symlink(front, front_symlink)
-            os.replace(front_symlink, symlink)
-
-            sublog.info('removing old back...')
-            if os.path.exists(back):
-                assert back.startswith(path.SAVIOUR)
-                _remove(back)
+            _symlink(data, symlink)
+            if os.path.exists(snap):
+                os.rename(snap, temp)  # move it out the way asap
+                sublog.info('removing now obsolete snapshot...')
+                _remove(temp)
     if total_failures:
         fingertip.util.log.error(f'failed: {", ".join(total_failures)}')
         raise SystemExit()
@@ -231,4 +233,8 @@ def mirror(config, *what_to_mirror):
 
 
 def deduplicate():
-    os.system(f'fdupes -r "{path.SAVIOUR}" | duperemove --fdupes')
+    sublog = log.Sublogger('deduplicate')
+    run = sublog.pipe_powered(subprocess.run,
+                              stdout=logging.INFO, stderr=logging.WARNING)
+    run(['duperemove', '--hashfile', path.saviour('.duperemove.hashfile'),
+         '-hdr', path.saviour('_')], check=True)
