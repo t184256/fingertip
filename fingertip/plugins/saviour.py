@@ -235,8 +235,10 @@ def mirror(config, *what_to_mirror):
 
 
 def deduplicate(log, *subpath):
-    run = log.pipe_powered(subprocess.run,
-                           stdout=logging.INFO, stderr=logging.WARNING)
-    r = run(['duperemove', '--hashfile', path.saviour('.duperemove.hashfile'),
-             '-hdr', path.saviour('_', *subpath)])
-    assert r.returncode in (0, 22)  # nothing to deduplicate
+    with lock.Lock(path.saviour('.duperemove.hashfile-lock')):
+        run = log.pipe_powered(subprocess.run,
+                               stdout=logging.INFO, stderr=logging.WARNING)
+        r = run(['duperemove',
+                 '--hashfile', path.saviour('.duperemove.hashfile'),
+                 '-hdr', path.saviour('_', *subpath)])
+        assert r.returncode in (0, 22)  # nothing to deduplicate
