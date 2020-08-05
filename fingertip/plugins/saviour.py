@@ -235,6 +235,7 @@ def mirror(config, *what_to_mirror):
 
 
 def deduplicate(log, *subpath):
+    log.info('locking the deduplication db...')
     with lock.Lock(path.saviour('.duperemove.hashfile-lock')):
         run = log.pipe_powered(subprocess.run,
                                stdout=logging.INFO, stderr=logging.WARNING)
