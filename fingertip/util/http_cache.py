@@ -31,17 +31,17 @@ def saviour_sources():
             os.getenv('FINGERTIP_SAVIOUR', SAVIOUR_DEFAULTS).split(',')]
 
 
-def is_fetcheable(source, url):
+def is_fetcheable(source, url, timeout=2):
     if source == 'local':
         return os.path.exists(path.saviour(url))
     elif source != 'direct':
         url = source + '/' + url
     url = 'http://' + url if '://' not in source else url
     try:
-        r = requests.head(url, allow_redirects=False)
+        r = requests.head(url, allow_redirects=False, timeout=timeout)
         return r.status_code < 400
     except (requests.exceptions.BaseHTTPError, urllib3.exceptions.HTTPError,
-            OSError):
+            requests.exceptions.Timeout, OSError):
         return False
     return False
 
