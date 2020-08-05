@@ -197,6 +197,9 @@ class HTTPCache:
             sess.mount(uri, adapter)
         return sess
 
+    def is_fetcheable(self, url):
+        return any((is_fetcheable(src, url) for src in saviour_sources()))
+
     def fetch(self, url, out_path):
         sources = saviour_sources()
         for i, (source, cache) in enumerate(sources):
@@ -212,9 +215,10 @@ class HTTPCache:
                     surl = 'http://' + surl if '://' not in source else surl
                 log.debug(f'fetching{"/caching" if cache else ""} '
                           f'{os.path.basename(url)} from {surl}')
-                r = sess.get(surl)
+                r = sess.get(surl)  # not raw because that punctures cache
                 with open(out_path, 'wb') as f:
                     f.write(r.content)
+                return
 
     def mock(self, uri, text):
         """
