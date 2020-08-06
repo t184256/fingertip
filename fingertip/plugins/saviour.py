@@ -227,24 +227,23 @@ def mirror(config, *what_to_mirror):
                 sublog.info('removing now obsolete snapshot...')
                 _remove(temp)
 
-            deduplicate(sublog, resource_name)
+            try:
+                deduplicate(sublog, resource_name, timeout=1)
+            except lock.LockTimeout:
+                log.warning('skipped deduplication, db was locked')
     if total_failures:
         fingertip.util.log.error(f'failed: {", ".join(total_failures)}')
         raise SystemExit()
     log.info('saviour has completed mirroring')
 
 
-def deduplicate(log, *subpath):
+def deduplicate(log, *subpath, timeout=None):
     log.info('locking the deduplication db...')
-    try:
-        with lock.Lock(path.saviour('.duperemove.hashfile-lock'), timeout=1):
-            log.info('deduplicating...')
-            run = log.pipe_powered(subprocess.run,
-                                   stdout=logging.INFO, stderr=logging.WARNING)
-            r = run(['duperemove',
-                     '--hashfile', path.saviour('.duperemove.hashfile'),
-                     '-hdr', path.saviour('_', *subpath)])
-            assert r.returncode in (0, 22)  # nothing to deduplicate
-            import time; time.sleep(4)
-    except lock.LockTimeout:
-        log.warning('skipped deduplication, did not wait for db unlocking')
+    with lock.Lock(path.saviour('.duperemove.hashfile-lock'), timeout=timeout):
+        log.info('deduplicating...')
+        run = log.pipe_powered(subprocess.run,
+                               stdout=logging.INFO, stderr=logging.WARNING)
+        r = run(['duperemove',
+                 '--hashfile', path.saviour('.duperemove.hashfile'),
+                 '-hdr', path.saviour('_', *subpath)])
+        assert r.returncode in (0, 22)  # nothing to deduplicate
