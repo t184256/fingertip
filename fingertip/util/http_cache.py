@@ -14,6 +14,7 @@ import requests
 import requests_mock
 import cachecontrol
 import cachecontrol.caches
+import RangeHTTPServer
 
 from fingertip.util import log, path, reflink
 
@@ -57,7 +58,7 @@ class HTTPCache:
         self._local_files_to_serve = {}
         http_cache = self
 
-        class Handler(http.server.SimpleHTTPRequestHandler):
+        class Handler(RangeHTTPServer.SimpleHTTPRequestHandler):
             protocol_version = 'HTTP/1.1'
 
             def __init__(self, *args, directory=None, **kwargs):

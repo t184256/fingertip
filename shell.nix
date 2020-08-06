@@ -1,6 +1,22 @@
 with import <nixpkgs> {};
 
 let
+  rangehttpserver = python3Packages.buildPythonPackage {
+    pname = "RangeHTTPServer";
+    version = "1.2.0";
+    src = fetchFromGitHub {
+      owner = "danvk";
+      repo = "RangeHTTPServer";
+      rev = "1.2.0";
+      sha256 = "1sy9j6y8kp5jiwv2vd652v94kspp1yd4dwxrfqfn6zwnfyv2mzv5";
+    };
+    doCheck = false;
+    meta = with lib; {
+      homepage = http://github.com/danvk/RangeHTTPServer;
+      description = "SimpleHTTPServer with support for Range requests";
+      license = licenses.asl20;
+    };
+  };
   fsmonitor = python3Packages.buildPythonPackage {
     pname = "fsmonitor";
     version = "0.1p";
@@ -11,7 +27,6 @@ let
       sha256 = "1cp7par6pvm0d2m40wylm445l5yy7zngjdd8bc34xy5vwhvcmb27";
     };
     doCheck = false;
-
     meta = with lib; {
       homepage = http://github.com/shaurz/fsmonitor;
       description = "Filesystem monitoring library for Python";
@@ -48,12 +63,13 @@ in
   colorama
   colorlog
   fasteners
-  fsmonitor
+  #fsmonitor
   inotify-simple
   lockfile
   paramiko
   pexpect
   pyxdg
+  rangehttpserver
   requests
   requests-mock
   ruamel_yaml

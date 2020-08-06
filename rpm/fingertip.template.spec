@@ -27,6 +27,7 @@ Requires:	python3-lockfile
 Requires:	python3-paramiko
 Requires:	python3-pexpect
 Requires:	python3-pyxdg
+Requires:	python3-rangehttpserver
 Requires:	python3-requests
 Requires:	python3-requests-mock
 Requires:	python3-ruamel-yaml
