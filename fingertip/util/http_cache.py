@@ -58,7 +58,7 @@ class HTTPCache:
         self._local_files_to_serve = {}
         http_cache = self
 
-        class Handler(RangeHTTPServer.SimpleHTTPRequestHandler):
+        class Handler(RangeHTTPServer.RangeRequestHandler):
             protocol_version = 'HTTP/1.1'
 
             def __init__(self, *args, directory=None, **kwargs):
@@ -122,7 +122,7 @@ class HTTPCache:
                                      f'from {uri} ({", ".join(direct)})')
                             r = sess_dir.get(uri, headers=headers, stream=True)
                             self._status_and_headers(r.status_code, r.headers)
-                            self.copyfile(r.raw, self.wfile)
+                            shutil.copyfileobj(r.raw, self.wfile)
                             return
 
                     # fetch with caching
