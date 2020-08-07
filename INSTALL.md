@@ -102,17 +102,21 @@ variables `FINGERTIP_SETUP=auto|suggest|never` and `FINGERTIP_SETUP_SIZE`.
 Finally, you can also perform the setup manually:
 
 ``` bash
-$ mkdir -p ~/.cache/fingertip/machines
-$ fallocate -l 25G ~/.cache/fingertip/for-machines.xfs
-$ mkfs.xfs -m reflink=1 ~/.cache/fingertip/for-machines.xfs
-$ sudo mount -o loop ~/.cache/fingertip/for-machines.xfs ~/.cache/fingertip/machines
-$ sudo chown $USER ~/.cache/fingertip/machines
+$ mkdir -p ~/.cache/fingertip/
+$ fallocate -l 25G ~/.cache/fingertip/cow.xfs.img
+$ mkfs.xfs -m reflink=1 ~/.cache/fingertip/cow.xfs.img
+$ sudo mount -o loop ~/.cache/fingertip/cow.xfs.img ~/.cache/fingertip/machines
+$ sudo chown $USER ~/.cache/fingertip
+```
+
+(and, if you're going to export files later with httpd)
+
+``` bash
+$ sudo semanage fcontext -a -t user_home_dir_t ~/.cache/fingertip/(/.*)?
+$ sudo restorecon -v ~/.cache/fingertip
 ```
 
 (consider adding it to /etc/fstab so that it will get automounted on boot:)
 ``` bash
-$ echo "$HOME/.cache/fingertip/for-machines.xfs $HOME/.cache/fingertip/machines auto loop" | sudo tee -a /etc/fstab
+$ echo "$HOME/.cache/fingertip/cow.xfs.img $HOME/.cache/fingertip auto loop" | sudo tee -a /etc/fstab
 ```
-
-
-
