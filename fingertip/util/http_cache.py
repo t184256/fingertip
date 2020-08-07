@@ -103,9 +103,18 @@ class HTTPCache:
 
                 try:
                     if meth == 'GET':
-                        # direct streaming might be required...
+                        # direct streaming or trickery might be required...
                         preview = sess.head(uri, headers=headers,
                                             allow_redirects=False)
+                        if (300 <= preview.status_code < 400 and
+                                'Location' in preview.headers):
+                            nu = preview.headers['Location']
+                            if nu.startswith('https://'):
+                                # no point in serving that, we have to pretend
+                                # that never happened
+                                log.warning(f'suppressing HTTPS redirect {nu}')
+                                return self._serve_http(nu, headers, meth=meth,
+                                                        no_cache=no_cache)
                         direct = []
                         if no_cache:
                             direct.append('caching disabled for this source')
