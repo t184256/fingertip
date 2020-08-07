@@ -37,6 +37,7 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
     # FIXME: -tmp
     m = fingertip.machine.Machine('qemu')
     m.arch = arch
+    m._host_forwards = []
     m.qemu = QEMUNamespacedFeatures(m, ram_size, disk_size, custom_args)
     m.snapshot = SnapshotNamespacedFeatures(m)
     m._backend_mode = 'pexpect'
@@ -84,6 +85,12 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
             m.ssh.invalidate()
     m.hooks.disrupt.append(disrupt)
 
+    def forward_host_port(hostport, guestport):
+        if m.qemu.live:
+            m.qemu.monitor.forward_host_port(hostport, guestport)
+        m._host_forwards.append((hostport, guestport))
+    m.forward_host_port = forward_host_port
+
     m.breakpoint = lambda: m.apply('ssh', no_unseal=True)
 
     load()
@@ -117,12 +124,14 @@ class QEMUNamespacedFeatures:
                           key=path.fingertip('ssh_key', 'fingertip.paramiko'))
         self.vm.shared_directory = SharedDirectory(self.vm)
         self.vm.exec = self.vm.ssh.exec
-        ssh_host_forward = f'hostfwd=tcp:127.0.0.1:{self.vm.ssh.port}-:22'
+        host_forwards = [(self.vm.ssh.port, 22)] + self.vm._host_forwards
+        host_forwards = [f'hostfwd=tcp:127.0.0.1:{h}-:{g}'
+                         for h, g in host_forwards]
         cache_guest_forward = (CACHE_INTERNAL_IP, CACHE_INTERNAL_PORT,
                                f'nc 127.0.0.1 {self.vm.http_cache.port}')
         guest_forwards = guest_forwards + [cache_guest_forward]
         run_args += ['-device', 'virtio-net,netdev=net0', '-netdev',
-                     ','.join(['user', 'id=net0', ssh_host_forward] +
+                     ','.join(['user', 'id=net0'] + host_forwards +
                               (['restrict=yes'] if self.vm.sealed else []) +
                               [f'guestfwd=tcp:{ip}:{port}-cmd:{cmd}'
                                for ip, port, cmd in guest_forwards])]
@@ -341,6 +350,10 @@ class Monitor:
         # as live QEMU images are not CoW-backed with qcow2 mechanism,
         # just deduplicated with FS-level reflinks that QEMU is unaware of
         self._execute_human_command('commit all')
+
+    def forward_host_port(self, hostport, guestport):
+        self._execute_human_command('hostfwd_add '
+                                    f'tcp:127.0.0.1:{hostport}-:{guestport}')
 
 
 class SharedDirectory:
