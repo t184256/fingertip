@@ -2,6 +2,7 @@
 # Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
 
 import hashlib
+import http
 import http.server
 import os
 import shutil
@@ -23,6 +24,8 @@ BIG = 2**30  # too big for caching
 STRIP_HEADERS = ('TE', 'Transfer-Encoding', 'Keep-Alive', 'Trailer', 'Upgrade',
                  'Connection', 'Host', 'Accept')
 SAVIOUR_DEFAULTS = 'local,cached+direct'
+RETRIES_MAX = 7
+COOLDOWN = 20
 
 
 def saviour_sources():
@@ -42,7 +45,8 @@ def is_fetcheable(source, url, timeout=2):
         r = requests.head(url, allow_redirects=False, timeout=timeout)
         return r.status_code < 400
     except (requests.exceptions.BaseHTTPError, urllib3.exceptions.HTTPError,
-            requests.exceptions.Timeout, OSError):
+            requests.exceptions.Timeout, OSError) as ex:
+        log.warning(f'{ex}')
         return False
     return False
 
@@ -89,7 +93,8 @@ class HTTPCache:
                         return self._serve_http(su, headers, meth,
                                                 no_cache=(not cache))
 
-            def _serve_http(self, uri, headers, meth='GET', no_cache=False):
+            def _serve_http(self, uri, headers, meth='GET', no_cache=False,
+                            retries=RETRIES_MAX):
                 sess = http_cache._get_requests_session(direct=no_cache)
                 sess_dir = http_cache._get_requests_session(direct=True)
                 basename = os.path.basename(uri)
@@ -101,6 +106,7 @@ class HTTPCache:
                 for k, v in headers.items():
                     log.debug(f'{k}: {v}')
 
+                error = None
                 try:
                     if meth == 'GET':
                         # direct streaming or trickery might be required...
@@ -112,9 +118,10 @@ class HTTPCache:
                             if nu.startswith('https://'):
                                 # no point in serving that, we have to pretend
                                 # that never happened
-                                log.warning(f'suppressing HTTPS redirect {nu}')
+                                log.info(f'suppressing HTTPS redirect {nu}')
                                 return self._serve_http(nu, headers, meth=meth,
-                                                        no_cache=no_cache)
+                                                        no_cache=no_cache,
+                                                        retries=retries)
                         direct = []
                         if no_cache:
                             direct.append('caching disabled for this source')
@@ -143,21 +150,28 @@ class HTTPCache:
                     if len(data) != length:
                         data = hack_around_unpacking(uri, headers, data)
                     assert len(data) == length
-                    self._status_and_headers(r.status_code, r.headers)
                 except BrokenPipeError:
-                    log.warning(f'Upwards broken pipe for {meth} {uri}')
-                    time.sleep(2)  # to delay a re-request
-                    return
+                    error = f'Upwards broken pipe for {meth} {uri}'
                 except ConnectionResetError:
-                    log.warning(f'Upwards connection reset for {meth} {uri}')
-                    time.sleep(2)  # to delay a re-request
-                    return
+                    error = f'Upwards connection reset for {meth} {uri}'
                 except requests.exceptions.ConnectionError:
-                    log.warning(f'Upwards connection error for {meth} {uri}')
-                    time.sleep(2)  # to delay a re-request
-                    return
+                    error = f'Upwards connection error for {meth} {uri}'
+                if error:
+                    # delay a re-request
+                    if retries:
+                        log.warning(f'{error} (will retry x{retries})')
+                        t = (RETRIES_MAX - retries) / RETRIES_MAX * COOLDOWN
+                        time.sleep(t)
+                        return self._serve_http(uri, headers, meth=meth,
+                                                no_cache=no_cache,
+                                                retries=retries-1)
+                    else:
+                        log.error(f'{error} (out of retries)')
+                        self.send_error(http.HTTPStatus.SERVICE_UNAVAILABLE)
+                        return
                 log.debug(f'{meth} {basename} fetched {length} ({uri})')
                 try:
+                    self._status_and_headers(r.status_code, r.headers)
                     if meth == 'GET':
                         self.wfile.write(data)
                 except BrokenPipeError:
@@ -165,7 +179,7 @@ class HTTPCache:
                 except ConnectionResetError:
                     log.warning(f'Downwards connection reset for {meth} {uri}')
                 except requests.exceptions.ConnectionError:
-                    log.warning(f'Downwards onnection error for {meth} {uri}')
+                    log.warning(f'Downwards connection error for {meth} {uri}')
                 log.info(f'{meth} {basename} served {length} ({uri})')
 
             def do_HEAD(self):
