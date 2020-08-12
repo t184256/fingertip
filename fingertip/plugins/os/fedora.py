@@ -28,10 +28,22 @@ def main(m=None, version=32, updates=True,
     return m
 
 
+def determine_mirror(mirror):
+    h = requests.head(mirror, allow_redirects=False)
+    if h.status_code in (301, 302, 303, 307, 308) and 'Location' in h.headers:
+        return h.headers['Location'].rstrip('/').replace('https://', 'http://')
+    return mirror
+
+
 def install_in_qemu(m, version, updates=True,
-                    mirror=None, fips=False):
+                    mirror=None, no_autopick_mirror=False, fips=False):
     releases_development = 'development' if version == '33' else 'releases'
-    mirror = mirror or FEDORA_GEOREDIRECTOR
+    if mirror is None:
+        if not no_autopick_mirror:
+            mirror = determine_mirror(FEDORA_GEOREDIRECTOR)
+            m.log.info(f'autoselected mirror {mirror}')
+        else:
+            mirror = FEDORA_GEOREDIRECTOR
     url = f'{mirror}/{releases_development}/{version}/Everything/x86_64/os'
     upd = f'{mirror}/updates/{version}/Everything/x86_64'
     repos = (f'url --url {url}\n' +
