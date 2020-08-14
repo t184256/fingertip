@@ -89,14 +89,20 @@ class Repo(git.Repo, lock.Lock):
 
             _remove(cache_path)
             reflink.auto(self.path, cache_path)
-            super().__init__(self.path)
+            git.Repo.__init__(self, self.path)
             self.remotes[0].set_url(url)
         self.self_destruct = True
+
+    def __enter__(self):
+        lock.Lock.__enter__(self)
+        git.Repo.__enter__(self)
+        return self
 
     def __exit__(self, *args):
         if self.self_destruct:
             _remove(self.path)
-        super().__exit__(*args)
+        git.Repo.__exit__(self, *args)
+        lock.Lock.__exit__(self, *args)
 
 
 def upload_clone(m, url, path_in_m, rev=None, rev_is_enough=True):
