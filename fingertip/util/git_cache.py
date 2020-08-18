@@ -29,16 +29,19 @@ def _remove(p):
 
 class Repo(git.Repo, lock.Lock):
     def __init__(self, url, *path_components, enough_to_have=None):
+        assert path_components
         self.url = url
-        cache_path = path.downloads('git', *path_components)
+        cache_path = path.downloads('git', *path_components, makedirs=True)
         cache_exists = os.path.exists(cache_path)
-        self.path = cache_path + '-working-copy'
-        lock_path = self.path + '-lock'
-        lock.Lock.__init__(self, lock_path)
+        self.path = temp.disappearing_dir(os.path.dirname(cache_path),
+                                          path_components[-1])
+        lock_working_copy_path = self.path + '-lock'
+        lock_cache_path = cache_path + '-lock'
+        lock.Lock.__init__(self, lock_working_copy_path)
         update_not_needed = None
         sources = saviour_sources()
         self.self_destruct = False
-        with self:
+        with lock.Lock(lock_cache_path), lock.Lock(lock_working_copy_path):
             _remove(self.path)
 
             for i, (source, cache) in enumerate(sources):
