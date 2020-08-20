@@ -7,6 +7,7 @@ import http.server
 import os
 import shutil
 import socketserver
+import stat
 import threading
 import time
 import urllib3
@@ -26,6 +27,12 @@ STRIP_HEADERS = ('TE', 'Transfer-Encoding', 'Keep-Alive', 'Trailer', 'Upgrade',
 SAVIOUR_DEFAULTS = 'local,cached+direct'
 RETRIES_MAX = 7
 COOLDOWN = 20
+
+
+def is_cache_group_writeable():
+    if os.path.exists(path.CACHE):
+        mode = stat.S_IMODE(os.stat(path.CACHE).st_mode)
+        return bool(mode & 0o020)
 
 
 def saviour_sources():
@@ -210,9 +217,10 @@ class HTTPCache:
 
     def _get_requests_session(self, direct=False):
         if not direct:
+            kwargs = ({'filemode': 0o0660, 'dirmode': 0o0770}
+                      if is_cache_group_writeable() else {})
             cache = cachecontrol.caches.FileCache(path.downloads('cache'),
-                                                  filemode=0o0660,
-                                                  dirmode=0o0770)
+                                                  **kwargs)
             sess = cachecontrol.CacheControl(requests.Session(), cache=cache)
         else:
             sess = requests.Session()
