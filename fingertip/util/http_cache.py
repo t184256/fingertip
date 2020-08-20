@@ -210,7 +210,9 @@ class HTTPCache:
 
     def _get_requests_session(self, direct=False):
         if not direct:
-            cache = cachecontrol.caches.FileCache(path.downloads('cache'))
+            cache = cachecontrol.caches.FileCache(path.downloads('cache'),
+                                                  filemode=0o0660,
+                                                  dirmode=0o0770)
             sess = cachecontrol.CacheControl(requests.Session(), cache=cache)
         else:
             sess = requests.Session()
