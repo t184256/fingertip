@@ -43,11 +43,14 @@ class Expiration:
     def file_has_not_changed(self, path):
         log.debug(f'checking that {path} has not changed...')
         mtime, hash_ = self._deps[path]
-        if mtime != (os.stat(path).st_mtime):
-            if hash_ != weak_hash.of_file(path):
-                log.warning(f'{path} has changed, set '
-                            'FINGERTIP_IGNORE_CODE_CHANGES=1 to ignore')
-                return False
+        try:
+            if mtime != (os.stat(path).st_mtime):
+                if hash_ != weak_hash.of_file(path):
+                    log.warning(f'{path} has changed, set '
+                                'FINGERTIP_IGNORE_CODE_CHANGES=1 to ignore')
+                    return False
+        except FileNotFoundError:
+            return False
         return True
 
     def files_have_not_changed(self):
