@@ -9,14 +9,16 @@ Helper functions for fingertip: working with self-destructing tempfiles.
 
 import atexit
 import os
-import signal
+import random
 import shutil
+import signal
+import string
 import tempfile
 
 from fingertip.util import log
 
 
-AUTOREMOVE_PREFIX = 'tmp-fingertip.'
+AUTOREMOVE_PREFIX = 'tmp.fingertip'
 
 
 # TODO: hacky and unclean
@@ -28,14 +30,39 @@ def terminate_child(num, frame):
 assert signal.signal(signal.SIGTERM, terminate_child) == signal.SIG_DFL
 
 
-def unique_dir(dstdir=None, hint=''):  # defaults to /tmp
+def random_chars(k=6):
+    return ''.join(random.choices(string.ascii_letters, k=k))
+
+
+def suffix_non_existing(base, k=6):  # racy
+    while True:
+        suffix = random_chars(k)
+        if not os.path.exists(base + suffix):
+            return base + suffix
+
+
+def unique_filename(dstdir=None, hint=''):
+    dstdir = dstdir or tempfile.gettempdir()
     hint = hint if len(hint) <= 20 else hint[:20-2] + '..'
-    return tempfile.mkdtemp(prefix=('.' + hint + '.'), dir=dstdir)
+    return suffix_non_existing(os.path.join(dstdir, f'.{hint}.'))
+
+
+def unique_file(dstdir=None, hint='', create=False):
+    tgt = unique_filename(dstdir=dstdir, hint=hint)
+    if create:
+        open(tgt, 'w').close()
+    return tgt
+
+
+def unique_dir(dstdir=None, hint=''):
+    tgt = unique_filename(dstdir=dstdir, hint=hint)
+    os.mkdir(tgt)
+    return tgt
 
 
 def remove(*paths):
     for path in paths:
-        assert AUTOREMOVE_PREFIX in path
+        assert os.path.basename(path).startswith('.' + AUTOREMOVE_PREFIX)
         try:
             if not os.path.isdir(path) or os.path.islink(path):
                 try:
@@ -48,23 +75,24 @@ def remove(*paths):
             log.warning(f'cleanup error for {path}: {e}')
 
 
-def disappearing_file(dstdir=None, hint=''):
-    prefix = AUTOREMOVE_PREFIX + hint + '.' if hint else AUTOREMOVE_PREFIX
-    _, temp_file_path = tempfile.mkstemp(prefix=prefix, dir=dstdir)
-    assert AUTOREMOVE_PREFIX in temp_file_path
-    atexit.register(remove, temp_file_path)
-    return temp_file_path
+def disappearing(path):
+    assert os.path.basename(path).startswith('.' + AUTOREMOVE_PREFIX)
+    atexit.register(remove, path)
+    return path
+
+
+def disappearing_file(dstdir=None, hint='', create=False):
+    hint = f'{AUTOREMOVE_PREFIX}.{hint}' if hint else AUTOREMOVE_PREFIX
+    return disappearing(unique_file(dstdir=dstdir, hint=hint, create=create))
 
 
 def disappearing_dir(dstdir=None, hint=''):
-    prefix = AUTOREMOVE_PREFIX + hint + '.' if hint else AUTOREMOVE_PREFIX
-    temp_dir_path = tempfile.mkdtemp(prefix=prefix, dir=dstdir)
-    assert AUTOREMOVE_PREFIX in temp_dir_path
-    atexit.register(remove, temp_dir_path)
-    return temp_dir_path
+    hint = f'{AUTOREMOVE_PREFIX}.{hint}' if hint else AUTOREMOVE_PREFIX
+    return disappearing(unique_dir(dstdir=dstdir, hint=hint))
 
 
-def has_space(how_much='2G', reserve_fraction=.5, where='/tmp'):
+def has_space(how_much='2G', reserve_fraction=.5, where=None):
+    where = where or tempfile.gettempdir()
     for suffix, power in {'G': 30, 'M': 20, 'K': 10}.items():
         if isinstance(how_much, str) and how_much.endswith(suffix):
             how_much = float(how_much[:-1]) * 2 ** power

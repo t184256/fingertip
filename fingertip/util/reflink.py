@@ -32,7 +32,7 @@ def auto(src, dst, preserve=False):
 
 
 def is_supported(dirpath):
-    tmp = temp.disappearing_file(dstdir=dirpath)
+    tmp = temp.disappearing_file(dstdir=dirpath, create=True)
     r = subprocess.Popen(['cp', '--reflink=always', tmp, tmp + '-reflink'],
                          stderr=subprocess.PIPE)
     _, err = r.communicate()
@@ -41,6 +41,7 @@ def is_supported(dirpath):
     sure_not = b'failed to clone' in err and b'Operation not supported' in err
     if r.returncode and not sure_not:
         log.error('reflink support detection inconclusive, cache dir problems')
+        log.error(f'({err})')
     return r.returncode == 0
 
 
