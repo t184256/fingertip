@@ -138,15 +138,20 @@ class QEMUNamespacedFeatures:
 
         image = os.path.join(self.vm.path, 'image.qcow2')
         if self._image_to_clone:
+            # let's try to use /tmp (which is, hopefully, tmpfs) for transients
+            # if it looks empty enough
+            cloned_to_tmp = False
             required_space = os.path.getsize(self._image_to_clone) + 2 * 2**30
-            lock = fasteners.process_lock.InterProcessLock('/tmp/.fingertip')
-            lock.acquire()
-            if self.vm._transient and temp.has_space(required_space):
-                image = temp.disappearing_file('/tmp', hint='fingertip-qemu')
-                reflink.auto(self._image_to_clone, image)
-                lock.release()
-            else:
-                lock.release()
+            if self.vm._transient:
+                # Would be ideal to have it global (and multiuser-ok)
+                tmp_free_lock = path.cache('.tmp-free-space-check-lock')
+                with fasteners.process_lock.InterProcessLock(tmp_free_lock):
+                    if temp.has_space(required_space):
+                        image = temp.disappearing_file('/tmp',
+                                                       hint='fingertip-qemu')
+                        reflink.auto(self._image_to_clone, image)
+                        cloned_to_tmp = True
+            if not cloned_to_tmp:
                 reflink.auto(self._image_to_clone, image)
             self._image_to_clone = None
         run_args += ['-drive',

@@ -34,6 +34,7 @@ def easy_accessor(root_path):
 
 
 fingertip = easy_accessor(FINGERTIP)
+cache = easy_accessor(CACHE)
 downloads = easy_accessor(DOWNLOADS)
 machines = easy_accessor(MACHINES)
 saviour = easy_accessor(SAVIOUR)
