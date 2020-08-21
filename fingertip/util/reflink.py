@@ -62,8 +62,8 @@ def mount_supported_fs(backing_file, tgt):
                        check=True)
         if tgt.startswith('/home'):
             subprocess.run(['sudo', 'semanage', 'fcontext', '-a', '-t',
-                            'user_home_dir_t', tgt + '(/.*)?'])
-            subprocess.run(['sudo', 'restorecon', '-v', tgt])
+                            'user_home_dir_t', tgt + '(/.*)?'], check=False)
+            subprocess.run(['sudo', 'restorecon', '-v', tgt], check=False)
 
 
 def storage_setup_wizard():
