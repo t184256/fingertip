@@ -13,11 +13,12 @@ FEDORA_GEOREDIRECTOR = 'http://download.fedoraproject.org/pub/fedora/linux'
 
 
 def main(m=None, version=32, updates=True,
-         mirror=None, fips=False):
+         mirror=None, no_specific_mirror=False, fips=False):
     m = m or fingertip.build('backend.qemu')
     if hasattr(m, 'qemu'):
         m = m.apply(install_in_qemu, version=version, updates=updates,
-                    mirror=mirror, fips=fips)
+                    mirror=mirror, no_specific_mirror=no_specific_mirror,
+                    fips=fips)
     elif hasattr(m, 'container'):
         m = m.apply(m.container.from_image, f'fedora:{version}')
         if updates:
@@ -28,22 +29,25 @@ def main(m=None, version=32, updates=True,
     return m
 
 
-def determine_mirror(mirror):
-    h = requests.head(mirror, allow_redirects=False)
+def determine_mirror(mirror, check_suffix):
+    h = requests.head(mirror + '/' + check_suffix, allow_redirects=False)
     if h.status_code in (301, 302, 303, 307, 308) and 'Location' in h.headers:
-        return h.headers['Location'].rstrip('/').replace('https://', 'http://')
+        r = h.headers['Location'].rstrip('/').replace('https://', 'http://')
+        assert r.endswith('/' + check_suffix)
+        return r[:-len('/' + check_suffix)]
     return mirror
 
 
 def install_in_qemu(m, version, updates=True,
-                    mirror=None, no_autopick_mirror=False, fips=False):
+                    mirror=None, no_specific_mirror=True, fips=False):
     releases_development = 'development' if version == '33' else 'releases'
     if mirror is None:
-        if not no_autopick_mirror:
-            mirror = determine_mirror(FEDORA_GEOREDIRECTOR)
-            m.log.info(f'autoselected mirror {mirror}')
-        else:
+        if no_specific_mirror:
             mirror = FEDORA_GEOREDIRECTOR
+        else:
+            suf = f'{"updates" if updates else releases_development}/{version}'
+            mirror = determine_mirror(FEDORA_GEOREDIRECTOR, suf)
+            m.log.info(f'autoselected mirror {mirror}')
     url = f'{mirror}/{releases_development}/{version}/Everything/x86_64/os'
     upd = f'{mirror}/updates/{version}/Everything/x86_64'
     repos = (f'url --url {url}\n' +
