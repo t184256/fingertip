@@ -153,8 +153,8 @@ class ContainerNamespacedFeatures:
             stderr.wait()
         out, err = stdout.data, stderr.data
         if p.returncode:  # HACK: ugly workaround for podman polluting stderr
-            m = (f'Error: non zero exit code: {p.returncode}:'
-                 ' OCI runtime error\n').encode()
+            m = ('Error: exec session exited with non-zero exit code '
+                 f'{p.returncode}: OCI runtime error\n').encode()
             if err.endswith(m):
                 err = err[:-len(m)]
         return fingertip.exec.ExecResult(p.returncode, out, err)
