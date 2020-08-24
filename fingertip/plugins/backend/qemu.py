@@ -70,6 +70,8 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
             m.log.debug(f'drop {m.qemu.monitor}, {m.qemu.monitor._sock}')
             m.qemu.monitor.quit()
             m.qemu._go_down()
+        if m._transient and m.qemu.image and os.path.exists(m.qemu.image):
+            os.unlink(m.qemu.image)
     m.hooks.drop.append(drop)
 
     def save():
@@ -107,7 +109,7 @@ class QEMUNamespacedFeatures:
         self.live = False
         self.ram_size, self.disk_size = ram_size, disk_size
         self.custom_args = custom_args
-        self._image_to_clone = None
+        self.image, self._image_to_clone = None, None
         self._qemu = f'qemu-system-{self.vm.arch}'
 
     def run(self, load=SNAPSHOT_BASE_NAME, guest_forwards=[], extra_args=[]):
