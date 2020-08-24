@@ -12,65 +12,58 @@ from fingertip.util import log, path
 FEDORA_GEOREDIRECTOR = 'http://download.fedoraproject.org/pub/fedora/linux'
 
 
-def main(m=None, version=32, updates=True,
-         mirror=None, specific_mirror=True, fips=False):
+def main(m=None, version=32, mirror=None, specific_mirror=True, fips=False):
     m = m or fingertip.build('backend.qemu')
     if hasattr(m, 'qemu'):
-        m = m.apply(install_in_qemu, version=version, updates=updates,
-                    mirror=mirror, specific_mirror=specific_mirror,
-                    fips=fips)
+        m = m.apply(install_in_qemu, version=version, mirror=mirror,
+                    specific_mirror=specific_mirror, fips=fips)
     elif hasattr(m, 'container'):
         m = m.apply(m.container.from_image, f'fedora:{version}')
-        if updates:
-            with m:
-                m('dnf -y update')
+        with m:
+            m('dnf -y update')
     else:
         raise NotImplementedError()
     return m
 
 
-def determine_mirror(mirror, version, releases_development, updates=False):
+def determine_mirror(mirror, version, releases_development):
     # we can query a georedirector for a local Fedora mirror and use just
     # that one, consistently. problem is, it also yields really broken ones.
     # let's check that a mirror has at least a repomd.xml and a kernel:
-    os = f'{releases_development}/{version}/Everything/x86_64/os'
-    up = f'updates/{version}/Everything/x86_64'
-    repomd = up if updates else os + '/repodata/repomd.xml'
-    kernel = f'{os}/isolinux/vmlinuz'
+    updates_repomd = f'updates/{version}/Everything/x86_64/repodata/repomd.xml'
+    kernel = (f'{releases_development}/{version}'
+              '/Everything/x86_64/os/isolinux/vmlinuz')
 
-    h = requests.head(mirror + '/' + repomd, allow_redirects=False)
+    h = requests.head(mirror + '/' + updates_repomd, allow_redirects=False)
     if h.status_code in (301, 302, 303, 307, 308) and 'Location' in h.headers:
         r = h.headers['Location'].rstrip('/').replace('https://', 'http://')
-        assert r.endswith('/' + repomd)
-        base = r[:-len('/' + repomd)]
+        assert r.endswith('/' + updates_repomd)
+        base = r[:-len('/' + updates_repomd)]
         # good, now now ensure it also has a kernel
         h = requests.head(base + '/' + kernel)
         if h.status_code != 200:
             log.warning(f'{base + "/" + kernel} -> {h.status_code}')
             log.warning(f'mirror {base} is broken, trying another one')
-            return determine_mirror(mirror, version, releases_development,
-                                    updates)  # retry
+            return determine_mirror(mirror, version, releases_development)
         else:
             return base
     return mirror
 
 
-def install_in_qemu(m, version, updates=True,
-                    mirror=None, specific_mirror=True, fips=False):
+def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
     releases_development = 'development' if version == '33' else 'releases'
     if mirror is None:
         if not specific_mirror:
             mirror = FEDORA_GEOREDIRECTOR  # not consistent, not recommended!
         else:
             mirror = determine_mirror(FEDORA_GEOREDIRECTOR, version,
-                                      releases_development, updates)
+                                      releases_development)
             m.log.info(f'autoselected mirror {mirror}')
     url = f'{mirror}/{releases_development}/{version}/Everything/x86_64/os'
     upd = f'{mirror}/updates/{version}/Everything/x86_64'
     repos = (f'url --url {url}\n' +
              f'repo --name fedora --baseurl {url}\n' +
-             (f'repo --name updates --baseurl {upd}'
-              if updates else ''))
+             f'repo --name updates --baseurl {upd}')
 
     m.expiration.cap('2d')  # non-immutable repositories
 
