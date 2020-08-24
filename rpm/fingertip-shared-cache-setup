@@ -25,7 +25,6 @@ if [[ -e $IMAGEFILE ]]; then
 		chgrp fingertip $STATEDIR/shared_cache
 		chmod 2775 $STATEDIR/shared_cache
 		setfacl -d --set u::rwx,g::rwx,o::- $STATEDIR/shared_cache
-		semanage fcontext -a -t httpd_sys_content_t "$STATEDIR/shared_cache(/.*)?"
 		restorecon -v $STATEDIR/shared_cache
 	fi
 fi

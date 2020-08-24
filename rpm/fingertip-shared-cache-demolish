@@ -23,7 +23,6 @@ semanage fcontext -d -t httpd_sys_content_t "/var/lib/fingertip/shared_cache(/.*
 if mount | grep 'on /var/lib/fingertip/shared_cache'; then
 	umount -l /var/lib/fingertip/shared_cache
 	losetup -d $(losetup -fL --show /var/lib/fingertip/cow.xfs.img)
-	semanage fcontext -d -t httpd_sys_content_t "/var/lib/fingertip/shared_cache(/.*)?"
 fi
 
 rm -rf /var/lib/fingertip
