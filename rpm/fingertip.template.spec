@@ -1,6 +1,6 @@
 Name:		fingertip
 Version:	{{ver}}
-Release:        {{rel}}%{?dist}
+Release:	{{rel}}%{?dist}
 Summary:	Control VMs, containers and other machines with Python, leverage live snapshots
 
 License:	GPLv3+
@@ -59,6 +59,8 @@ the laziest way possible, that's it.
 %build
 # noop
 
+%global statedir %{_sharedstatedir}/fingertip
+
 %install
 install -d -m 755 %{buildroot}%{_bindir}
 install -d -m 755 %{buildroot}%{python3_sitelib}
@@ -70,6 +72,19 @@ cp -p __main__.py %{buildroot}%{python3_sitelib}/fingertip/
 chmod +x %{buildroot}%{python3_sitelib}/fingertip/__main__.py
 ln -s %{python3_sitelib}/fingertip/__main__.py %{buildroot}%{_bindir}/fingertip
 
+install -d -m 755 %{buildroot}%{_unitdir}
+install -m 644 rpm/fingertip-shared-cache.service %{buildroot}%{_unitdir}/
+
+install -d -m 755 %{buildroot}%{_sbindir}
+install -m 755 rpm/fingertip-shared-cache-demolish %{buildroot}%{_sbindir}/
+install -m 755 rpm/fingertip-shared-cache-grow %{buildroot}%{_sbindir}/
+install -m 755 rpm/fingertip-shared-cache-use %{buildroot}%{_sbindir}/
+
+install -d -m 755 %{buildroot}%{_libexecdir}/fingertip
+install -m 755 rpm/fingertip-shared-cache-setup %{buildroot}%{_libexecdir}/fingertip/shared-cache-setup
+
+install -d -m 755 %{buildroot}%{statedir}
+install -d -m 2755 %{buildroot}%{statedir}/shared_cache
 
 %files
 %license COPYING
@@ -80,6 +95,41 @@ ln -s %{python3_sitelib}/fingertip/__main__.py %{buildroot}%{_bindir}/fingertip
 %{python3_sitelib}/ssh_key/*
 %{python3_sitelib}/kickstart_templates/*
 
+
+%package shared-cache
+Summary:	Shared CoW-enabled cache for fingertip
+Requires:	fingertip
+Requires:	procps-ng
+Requires:	/usr/sbin/losetup
+Requires:	/usr/sbin/semanage
+Requires:	/usr/sbin/restorecon
+%description shared-cache
+Tools to set up a shared CoW-powered HTTP-exportable cache for fingertip.
+
+After installing, you'll have to
+`systemctl enable --now fingertip-shared-cache`,
+`fingertip-shared-cache-grow $DESIRED_SIZE` the image
+(if your FS didn't have CoW),
+and, lastly, `fingertip-shared-cache-use $YOUR_USERNAME`.
+
+%pre shared-cache
+getent group fingertip >/dev/null || groupadd -r fingertip
+
+%files shared-cache
+%{statedir}
+%attr(2775,root,fingertip) %{statedir}/shared_cache
+%{_libexecdir}/fingertip/shared-cache-setup
+%{_unitdir}/fingertip-shared-cache.service
+%{_sbindir}/fingertip-shared-cache-demolish
+%{_sbindir}/fingertip-shared-cache-grow
+%{_sbindir}/fingertip-shared-cache-use
+
+%post shared-cache
+chmod -R 2775 %{statedir}
+chgrp -R fingertip %{statedir}
+setfacl -dR --set u::rwx,g::rwx,o::- %{statedir}
+semanage fcontext -a -t httpd_sys_content_t "%{statedir}(/.*)?"
+restorecon -v %{statedir}
 
 # templated from build.sh
 %changelog

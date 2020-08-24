@@ -1,0 +1,30 @@
+#!/bin/bash
+
+if [[ $1 != '--force' ]]; then
+	echo "Does its best to remove fingertip shared cache from the system."
+	echo "You're advised to read the script first."
+	echo "Usage: $0 --force"
+	exit 1
+fi
+
+
+set -uex
+
+systemctl disable --now fingertip-shared-cache
+
+while pgrep -f /var/lib/fingertip/shared_cache/; do
+	echo 'waiting for some processes to terminate...'
+	sleep .5
+	pkill -f /var/lib/fingertip/shared_cache/
+done
+
+if mount | grep 'on /var/lib/fingertip/shared_cache'; then
+	umount -l /var/lib/fingertip/shared_cache
+	losetup -d $(losetup -fL --show /var/lib/fingertip/cow.xfs.img)
+fi
+
+semanage fcontext -d -t httpd_sys_content_t "/var/lib/fingertip/shared_cache(/.*)?"
+
+rm -rf /var/lib/fingertip
+
+dnf remove fingertip-shared-cache

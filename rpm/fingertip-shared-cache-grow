@@ -1,0 +1,14 @@
+#!/bin/bash
+
+set -uex
+NEW_SIZE=$1
+
+IMAGEFILE=/var/lib/fingertip/cow.xfs.img
+LOOPDEV=$(losetup -fL --show /var/lib/fingertip/cow.xfs.img)
+
+[[ -e $IMAGEFILE ]]
+
+truncate -s ">$NEW_SIZE" $IMAGEFILE
+losetup -c $LOOPDEV
+xfs_growfs $LOOPDEV
+

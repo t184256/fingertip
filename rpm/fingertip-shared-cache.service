@@ -1,0 +1,9 @@
+[Unit]
+Description=Ensure fingertip shared cache is CoW-enabled
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/fingertip/shared-cache-setup
+
+[Install]
+WantedBy=default.target

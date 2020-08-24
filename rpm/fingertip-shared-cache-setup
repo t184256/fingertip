@@ -1,0 +1,31 @@
+#!/bin/bash
+
+set -uex
+
+STATEDIR=/var/lib/fingertip
+IMAGEFILE=$STATEDIR/cow.xfs.img
+
+if [[ ! -e $IMAGEFILE ]]; then
+	TESTFILE1=$STATEDIR/cow-test
+	TESTFILE2=$STATEDIR/cow-test-
+	if ! cp --reflink=always $TESTFILE1 $TESTFILE2 2>/dev/null; then
+		if [[ ! -e $STATEDIR/cow.xfs.img ]]; then
+			fallocate -l 8G $IMAGEFILE
+			mkfs.xfs -q -m reflink=1 $IMAGEFILE
+		fi
+	fi
+	rm -f $TESTFILE1 $TESTFILE2
+fi
+
+if [[ -e $IMAGEFILE ]]; then
+	if ! mount | grep -q $IMAGEFILE; then
+		mkdir -p $STATEDIR/shared_cache
+		mount -o loop $IMAGEFILE $STATEDIR/shared_cache
+		chgrp fingertip $STATEDIR/shared_cache
+		chmod 2775 $STATEDIR/shared_cache
+		setfacl -d --set u::rwx,g::rwx,o::- $STATEDIR/shared_cache
+		semanage fcontext -a -t httpd_sys_content_t "$STATEDIR/shared_cache(/.*)?"
+		restorecon -v $STATEDIR/shared_cache
+	fi
+fi
+

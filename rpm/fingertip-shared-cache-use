@@ -1,0 +1,30 @@
+#!/bin/bash
+
+set -uex
+
+TARGET_USER=${1:-$(id -un)}
+
+if [[ $TARGET_USER == root ]]; then
+        echo "Specify a user as a parameter, you don't want to do that to root"
+        exit 1
+fi
+
+TARGET_HOME=$(eval echo "~$TARGET_USER")
+
+if [[ ! "$(groups $TARGET_USER)" =~ $(echo '\<fingertip\>') &&
+                $TARGET_USER != root ]]; then
+        sudo usermod -a -G fingertip $TARGET_USER
+fi
+
+if mount | grep $TARGET_HOME/.cache/fingertip/cow.xfs.img; then
+	umount -l $TARGET_HOME/.cache/fingertip/cow.xfs.img
+        set +e
+        losetup -d $(losetup -fL --show $TARGET_HOME/.cache/fingertip/cow.xfs.img)
+        set -e
+fi
+
+rm -rf $TARGET_HOME/.cache/fingertip
+mkdir -p $TARGET_HOME/.cache/
+chown $TARGET_USER $TARGET_HOME/.cache
+ln -sf /var/lib/fingertip/shared_cache $TARGET_HOME/.cache/fingertip
+chown -h $TARGET_USER $TARGET_HOME/.cache/fingertip
