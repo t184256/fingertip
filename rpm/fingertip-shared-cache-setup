@@ -8,6 +8,7 @@ IMAGEFILE=$STATEDIR/cow.xfs.img
 if [[ ! -e $IMAGEFILE ]]; then
 	TESTFILE1=$STATEDIR/cow-test
 	TESTFILE2=$STATEDIR/cow-test-
+	touch $TESTFILE1
 	if ! cp --reflink=always $TESTFILE1 $TESTFILE2 2>/dev/null; then
 		if [[ ! -e $STATEDIR/cow.xfs.img ]]; then
 			fallocate -l 8G $IMAGEFILE

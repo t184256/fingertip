@@ -128,8 +128,8 @@ getent group fingertip >/dev/null || groupadd -r fingertip
 chmod -R 2775 %{statedir}
 chgrp -R fingertip %{statedir}
 setfacl -dR --set u::rwx,g::rwx,o::- %{statedir}
-semanage fcontext -a -t httpd_sys_content_t "%{statedir}(/.*)?"
-restorecon -v %{statedir}
+semanage fcontext -a -t httpd_sys_content_t "%{statedir}/shared_cache(/.*)?"
+restorecon -v %{statedir}/shared_cache
 
 # templated from build.sh
 %changelog
