@@ -6,7 +6,7 @@ import requests
 import os
 
 import fingertip.machine
-from fingertip.util import path
+from fingertip.util import log, path
 
 
 FEDORA_GEOREDIRECTOR = 'http://download.fedoraproject.org/pub/fedora/linux'
@@ -29,12 +29,29 @@ def main(m=None, version=32, updates=True,
     return m
 
 
-def determine_mirror(mirror, check_suffix):
-    h = requests.head(mirror + '/' + check_suffix, allow_redirects=False)
+def determine_mirror(mirror, version, releases_development, updates=False):
+    # we can query a georedirector for a local Fedora mirror and use just
+    # that one, consistently. problem is, it also yields really broken ones.
+    # let's check that a mirror has at least a repomd.xml and a kernel:
+    os = f'{releases_development}/{version}/Everything/x86_64/os'
+    up = f'updates/{version}/Everything/x86_64'
+    repomd = up if updates else os + '/repodata/repomd.xml'
+    kernel = f'{os}/isolinux/vmlinuz'
+
+    h = requests.head(mirror + '/' + repomd, allow_redirects=False)
     if h.status_code in (301, 302, 303, 307, 308) and 'Location' in h.headers:
         r = h.headers['Location'].rstrip('/').replace('https://', 'http://')
-        assert r.endswith('/' + check_suffix)
-        return r[:-len('/' + check_suffix)]
+        assert r.endswith('/' + repomd)
+        base = r[:-len('/' + repomd)]
+        # good, now now ensure it also has a kernel
+        h = requests.head(base + '/' + kernel)
+        if h.status_code != 200:
+            log.warning(f'{base + "/" + kernel} -> {h.status_code}')
+            log.warning(f'mirror {base} is broken, trying another one')
+            return determine_mirror(mirror, version, releases_development,
+                                    updates)  # retry
+        else:
+            return base
     return mirror
 
 
@@ -45,8 +62,8 @@ def install_in_qemu(m, version, updates=True,
         if no_specific_mirror:
             mirror = FEDORA_GEOREDIRECTOR
         else:
-            suf = f'{"updates" if updates else releases_development}/{version}'
-            mirror = determine_mirror(FEDORA_GEOREDIRECTOR, suf)
+            mirror = determine_mirror(FEDORA_GEOREDIRECTOR, version,
+                                      releases_development, updates)
             m.log.info(f'autoselected mirror {mirror}')
     url = f'{mirror}/{releases_development}/{version}/Everything/x86_64/os'
     upd = f'{mirror}/updates/{version}/Everything/x86_64'
