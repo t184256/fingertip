@@ -15,7 +15,13 @@ from fingertip.util import optional_pretty_backtraces  # noqa: F401
 
 
 def parse_kwarg(kwarg):
-    key, val = kwarg.split('=', 1) if '=' in kwarg else (kwarg, True)
+    if '=' in kwarg:
+        key, val = kwarg.split('=', 1)
+    else:
+        if kwarg.startswith('no-'):
+            key, val = kwarg[3:], False
+        else:
+            key, val = kwarg, True
     return key.replace('-', '_'), val
 
 

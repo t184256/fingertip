@@ -164,7 +164,7 @@ def make_m_segment_aware(m):
                 m.snapshot.checkpoint(checkpoint_name)
             return checkpoint_name
 
-    def execute_segment(segment, no_checkpoint=False):
+    def execute_segment(segment, checkpoint=True):
         start_time = time.time()
 
         m.log.debug(f'sending {repr(segment.input)}')
@@ -203,7 +203,7 @@ def make_m_segment_aware(m):
             checkpoint_after=None  # set later, see below
         )
         m.results.append(result)
-        if not no_checkpoint:
+        if checkpoint:
             result.checkpoint_after = maybe_checkpoint_already()
         m.consider_interrupt_and_rewind()
     m.execute_segment = execute_segment
@@ -300,7 +300,7 @@ def make_m_segment_aware(m):
                 m.console.logfile_read.flush()
             last = j == len(segments) - 1
             m.log.debug(f'Executing segment {j} for real:')
-            m.execute_segment(segment, no_checkpoint=last)
+            m.execute_segment(segment, checkpoint=not last)
             if j == 0:
                 m.results[0].full_output = (m.repl_header +
                                             m.results[0].full_output)
@@ -487,12 +487,11 @@ repls = {
 
 
 @fingertip.transient
-def main(m, scriptpath, language='bash', no_unseal=False,
-         terse=False, no_color=False, script_reading_hook=None,
+def main(m, scriptpath, language='bash', unseal=True,
+         terse=False, color=True, script_reading_hook=None,
          halt_on='warning'):
     script_reading_hook = script_reading_hook or (lambda m, code: code)
-    if not no_unseal:
-        m = m.apply('unseal')
+    m = m.apply('unseal') if unseal else m
     # m = m.apply('.hooks.disable_proxy')
 
     repl = repls[language] if isinstance(language, str) else language
@@ -516,7 +515,7 @@ def main(m, scriptpath, language='bash', no_unseal=False,
     fingertip.util.log.plain()
 
     if os.getenv('FINGERTIP_DEBUG') != '1':
-        if not no_color and hasattr(repl, 'format'):
+        if color and hasattr(repl, 'format'):
             class Formatter(logging.Formatter):
                 def format(self, record):
                     formatted = repl.format(record.msg)

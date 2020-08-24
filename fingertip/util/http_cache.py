@@ -83,7 +83,7 @@ class HTTPCache:
 
             def _serve(self, uri, headers, meth='GET'):
                 if uri in http_cache._mocks:
-                    return self._serve_http(uri, headers, meth, no_cache=True)
+                    return self._serve_http(uri, headers, meth, cache=False)
                 sources = saviour_sources()
                 for i, (source, cache) in enumerate(sources):
                     if is_fetcheable(source, uri) or i == len(sources) - 1:
@@ -97,12 +97,11 @@ class HTTPCache:
                         else:
                             su = source + '/' + uri
                             su = 'http://' + su if '://' not in source else su
-                        return self._serve_http(su, headers, meth,
-                                                no_cache=(not cache))
+                        return self._serve_http(su, headers, meth, cache=cache)
 
-            def _serve_http(self, uri, headers, meth='GET', no_cache=False,
+            def _serve_http(self, uri, headers, meth='GET', cache=True,
                             retries=RETRIES_MAX):
-                sess = http_cache._get_requests_session(direct=no_cache)
+                sess = http_cache._get_requests_session(direct=not cache)
                 sess_dir = http_cache._get_requests_session(direct=True)
                 basename = os.path.basename(uri)
 
@@ -127,10 +126,10 @@ class HTTPCache:
                                 # that never happened
                                 log.info(f'suppressing HTTPS redirect {nu}')
                                 return self._serve_http(nu, headers, meth=meth,
-                                                        no_cache=no_cache,
+                                                        cache=cache,
                                                         retries=retries)
                         direct = []
-                        if no_cache:
+                        if not cache:
                             direct.append('caching disabled for this source')
                         if int(preview.headers.get('Content-Length', 0)) > BIG:
                             direct.append(f'file bigger than {BIG}')
@@ -170,7 +169,7 @@ class HTTPCache:
                         t = (RETRIES_MAX - retries) / RETRIES_MAX * COOLDOWN
                         time.sleep(t)
                         return self._serve_http(uri, headers, meth=meth,
-                                                no_cache=no_cache,
+                                                cache=cache,
                                                 retries=retries-1)
                     else:
                         log.error(f'{error} (out of retries)')

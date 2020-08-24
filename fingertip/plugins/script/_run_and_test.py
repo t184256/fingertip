@@ -15,16 +15,16 @@ import fingertip
 # fingertip ... + script.X script --cache=1h  -  cache for 1h at most
 # fingertip ... + script.X script --cache=1h + ssh  -  cache or reuse if fresh
 # fingertip ... + transient script.X script + ssh  -  revert
-def _should_be_transient(m, scriptpath, cache=0, no_unseal=False):
+def _should_be_transient(m, scriptpath, cache=0, unseal=True):
     return False if cache else 'last'
 
 
-def _exec(m, scriptpath, mode=None, last_step=None, cache=0, no_unseal=False):
+def _exec(m, scriptpath, mode=None, last_step=None, cache=0, unseal=True):
     m.log.debug(f'Plugin: script, mode: {mode}, scriptpath: {scriptpath}, '
                 f'last_step: {last_step}, cache: {cache}, '
-                f'no_unseal: {no_unseal}')
+                f'unseal: {unseal}')
     assert mode in ['run', 'test']
-    m = m if no_unseal else m.apply('unseal')
+    m = m.apply('unseal') if unseal else m
     scriptname = 'uploaded_script'
 
     with m:
@@ -56,16 +56,16 @@ def _exec(m, scriptpath, mode=None, last_step=None, cache=0, no_unseal=False):
 #  * do not touch proxy settings
 #  * traceback on non-zero exit code
 @fingertip.transient(when=_should_be_transient)
-def run(m, scriptpath, fingertip_last_step=None, cache=0, no_unseal=False):
+def run(m, scriptpath, fingertip_last_step=None, cache=0, unseal=True):
     return _exec(m, scriptpath, mode='run',
                  last_step=fingertip_last_step,
-                 cache=cache, no_unseal=no_unseal)
+                 cache=cache, unseal=unseal)
 
 # run test like scenario, meaning mostly:
 #  * disable proxy
 #  * do not traceback on non-zero exit code
 @fingertip.transient(when=_should_be_transient)
-def test(m, scriptpath, fingertip_last_step=None, cache=0, no_unseal=False):
+def test(m, scriptpath, fingertip_last_step=None, cache=0, unseal=True):
     return _exec(m, scriptpath, mode='test',
                  last_step=fingertip_last_step,
-                 cache=cache, no_unseal=no_unseal)
+                 cache=cache, unseal=unseal)

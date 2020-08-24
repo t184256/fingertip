@@ -4,8 +4,8 @@ import fingertip
 
 
 @fingertip.transient(when='last')
-def main(m, no_unseal=False):
-    m = m if no_unseal else m.apply('unseal')
+def main(m, unseal=True):
+    m = m.apply('unseal') if unseal else m
     with m:
         m.expiration.cap(0)  # non-deterministic user input, never reuse
         m.log.info(f'waiting for the SSH server to be up...')

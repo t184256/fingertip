@@ -13,11 +13,11 @@ FEDORA_GEOREDIRECTOR = 'http://download.fedoraproject.org/pub/fedora/linux'
 
 
 def main(m=None, version=32, updates=True,
-         mirror=None, no_specific_mirror=False, fips=False):
+         mirror=None, specific_mirror=True, fips=False):
     m = m or fingertip.build('backend.qemu')
     if hasattr(m, 'qemu'):
         m = m.apply(install_in_qemu, version=version, updates=updates,
-                    mirror=mirror, no_specific_mirror=no_specific_mirror,
+                    mirror=mirror, specific_mirror=specific_mirror,
                     fips=fips)
     elif hasattr(m, 'container'):
         m = m.apply(m.container.from_image, f'fedora:{version}')
@@ -56,11 +56,11 @@ def determine_mirror(mirror, version, releases_development, updates=False):
 
 
 def install_in_qemu(m, version, updates=True,
-                    mirror=None, no_specific_mirror=True, fips=False):
+                    mirror=None, specific_mirror=True, fips=False):
     releases_development = 'development' if version == '33' else 'releases'
     if mirror is None:
-        if no_specific_mirror:
-            mirror = FEDORA_GEOREDIRECTOR
+        if not specific_mirror:
+            mirror = FEDORA_GEOREDIRECTOR  # not consistent, not recommended!
         else:
             mirror = determine_mirror(FEDORA_GEOREDIRECTOR, version,
                                       releases_development, updates)

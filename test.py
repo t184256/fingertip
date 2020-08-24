@@ -32,7 +32,7 @@ TESTS = dict(
     again=lambda m: m.apply('exec', 'true'),
     nsave=lambda m: m.apply('exec', 'true', transient=True),
     xtend=lambda m: m.apply('exec', 'true').apply('exec', 'true'),
-    false=lambda m: m.apply('exec', 'false', no_check=True),
+    false=lambda m: m.apply('exec', 'false', check=False),
     uname=lambda m: m.apply('ansible', 'command', 'uname -a'),
     patch=lambda m: m.apply('ansible', 'package',
                             name='patch', state='present'),

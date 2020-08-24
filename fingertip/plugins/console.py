@@ -4,9 +4,8 @@ import fingertip
 
 
 @fingertip.transient
-def main(m, no_unseal=False):
-    if not no_unseal:
-        m = m.apply('unseal')
+def main(m, unseal=True):
+    m = m.apply('unseal') if unseal else m
 
     assert hasattr(m, '_backend_mode')
     if hasattr(m, 'qemu'):

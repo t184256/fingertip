@@ -91,7 +91,7 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
         m._host_forwards.append((hostport, guestport))
     m.forward_host_port = forward_host_port
 
-    m.breakpoint = lambda: m.apply('ssh', no_unseal=True)
+    m.breakpoint = lambda: m.apply('ssh', unseal=False)
 
     load()
     run = m.log.pipe_powered(subprocess.run,
