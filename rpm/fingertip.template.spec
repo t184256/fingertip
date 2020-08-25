@@ -101,10 +101,10 @@ install -d -m 2755 %{buildroot}%{statedir}/shared_cache
 Summary:	Shared CoW-enabled cache for fingertip
 Requires:	fingertip
 Requires:	procps-ng
+Requires:	systemd
 Requires:	/usr/sbin/losetup
 Requires:	/usr/sbin/semanage
 Requires:	/usr/sbin/restorecon
-%systemd_requires
 %description shared-cache
 Tools to set up a shared CoW-powered HTTP-exportable cache for fingertip.
 
