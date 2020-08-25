@@ -10,6 +10,7 @@ Source0:	https://github.com/t184256/fingertip/archive/{{git_commit}}/{{tarball}}
 BuildArch:	noarch
 BuildRequires:	python3
 BuildRequires:	python3-devel
+BuildRequires:	systemd-rpm-macros
 
 Requires:	ansible
 Requires:	git-core
@@ -103,6 +104,7 @@ Requires:	procps-ng
 Requires:	/usr/sbin/losetup
 Requires:	/usr/sbin/semanage
 Requires:	/usr/sbin/restorecon
+%systemd_requires
 %description shared-cache
 Tools to set up a shared CoW-powered HTTP-exportable cache for fingertip.
 
