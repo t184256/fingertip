@@ -19,7 +19,7 @@ if [[ ! -e $IMAGEFILE ]]; then
 fi
 
 if [[ -e $IMAGEFILE ]]; then
-	if ! mount | grep -q $IMAGEFILE; then
+	if ! mount | grep -q $STATEDIR/shared_cache; then
 		mkdir -p $STATEDIR/shared_cache
 		mount -o loop $IMAGEFILE $STATEDIR/shared_cache
 		chgrp fingertip $STATEDIR/shared_cache
