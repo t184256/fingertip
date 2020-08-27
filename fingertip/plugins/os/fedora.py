@@ -6,7 +6,7 @@ import requests
 import os
 
 import fingertip.machine
-from fingertip.util import log, path
+from fingertip.util import http_cache, log, path
 
 
 FEDORA_GEOREDIRECTOR = 'http://download.fedoraproject.org/pub/fedora/linux'
@@ -28,6 +28,10 @@ def main(m=None, version=32, mirror=None, specific_mirror=True, fips=False):
 
 
 def determine_mirror(mirror, version, releases_development):
+    # if you have a saviour mirror, let's assume it's a good one
+    for source, _ in http_cache.saviour_sources():
+        if source != 'direct' and http_cache.is_fetcheable(source, mirror):
+            return mirror
     # we can query a georedirector for a local Fedora mirror and use just
     # that one, consistently. problem is, it also yields really broken ones.
     # let's check that a mirror has at least a repomd.xml and a kernel:
