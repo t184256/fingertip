@@ -17,8 +17,10 @@ import pexpect
 import fingertip.machine
 import fingertip.util.http_cache
 from fingertip.util import free_port, log, path, reflink, repeatedly, temp
+from fingertip.util import units
 
 
+IGNORED_EVENTS = ()
 SNAPSHOT_BASE_NAME = 'tip'  # it has to have some name
 CACHE_INTERNAL_IP, CACHE_INTERNAL_PORT = '10.0.2.244', 8080
 CACHE_INTERNAL_URL = f'http://{CACHE_INTERNAL_IP}:{CACHE_INTERNAL_PORT}'
@@ -28,6 +30,7 @@ QEMU_COMMON_ARGS = ['-enable-kvm', '-cpu', 'host', '-smp', '4',
                                'security_model=mapped-file,mount_tag=shared',
                     '-nographic',
                     '-object', 'rng-random,id=rng0,filename=/dev/urandom',
+                    '-device', 'virtio-balloon',
                     '-device', 'virtio-rng-pci,rng=rng0']
 
 
@@ -41,6 +44,7 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
     m.qemu = QEMUNamespacedFeatures(m, ram_size, disk_size, custom_args)
     m.snapshot = SnapshotNamespacedFeatures(m)
     m._backend_mode = 'pexpect'
+    m.balloon_size = units.parse_binary(ram_size)
 
     # TODO: extract SSH into a separate plugin?
     m.ssh = SSH(m)
@@ -95,6 +99,12 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
             m.qemu.monitor.forward_host_port(hostport, guestport)
         m._host_forwards.append((hostport, guestport))
     m.forward_host_port = forward_host_port
+
+    def balloon(size):
+        size = units.parse_binary(size)
+        assert m.qemu.live
+        m.qemu.monitor.balloon(size)
+    m.balloon = balloon
 
     m.breakpoint = lambda: m.apply('ssh', unseal=False)
 
@@ -173,6 +183,7 @@ class QEMUNamespacedFeatures:
             self.vm.console = pexp(self._qemu, args, echo=False,
                                    timeout=None,
                                    encoding='utf-8', codec_errors='ignore')
+            self.monitor.balloon(self.vm.balloon_size, just_started=True)
             self.live = True
         elif self.vm._backend_mode == 'direct':
             subprocess.run([self._qemu, '-serial', 'mon:stdio'] + args,
@@ -191,7 +202,8 @@ class QEMUNamespacedFeatures:
         if self.live:
             self.vm.console = None
             self.vm.ssh.invalidate()
-            del self.vm.exec
+        del self.vm.exec
+        del self.monitor
 
 
 class SnapshotNamespacedFeatures:
@@ -300,10 +312,15 @@ class Monitor:
             raise UnknownVMException(r)
         return r
 
-    def _expect(self, what=None):
-        reply = self._recv()
-        self.vm.log.debug(f'expecting: {what}')
-        self.vm.log.debug(f'received: {reply}')
+    def _expect(self, what=None):  # None = nothing exact, caller inspects it
+        while True:
+            reply = self._recv()
+            self.vm.log.debug(f'expecting: {what}')
+            self.vm.log.debug(f'received: {reply}')
+            if 'event' in reply and reply['event'] in IGNORED_EVENTS:
+                self.vm.log.warning(f'ignoring: {reply}')
+                continue
+            break
         if what is not None:
             assert reply == what
         return reply
@@ -353,6 +370,36 @@ class Monitor:
     def forward_host_port(self, hostport, guestport):
         self._execute_human_command('hostfwd_add '
                                     f'tcp:127.0.0.1:{hostport}-:{guestport}')
+
+    def balloon(self, target_size, just_started=False):
+        previous_size = self.vm.balloon_size
+        target_size = units.parse_binary(target_size)
+        #self.vm.log.warning(f'ballooning to {units.to_binary(target_size)} mb')
+        if previous_size == target_size:
+            if just_started:
+                self.vm.log.warning(f'balloon-reminding to {target_size}')
+                self._execute(f'balloon', **{'value': target_size})
+                self._expect({'return': {}})
+                return
+            else:
+                self.vm.log.warning(f'NOT ballooning '
+                                    f'to {target_size} '
+                                    f'from {previous_size}')
+                return
+        else:
+            self.vm.log.warning(f'ballooning to {target_size} '
+                                f'from {previous_size}')
+            self._execute(f'balloon', **{'value': target_size})
+            while True:
+                r = self._expect(None)
+                if r == {'return': {}}:
+                    continue
+                assert 'timestamp' in r and 'event' in r
+                assert r['event'] == 'BALLOON_CHANGE'
+                assert 'data' in r and 'actual' in r['data']
+                if r['data']['actual'] == target_size:
+                    self.vm.balloon_size = r['data']['actual']
+                    break
 
 
 class SharedDirectory:

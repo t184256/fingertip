@@ -13,11 +13,11 @@ FEDORA_GEOREDIRECTOR = 'http://download.fedoraproject.org/pub/fedora/linux'
 LATEST = 33
 
 
-def main(m=None, version=32, mirror=None, specific_mirror=True, fips=False):
+def main(m=None, version=32, mirror=None, specific_mirror=True, fips=False, balloon=None):
     m = m or fingertip.build('backend.qemu')
     if hasattr(m, 'qemu'):
         m = m.apply(install_in_qemu, version=version, mirror=mirror,
-                    specific_mirror=specific_mirror, fips=fips)
+                    specific_mirror=specific_mirror, fips=fips, balloon=balloon)
     elif hasattr(m, 'container'):
         m = m.apply(m.container.from_image, f'fedora:{version}')
         with m:
@@ -55,7 +55,7 @@ def determine_mirror(mirror, version, releases_development):
     return mirror
 
 
-def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
+def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False, balloon=None):
     version = int(version) if version != 'rawhide' else 'rawhide'
     releases_development = ('development' if version in (LATEST, 'rawhide')
                             else 'releases')
@@ -74,10 +74,7 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
 
     m.expiration.cap('2d')  # non-immutable repositories
 
-    original_ram_size = m.qemu.ram_size
-
     with m:
-        m.qemu.ram_size = '2G'
         hostname = f'fedora{version}' + ('-fips' if fips else '')
         fqdn = hostname + '.fingertip.local'
         ssh_key_fname = path.fingertip('ssh_key', 'fingertip.pub')
@@ -107,6 +104,7 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
                   f'proxy={m.http_cache.internal_url} ' +
                   f'inst.proxy={m.http_cache.internal_url} ' +
                   f'inst.repo={url} ' +
+                  'inst.zram=off ' +
                   ('fips=1' if fips else ''))
         extra_args = ['-kernel', kernel, '-initrd', initrd, '-append', append]
 
@@ -118,7 +116,6 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
         assert i == 0, 'Installation failed'
         m.qemu.wait()
 
-        m.qemu.ram_size = original_ram_size
         m.qemu.run(load=None)  # cold boot
 
         def login(username='root', password='fingertip'):
@@ -147,6 +144,8 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
 
         m.hooks.timesync.append(lambda: m('hwclock -s'))
 
+        if balloon:
+            m.balloon(balloon)
         m.fedora = version
 
         return m
