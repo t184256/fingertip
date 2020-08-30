@@ -15,7 +15,7 @@ import signal
 import string
 import tempfile
 
-from fingertip.util import log
+from fingertip.util import log, units
 
 
 AUTOREMOVE_PREFIX = 'tmp.fingertip'
@@ -93,10 +93,7 @@ def disappearing_dir(dstdir=None, hint=''):
 
 def has_space(how_much='2G', reserve_fraction=.5, where=None):
     where = where or tempfile.gettempdir()
-    for suffix, power in {'G': 30, 'M': 20, 'K': 10}.items():
-        if isinstance(how_much, str) and how_much.endswith(suffix):
-            how_much = float(how_much[:-1]) * 2 ** power
-            break
+    how_much = units.parse_binary(how_much)
     total, _, free = shutil.disk_usage(where)
     if not free >= how_much:
         log.warning(f'{where} does not have {how_much} of free space')

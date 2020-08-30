@@ -2,33 +2,24 @@
 # Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
 
 import datetime
-import numbers
 import os
 import sys
 import time
 
-from fingertip.util import log, weak_hash
-
-
-def _parse(interval):
-    _SUFFIXES = {'s': 1, 'm': 60, 'h': 60 * 60, 'd': 24 * 60 * 60}
-    if isinstance(interval, str) and interval[-1] in _SUFFIXES:
-        return float(interval[:-1]) * _SUFFIXES[interval[-1]]
-    if isinstance(interval, numbers.Real) and not isinstance(interval, bool):
-        return float(interval)
-    raise ValueError(f'Cannot parse time interval {interval}')
+from fingertip.util import log, weak_hash, units
 
 
 class Expiration:
     def __init__(self, expire_in):
-        self.time = time.time() + _parse(expire_in)
+        self.time = time.time() + units.parse_time_interval(expire_in)
         self._deps = {}
 
     def pretty(self):
         return datetime.datetime.fromtimestamp(self.time).isoformat()
 
     def cap(self, interval):
-        self.time = min(self.time, time.time() + _parse(interval))
+        self.time = min(self.time,
+                        time.time() + units.parse_time_interval(interval))
 
     def is_expired(self, by=None):
         return self.time < (by or time.time())
