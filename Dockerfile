@@ -19,6 +19,8 @@ RUN dnf -y --setopt=install_weak_deps=False --best install \
 	python3-pyxdg \
 	python3-requests \
 	python3-requests-mock \
+	python3-rangehttpserver \
+	python3-GitPython \
 	qemu-img \
 	qemu-kvm-core \
 	&& dnf clean all
@@ -26,4 +28,4 @@ RUN dnf -y --setopt=install_weak_deps=False --best install \
 RUN mkdir -p /user-home/.cache/fingertip /containerized-fingertip /cwd
 ENV HOME /user-home
 RUN chmod -R 777 /user-home /cwd
-WORKDIR /containerized-fingertip/cwd
+WORKDIR /cwd
