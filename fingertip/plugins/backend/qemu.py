@@ -42,6 +42,9 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
     m.snapshot = SnapshotNamespacedFeatures(m)
     m._backend_mode = 'pexpect'
 
+    # TODO: extract SSH into a separate plugin?
+    m.ssh = SSH(m)
+
     def load():
         m.http_cache = fingertip.util.http_cache.HTTPCache()
         m.http_cache.internal_ip = CACHE_INTERNAL_IP
@@ -121,9 +124,6 @@ class QEMUNamespacedFeatures:
         run_args += ['-qmp', (f'tcp:127.0.0.1:{self.monitor.port},'
                               'server,nowait,nodelay')]
 
-        # TODO: extract SSH into a separate plugin?
-        self.vm.ssh = SSH(self.vm,
-                          key=path.fingertip('ssh_key', 'fingertip.paramiko'))
         self.vm.shared_directory = SharedDirectory(self.vm)
         self.vm.exec = self.vm.ssh.exec
         host_forwards = [(self.vm.ssh.port, 22)] + self.vm._host_forwards
@@ -383,9 +383,12 @@ class SharedDirectory:
 
 
 class SSH:
-    def __init__(self, m, key, host='127.0.0.1', port=None):
-        self.host, self.key = host, key
-        self.port = port or free_port.find()
+    _key_file = path.fingertip('ssh_key', 'fingertip')
+    key_file_paramiko = path.fingertip('ssh_key', 'fingertip.paramiko')
+    pubkey_file = path.fingertip('ssh_key', 'fingertip.pub')
+
+    def __init__(self, m, host='127.0.0.1', port=None):
+        self.host, self.port = host, port or free_port.find()
         self.m = m
         self.m.log.debug(f'ssh port {self.port}')
         self._transport = None
@@ -399,7 +402,7 @@ class SSH:
                 return  # the transport is already OK
         self._transport = None
         self.m.log.debug('waiting for the VM to spin up and offer SSH...')
-        pkey = paramiko.ECDSAKey.from_private_key_file(self.key)
+        pubkey = paramiko.ECDSAKey.from_private_key_file(SSH.key_file_paramiko)
 
         def connect():
             self.m.log.debug('Trying to connect ...')
@@ -412,7 +415,7 @@ class SSH:
             paramiko.ssh_exception.SSHException,
             retries=retries, timeout=timeout
         )
-        transport.auth_publickey('root', pkey)
+        transport.auth_publickey('root', pubkey)
         self._transport = transport
 
     def invalidate(self):
@@ -497,13 +500,18 @@ class SSH:
 
     @property
     def key_file(self):
-        key_file = path.fingertip('ssh_key', 'fingertip')
-        s = os.stat(key_file)
+        s = os.stat(SSH._key_file)
         mode = s[stat.ST_MODE]
         owner = s[stat.ST_UID]
         # OpenSSH cares about permissions on key file only if the owner
         # matches current user
         if mode & 0o77 and owner == os.getuid():
-            self.m.log.debug(f'fixing up permissions on {key_file}')
-            os.chmod(key_file, mode & 0o7700)
-        return key_file
+            self.m.log.debug(f'fixing up permissions on {SSH._key_file}')
+            os.chmod(SSH._key_file, mode & 0o7700)
+        return SSH._key_file
+
+    @property
+    def pubkey(self):
+        self.m.expiration.depend_on_a_file(SSH.pubkey_file)
+        with open(SSH.pubkey_file) as f:
+            return f.read().strip()
