@@ -124,6 +124,7 @@ class QEMUNamespacedFeatures:
         run_args += ['-qmp', (f'tcp:127.0.0.1:{self.monitor.port},'
                               'server,nowait,nodelay')]
 
+        self.vm.ssh.port = self.vm.ssh.port or free_port.find()
         self.vm.shared_directory = SharedDirectory(self.vm)
         self.vm.exec = self.vm.ssh.exec
         host_forwards = [(self.vm.ssh.port, 22)] + self.vm._host_forwards
@@ -378,7 +379,7 @@ class SSH:
     pubkey_file = path.fingertip('ssh_key', 'fingertip.pub')
 
     def __init__(self, m, host='127.0.0.1', port=None):
-        self.host, self.port = host, port or free_port.find()
+        self.host, self.port = host, port
         self.m = m
         self.m.log.debug(f'ssh port {self.port}')
         self._transport = None
