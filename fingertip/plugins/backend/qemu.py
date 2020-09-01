@@ -192,16 +192,6 @@ class QEMUNamespacedFeatures:
             self.vm.ssh.invalidate()
             del self.vm.exec
 
-    def compress_image(self):
-        assert not self.live
-        image = os.path.join(self.vm.path, 'image.qcow2')
-        self.vm.log.info(f'compressing {image}')
-        run = self.vm.log.pipe_powered(subprocess.run, stdout=logging.INFO,
-                                       stderr=logging.ERROR)
-        run(['qemu-img', 'convert', '-c', '-Oqcow2', image, image + '-tmp'],
-            check=True)
-        os.rename(image + '-tmp', image)
-
 
 class SnapshotNamespacedFeatures:
     def __init__(self, vm):

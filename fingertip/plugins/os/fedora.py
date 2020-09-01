@@ -117,7 +117,7 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
                               'installer will now terminate'])
         assert i == 0, 'Installation failed'
         m.qemu.wait()
-        m.qemu.compress_image()
+
         m.qemu.ram_size = original_ram_size
         m.qemu.run(load=None)  # cold boot
 

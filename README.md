@@ -72,8 +72,8 @@ So,
 $ fingertip os.fedora + ssh
 ```
 
-You should observe Fedora installation starting up, then shutting down,
-compressing an image, booting up again and, finally,
+You should observe Fedora installation starting up,
+then shutting down, booting up again and, finally,
 giving you interactive control over the machine over SSH.
 
 Invoke the same command again, and it should do nearly nothing, as

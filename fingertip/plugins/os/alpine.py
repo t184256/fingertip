@@ -80,7 +80,6 @@ def install_in_qemu(m):
         m.console.sendline('poweroff')
 
         m.qemu.wait()
-        m.qemu.compress_image()
 
         def disable_proxy():
             m('setup-proxy none', check=False)
