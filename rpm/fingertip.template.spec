@@ -38,6 +38,7 @@ Requires:	rsync
 Requires:	util-linux
 Requires:	xfsprogs
 Recommends:	duperemove
+Recommends:	createrepo_c
 Recommends:	podman
 
 %description

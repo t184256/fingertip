@@ -72,7 +72,8 @@ def method_git(log, src, base, dst):
 
 
 def method_reposync(log, src, base, dst,
-                    arches=['noarch', 'x86_64'], source='auto', options=[]):
+                    arches=['noarch', 'x86_64'], source='auto',
+                    metadata='download', options=[]):
     if source == 'auto':
         source = '/source' in src or '/SRPM' in src
     repo_desc_for_mirroring = textwrap.dedent(f'''
@@ -87,12 +88,24 @@ def method_reposync(log, src, base, dst,
         f.write(repo_desc_for_mirroring)
     run = log.pipe_powered(subprocess.run,
                            stdout=logging.INFO, stderr=logging.WARNING)
-    run(['dnf', f'--setopt=reposdir={repodir}', 'reposync',
-         f'--download-path={dst}', '--norepopath',
-         '--download-metadata', '--delete', '--repoid=repo'] +
-        [f'--arch={arch}' for arch in arches] + options +
-        (['--source'] if source else []),
+    run(['dnf', f'--setopt=reposdir={repodir}', 'reposync', '--norepopath',
+         f'--download-path={dst}', '--repoid=repo',
+         '--delete', '--remote-time'] +
+        [f'--arch={arch}' for arch in arches] +
+        (['--download-metadata'] if not metadata != 'generate' else []) +
+        (['--source'] if source else []) +
+        options,
         check=True)
+    run = log.pipe_powered(subprocess.run,  # either too silent or too noisy =/
+                           stdout=logging.INFO, stderr=logging.INFO)
+    createrepo_c_options = ['-v', '--error-exit-val', '--ignore-lock']
+    if metadata == 'regenerate':
+        log.info('regenerating metadata...')
+        run(['createrepo_c'] + createrepo_c_options + ['--update', dst],
+            check=True)
+    elif metadata == 'generate':
+        log.info('generating metadata from scratch...')
+        run(['createrepo_c'] + createrepo_c_options + [dst], check=True)
 
 
 def method_command(log, src, base, dst, command='false', reuse=True):
