@@ -91,5 +91,16 @@ def main(m=None, url=None):
         m.log.debug(f'm.prompt = {repr(m.prompt)}')
         m.console.sendline('')
         m.console.expect_exact(m.prompt)
+
+        def login(username='root', password='fingertip'):
+            m.console.expect(f'login: ')
+            m.console.sendline(username)
+            m.console.expect('Password: ')
+            m.console.sendline(password)
+            m.console.expect_exact(m.prompt)
+        m.login = login
+
+        m.hooks.timesync.append(lambda: m('hwclock -s'))
+
         m.log.info('cloud-init finished')
     return m
