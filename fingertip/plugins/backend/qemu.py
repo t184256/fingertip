@@ -20,7 +20,7 @@ from fingertip.util import free_port, log, path, reflink, repeatedly, temp
 from fingertip.util import units
 
 
-IGNORED_EVENTS = ()
+IGNORED_EVENTS = ('NIC_RX_FILTER_CHANGED',)
 SNAPSHOT_BASE_NAME = 'tip'  # it has to have some name
 CACHE_INTERNAL_IP, CACHE_INTERNAL_PORT = '10.0.2.244', 8080
 CACHE_INTERNAL_URL = f'http://{CACHE_INTERNAL_IP}:{CACHE_INTERNAL_PORT}'
@@ -45,6 +45,8 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
     m.snapshot = SnapshotNamespacedFeatures(m)
     m._backend_mode = 'pexpect'
     m.balloon_size = units.parse_binary(ram_size)
+    m.balloon_tgt = m.balloon_size
+    m.balloon_min = units.parse_binary('1G')
 
     # TODO: extract SSH into a separate plugin?
     m.ssh = SSH(m)
@@ -64,6 +66,8 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
 
     def down():
         if m.qemu.live:
+            m.log.warning(f'applying ballooning pressure ({m.balloon_min})')
+            m.qemu.monitor.balloon(m.balloon_min)
             m.log.debug(f'save_live {m.qemu.monitor}, {m.qemu.monitor._sock}')
             m.qemu.monitor.pause()
             m.qemu.monitor.checkpoint()
@@ -104,6 +108,7 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
         size = units.parse_binary(size)
         assert m.qemu.live
         m.qemu.monitor.balloon(size)
+        m.balloon_tgt = size
     m.balloon = balloon
 
     m.breakpoint = lambda: m.apply('ssh', unseal=False)
@@ -183,9 +188,11 @@ class QEMUNamespacedFeatures:
             self.vm.console = pexp(self._qemu, args, echo=False,
                                    timeout=None,
                                    encoding='utf-8', codec_errors='ignore')
-            self.monitor.balloon(self.vm.balloon_size, just_started=True)
+            # TODO: balloon asynchronously
+            self.monitor.balloon(self.vm.balloon_tgt, just_started=True)
             self.live = True
         elif self.vm._backend_mode == 'direct':
+            # TODO: balloon up! IDK how, though, make the caller do it?
             subprocess.run([self._qemu, '-serial', 'mon:stdio'] + args,
                            check=True)
             self.live = False
@@ -372,34 +379,45 @@ class Monitor:
                                     f'tcp:127.0.0.1:{hostport}-:{guestport}')
 
     def balloon(self, target_size, just_started=False):
+        start_time = time.time()
         previous_size = self.vm.balloon_size
         target_size = units.parse_binary(target_size)
-        #self.vm.log.warning(f'ballooning to {units.to_binary(target_size)} mb')
         if previous_size == target_size:
             if just_started:
-                self.vm.log.warning(f'balloon-reminding to {target_size}')
-                self._execute(f'balloon', **{'value': target_size})
-                self._expect({'return': {}})
-                return
+                #self.vm.log.warning(f'balloon-reminding to {target_size}')
+                #self._execute(f'balloon', **{'value': target_size})
+                #self._expect({'return': {}})
+                #self.vm.log.debug('balloon-reminding complete')
+                self.vm.log.debug('skipping balloon-reminding')
             else:
                 self.vm.log.warning(f'NOT ballooning '
                                     f'to {target_size} '
                                     f'from {previous_size}')
-                return
         else:
             self.vm.log.warning(f'ballooning to {target_size} '
                                 f'from {previous_size}')
             self._execute(f'balloon', **{'value': target_size})
-            while True:
+            got_return, got_right_size = False, False
+            while not (got_return and got_right_size):
+                self.vm.log.warning('ballooning: '
+                                    f'{got_return}, {got_right_size}')
                 r = self._expect(None)
                 if r == {'return': {}}:
-                    continue
-                assert 'timestamp' in r and 'event' in r
-                assert r['event'] == 'BALLOON_CHANGE'
-                assert 'data' in r and 'actual' in r['data']
-                if r['data']['actual'] == target_size:
-                    self.vm.balloon_size = r['data']['actual']
-                    break
+                    got_return = True
+                else:
+                    assert 'timestamp' in r and 'event' in r
+                    assert r['event'] == 'BALLOON_CHANGE'
+                    assert 'data' in r and 'actual' in r['data']
+                    if r['data']['actual'] == target_size:
+                        self.vm.balloon_size = r['data']['actual']
+                        got_right_size = True
+        self.vm.log.debug('done with ballooning')
+        ballooning_duration = time.time() - start_time
+        if ballooning_duration > 1:
+            self.vm.log.warning(f'ballooning took {ballooning_duration}s, '
+                                'increase ram.size.min to avoid that')
+        else:
+            self.vm.log.debug(f'ballooning took {ballooning_duration}s')
 
 
 class SharedDirectory:

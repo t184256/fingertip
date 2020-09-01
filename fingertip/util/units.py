@@ -24,7 +24,7 @@ def parse_binary(value):
         raise ValueError(f'Cannot parse binary-suffixed value {value}')
 
 
-def to_binary(value):
+def binary(value):
     value = int(value)
     for suffix, suffix_value in BINARY.items():
         if value >= suffix_value:
