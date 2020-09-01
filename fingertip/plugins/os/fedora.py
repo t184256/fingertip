@@ -120,13 +120,21 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
         m.qemu.compress_image()
         m.qemu.ram_size = original_ram_size
         m.qemu.run(load=None)  # cold boot
-        ROOT_PASSWORD = 'fingertip'
-        m.prompt = f'[root@{hostname} ~]# '
-        m.console.expect(f'{hostname} login: ')
-        m.console.sendline('root')
-        m.console.expect('Password: ')
-        m.console.sendline(ROOT_PASSWORD)
-        m.console.expect_exact(m.prompt)
+
+        def login(username='root', password='fingertip'):
+            if username == 'root':
+                m.prompt = f'[root@{hostname} ~]# '
+            else:
+                m.prompt = f'[{username}@{hostname} ~]$ '
+            m.console.expect(f'{hostname} login: ')
+            m.console.sendline(username)
+            m.console.expect('Password: ')
+            m.console.sendline(password)
+            m.console.expect_exact(m.prompt)
+
+        m.login = login
+
+        m.login()
         m.log.info('Fedora installation finished')
 
         def disable_proxy():
