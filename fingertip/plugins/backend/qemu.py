@@ -316,6 +316,7 @@ class Monitor:
                 time.sleep(2)
             else:
                 self._ram_target_changed.wait()
+                self._ram_target_changed.clear()
 
     def _expect(self, what=None):  # None = nothing exact, caller inspects it
         reply = self._queue.get()
@@ -473,6 +474,7 @@ class RAMNamespacedFeatures:
         if self._actual != self._target:
             while self._actual != self._target:
                 self._m.qemu.monitor._ram_actual_changed.wait()
+                self._m.qemu.monitor._ram_actual_changed.clear()
             ballooning_duration = time.time() - start_time
             if ballooning_duration > 2.5:
                 self._m.log.warning(f'ballooning took {ballooning_duration}s, '
