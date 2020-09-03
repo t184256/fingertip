@@ -185,13 +185,14 @@ class QEMUNamespacedFeatures:
         args = QEMU_COMMON_ARGS + self.custom_args + run_args + extra_args
         self.vm.log.debug(' '.join(args))
         if self.vm._backend_mode == 'pexpect':
+            # start connecting/negotiating QMP, later starts auto-ballooning
+            threading.Thread(target=self.monitor.connect, daemon=True).start()
             pexp = self.vm.log.pseudofile_powered(pexpect.spawn,
                                                   logfile=logging.INFO)
             self.vm.console = pexp(self._qemu, args, echo=False,
                                    timeout=None,
                                    encoding='utf-8', codec_errors='ignore')
             self.live = True
-            self.vm.qemu.monitor.connect()  # starts auto-ballooning
         elif self.vm._backend_mode == 'direct':
             subprocess.run([self._qemu, '-serial', 'mon:stdio'] + args,
                            check=True)
@@ -275,19 +276,20 @@ class Monitor:
 
     def connect(self, retries=12, timeout=1/32):
         if self._sock is None:
-            self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            repeatedly.keep_trying(
-                lambda: self._sock.connect(('127.0.0.1', self.port)),
-                ConnectionRefusedError, retries=retries, timeout=timeout
-            )
             with self._command_execution_lock:
-                self.vm.log.debug(f'negotiation')
-                server_greeting = self._recv()
-                assert 'QMP' in server_greeting
-                threading.Thread(target=self._recv_thread, daemon=True).start()
-                self.vm.log.debug(f'testing QMP')
+                self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                self.vm.log.debug(f'QMP connecting...')
+                repeatedly.keep_trying(
+                    lambda: self._sock.connect(('127.0.0.1', self.port)),
+                    ConnectionRefusedError, retries=retries, timeout=timeout
+                )
                 self._execute('qmp_capabilities')
-                self._expect({'return': {}})
+                threading.Thread(target=self._recv_thread, daemon=True).start()
+                server_greeting = self._expect()
+                assert set(server_greeting.keys()) == {'QMP'}
+                self._expect({'return': {}})  # from qmp_capabilities
+                self.vm.log.debug(f'QMP is ready')
             threading.Thread(target=self._ballooning_thread,
                              daemon=True).start()
 
@@ -322,7 +324,7 @@ class Monitor:
 
     def _expect(self, what=None):  # None = nothing exact, caller inspects it
         reply = self._queue.get()
-        self.vm.log.debug(f'expecting: {what}')
+        self.vm.log.debug(f'expected: {what}')
         self.vm.log.debug(f'received: {reply}')
         if what is not None:
             assert reply == what
@@ -396,7 +398,7 @@ class Monitor:
 
     def quit(self):
         self.vm.hooks.disrupt()
-        with self._command_execution_lock:
+        if self._command_execution_lock.acquire(blocking=False):
             self._execute('quit')
             self._expect({'return': {}})
             self._disconnect()
