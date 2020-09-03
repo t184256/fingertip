@@ -9,7 +9,7 @@ import fasteners
 
 import fingertip.expiration
 import fingertip.machine
-from fingertip.util import log, path
+from fingertip.util import log, path, units
 
 
 @fingertip.transient
@@ -38,7 +38,7 @@ def logs(older_than=0):
 
 
 def _cleanup_dir(dirpath, older_than, time_func):
-    cutoff_time = time.time() - fingertip.expiration._parse(older_than)
+    cutoff_time = time.time() - units.parse_time_interval(older_than)
     for root, dirs, files in os.walk(dirpath, topdown=False):
         for f in (os.path.join(root, x) for x in files):
             assert os.path.realpath(f).startswith(os.path.realpath(dirpath))
@@ -56,7 +56,7 @@ def _cleanup_dir(dirpath, older_than, time_func):
 
 def machines(expired_for=0):
     if expired_for != 'all':
-        adjusted_time = time.time() - fingertip.expiration._parse(expired_for)
+        adjusted_time = time.time() - units.parse_time_interval(expired_for)
     for root, dirs, files in os.walk(path.MACHINES, topdown=False):
         for d in (os.path.join(root, x) for x in dirs):
             lock_path = os.path.join(root, '.' + os.path.basename(d) + '-lock')
