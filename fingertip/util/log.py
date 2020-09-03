@@ -35,6 +35,11 @@ def strip_control_sequences(s):
     return r if r'\x' in r else d
 
 
+class NoFlushFileHandler(logging.FileHandler):
+    def flush(self):
+        pass
+
+
 class ErasingFormatter(logging.Formatter):
     _COLORS = {logging.DEBUG: '\033[0;34m',
                logging.WARNING: '\033[1;33m',
@@ -184,7 +189,7 @@ class Sublogger:
             self.used = True
 
             if self.path:
-                self.sub.addHandler(logging.FileHandler(self.path))
+                self.sub.addHandler(NoFlushFileHandler(self.path))
 
                 debug(f'logging to {self.path}, enabling hint')
                 atexit.register(self.hint)
