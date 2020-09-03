@@ -13,11 +13,11 @@ FEDORA_GEOREDIRECTOR = 'http://download.fedoraproject.org/pub/fedora/linux'
 LATEST = 33
 
 
-def main(m=None, version=32, mirror=None, specific_mirror=True, fips=False, balloon=None):
+def main(m=None, version=32, mirror=None, specific_mirror=True, fips=False):
     m = m or fingertip.build('backend.qemu')
     if hasattr(m, 'qemu'):
         m = m.apply(install_in_qemu, version=version, mirror=mirror,
-                    specific_mirror=specific_mirror, fips=fips, balloon=balloon)
+                    specific_mirror=specific_mirror, fips=fips)
     elif hasattr(m, 'container'):
         m = m.apply(m.container.from_image, f'fedora:{version}')
         with m:
@@ -55,7 +55,7 @@ def determine_mirror(mirror, version, releases_development):
     return mirror
 
 
-def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False, balloon=None):
+def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
     version = int(version) if version != 'rawhide' else 'rawhide'
     releases_development = ('development' if version in (LATEST, 'rawhide')
                             else 'releases')
@@ -72,9 +72,10 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False, b
              f'repo --name fedora --baseurl {url}\n' +
              f'repo --name updates --baseurl {upd}')
 
-    m.expiration.cap('2d')  # non-immutable repositories
-
     with m:
+        m.ram.safeguard = '768M'
+        m.expiration.cap('2d')  # non-immutable repositories
+
         hostname = f'fedora{version}' + ('-fips' if fips else '')
         fqdn = hostname + '.fingertip.local'
         ssh_key_fname = path.fingertip('ssh_key', 'fingertip.pub')
@@ -101,20 +102,21 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False, b
         initrd = os.path.join(m.path, 'initrd')
         m.http_cache.fetch(f'{url}/isolinux/initrd.img', initrd)
         append = ('ks=http://mock/ks inst.ksstrict console=ttyS0 inst.notmux '
+                  'inst.zram=off ' +
                   f'proxy={m.http_cache.internal_url} ' +
                   f'inst.proxy={m.http_cache.internal_url} ' +
                   f'inst.repo={url} ' +
-                  'inst.zram=off ' +
                   ('fips=1' if fips else ''))
         extra_args = ['-kernel', kernel, '-initrd', initrd, '-append', append]
 
-        m.qemu.run(load=None, extra_args=extra_args)
-        i = m.console.expect(['Storing configuration files and kickstarts',
-                              'installation failed',
-                              'installation was stopped',
-                              'installer will now terminate'])
-        assert i == 0, 'Installation failed'
-        m.qemu.wait()
+        with m.ram('3G'):
+            m.qemu.run(load=None, extra_args=extra_args)
+            i = m.console.expect(['Storing configuration files and kickstarts',
+                                  'installation failed',
+                                  'installation was stopped',
+                                  'installer will now terminate'])
+            assert i == 0, 'Installation failed'
+            m.qemu.wait()
 
         m.qemu.run(load=None)  # cold boot
 
@@ -144,8 +146,6 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False, b
 
         m.hooks.timesync.append(lambda: m('hwclock -s'))
 
-        if balloon:
-            m.balloon(balloon)
         m.fedora = version
 
         return m

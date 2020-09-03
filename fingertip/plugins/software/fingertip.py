@@ -85,6 +85,7 @@ def main(m, from_=None, preinstall=False):
     if not hasattr(m, 'fingertip_built'):
         m = m.apply(build, from_, preinstall)
     with m:
+        m.ram.min = '2G'
         m('dnf -y install /tmp/fingertip/rpms/noarch/*.rpm')
         m.fingertip_installed = True
         m('useradd user', check=False)

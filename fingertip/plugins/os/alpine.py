@@ -34,7 +34,9 @@ def install_in_qemu(m):
     iso_file = os.path.join(m.path, os.path.basename(ISO))
     m.http_cache.fetch(ISO, iso_file)
 
-    with m:
+    with m, m.ram('512M'):
+        m.ram.safeguard = '256M'  # alpine is quite a slim distro
+
         m.qemu.run(load=None, extra_args=['-cdrom', iso_file])
         m.console.expect_exact('localhost login: ')
         m.console.sendline('root')

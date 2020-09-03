@@ -2,6 +2,7 @@
 # Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
 
 import atexit
+import contextlib
 import json
 import logging
 import os
@@ -9,7 +10,9 @@ import selectors
 import socket
 import stat
 import subprocess
+import threading
 import time
+import queue
 
 import fasteners
 import pexpect
@@ -20,7 +23,7 @@ from fingertip.util import free_port, log, path, reflink, repeatedly, temp
 from fingertip.util import units
 
 
-IGNORED_EVENTS = ('NIC_RX_FILTER_CHANGED',)
+IGNORED_EVENTS = ('NIC_RX_FILTER_CHANGED', 'RESET')
 SNAPSHOT_BASE_NAME = 'tip'  # it has to have some name
 CACHE_INTERNAL_IP, CACHE_INTERNAL_PORT = '10.0.2.244', 8080
 CACHE_INTERNAL_URL = f'http://{CACHE_INTERNAL_IP}:{CACHE_INTERNAL_PORT}'
@@ -34,19 +37,16 @@ QEMU_COMMON_ARGS = ['-enable-kvm', '-cpu', 'host', '-smp', '4',
                     '-device', 'virtio-rng-pci,rng=rng0']
 
 
-def main(arch='x86_64', ram_size='1G', disk_size='20G',
-         custom_args=[], guest_forwards=[]):
+def main(arch='x86_64', ram_min='1G', ram_size='1G', ram_max='4G',
+         disk_size='20G', custom_args=[], guest_forwards=[]):
     assert arch == 'x86_64'
-    # FIXME: -tmp
     m = fingertip.machine.Machine('qemu')
     m.arch = arch
     m._host_forwards = []
-    m.qemu = QEMUNamespacedFeatures(m, ram_size, disk_size, custom_args)
+    m.ram = RAMNamespacedFeatures(m, ram_min, ram_size, ram_max)
+    m.qemu = QEMUNamespacedFeatures(m, disk_size, custom_args)
     m.snapshot = SnapshotNamespacedFeatures(m)
     m._backend_mode = 'pexpect'
-    m.balloon_size = units.parse_binary(ram_size)
-    m.balloon_tgt = m.balloon_size
-    m.balloon_min = units.parse_binary('1G')
 
     # TODO: extract SSH into a separate plugin?
     m.ssh = SSH(m)
@@ -56,6 +56,10 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
         m.http_cache.internal_ip = CACHE_INTERNAL_IP
         m.http_cache.internal_port = CACHE_INTERNAL_PORT
         m.http_cache.internal_url = CACHE_INTERNAL_URL
+
+        if hasattr(m.ram, '_pre_down_size'):
+            m.ram._target = m.ram._pre_down_size
+            del m.ram._pre_down_size
     m.hooks.load.append(load)
 
     def up():
@@ -66,8 +70,11 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
 
     def down():
         if m.qemu.live:
-            m.log.warning(f'applying ballooning pressure ({m.balloon_min})')
-            m.qemu.monitor.balloon(m.balloon_min)
+            if m.ram.min != m.ram.actual:
+                m.log.info('driving RAM down to '
+                           f'({units.binary(m.ram.min)})')
+                m.ram._pre_down_size = m.ram._target
+                m.ram.size = m.ram.min  # blocking
             m.log.debug(f'save_live {m.qemu.monitor}, {m.qemu.monitor._sock}')
             m.qemu.monitor.pause()
             m.qemu.monitor.checkpoint()
@@ -104,13 +111,6 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
         m._host_forwards.append((hostport, guestport))
     m.forward_host_port = forward_host_port
 
-    def balloon(size):
-        size = units.parse_binary(size)
-        assert m.qemu.live
-        m.qemu.monitor.balloon(size)
-        m.balloon_tgt = size
-    m.balloon = balloon
-
     m.breakpoint = lambda: m.apply('ssh', unseal=False)
 
     load()
@@ -122,10 +122,10 @@ def main(arch='x86_64', ram_size='1G', disk_size='20G',
 
 
 class QEMUNamespacedFeatures:
-    def __init__(self, vm, ram_size, disk_size, custom_args):
+    def __init__(self, vm, disk_size, custom_args):
         self.vm = vm
         self.live = False
-        self.ram_size, self.disk_size = ram_size, disk_size
+        self.disk_size = disk_size
         self.custom_args = custom_args
         self.image, self._image_to_clone = None, None
         self._qemu = f'qemu-system-{self.vm.arch}'
@@ -176,7 +176,7 @@ class QEMUNamespacedFeatures:
         run_args += ['-drive',
                      f'file={self.image},cache=unsafe,if=virtio,discard=unmap']
 
-        run_args += ['-m', self.ram_size]
+        run_args += ['-m', str(self.vm.ram.max // 2**20)]
 
         os.makedirs(path.SHARED, exist_ok=True)
 
@@ -188,13 +188,12 @@ class QEMUNamespacedFeatures:
             self.vm.console = pexp(self._qemu, args, echo=False,
                                    timeout=None,
                                    encoding='utf-8', codec_errors='ignore')
-            # TODO: balloon asynchronously
-            self.monitor.balloon(self.vm.balloon_tgt, just_started=True)
             self.live = True
+            self.vm.qemu.monitor.connect()  # starts auto-ballooning
         elif self.vm._backend_mode == 'direct':
-            # TODO: balloon up! IDK how, though, make the caller do it?
             subprocess.run([self._qemu, '-serial', 'mon:stdio'] + args,
                            check=True)
+            # FIXME: autoballooning won't start w/o the monitor connection!
             self.live = False
             self._go_down()
 
@@ -267,37 +266,90 @@ class Monitor:
         self.port = port or free_port.find()
         self.vm.log.debug(f'monitor port {self.port}')
         self._sock = None
+        self._queue = queue.Queue()
+        self._ram_actual_changed = threading.Event()
+        self._ram_target_changed = threading.Event()
+        self._command_execution_lock = threading.RLock()
 
-    def _connect(self, retries=12, timeout=1/32):
+    def connect(self, retries=12, timeout=1/32):
         if self._sock is None:
             self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             repeatedly.keep_trying(
                 lambda: self._sock.connect(('127.0.0.1', self.port)),
                 ConnectionRefusedError, retries=retries, timeout=timeout
             )
-            self.vm.log.debug(f'negotiation')
-            server_greeting = self._recv()
-            assert 'QMP' in server_greeting
-            self._execute('qmp_capabilities')
-            self._expect({'return': {}})
+            with self._command_execution_lock:
+                self.vm.log.debug(f'negotiation')
+                server_greeting = self._recv()
+                assert 'QMP' in server_greeting
+                threading.Thread(target=self._recv_thread, daemon=True).start()
+                self.vm.log.debug(f'testing QMP')
+                self._execute('qmp_capabilities')
+                self._expect({'return': {}})
+            threading.Thread(target=self._ballooning_thread,
+                             daemon=True).start()
+
+    def _recv_thread(self):
+        while self._sock:
+            r = self._recv()
+            if not r:
+                break
+
+            if 'event' in r:
+                if r['event'] in IGNORED_EVENTS:
+                    self.vm.log.debug(f'ignoring: QMP message {r}')
+                    continue
+                elif r['event'] == 'BALLOON_CHANGE':
+                    assert 'data' in r and 'actual' in r['data']
+                    self.vm.ram._actual = r['data']['actual']
+                    self.vm.log.debug('memory ballooned to '
+                                      f'{units.binary(self.vm.ram._actual)}')
+                    self._ram_actual_changed.set()
+                    continue
+
+            self._queue.put(r)
+
+    def _ballooning_thread(self):
+        while self._sock:
+            if self.vm.ram._actual != self.vm.ram._target:
+                self.balloon(self.vm.ram._target)
+                time.sleep(2)
+            else:
+                self._ram_target_changed.wait()
+
+    def _expect(self, what=None):  # None = nothing exact, caller inspects it
+        reply = self._queue.get()
+        self.vm.log.debug(f'expecting: {what}')
+        self.vm.log.debug(f'received: {reply}')
+        if what is not None:
+            assert reply == what
+        return reply
 
     def _disconnect(self):
-        self._sock.close()
-        self._sock = None
+        with self._command_execution_lock:
+            if self._sock:
+                self._sock.close()
+                self._sock = None
+                self.vm.log.debug('qemu monitor disconnected')
 
     def _send(self, dictionary):
         self._sock.send(json.dumps(dictionary).encode())
 
     def _recv(self):
         r = b''
-        while True:
-            r += self._sock.recv(1)
-            if not r or b'\n' in r:
-                break
-        return json.loads(r.decode())
+        try:
+            while self._sock:
+                r += self._sock.recv(1)
+                if not r:
+                    self._disconnect()
+                    return
+                if r[-1] == ord('\n'):
+                    return json.loads(r.decode())
+        except OSError:
+            self._disconnect()
 
     def _execute(self, cmd, retries=12, timeout=1/32, **kwargs):
-        self._connect(retries, timeout)
+        self.connect(retries, timeout)
         self.vm.log.debug(f'executing: {cmd} {kwargs}')
         if not kwargs:
             self._send({'execute': cmd})
@@ -305,55 +357,46 @@ class Monitor:
             self._send({'execute': cmd, 'arguments': kwargs})
 
     def _execute_human_command(self, cmd):
-        self._execute(f'human-monitor-command', **{'command-line': cmd})
-        r = self._expect(None)
-        while 'timestamp' in r and 'event' in r:
-            r = self._expect(None)  # ignore these for now
-        assert set(r.keys()) == {'return'}
-        assert isinstance(r['return'], str)
-        r = r['return']
-        if 'Error while writing VM state: No space left on device' in r:
-            raise NotEnoughSpaceForSnapshotException(r)
-        elif r:
-            self.vm.log.error(r)
-            raise UnknownVMException(r)
-        return r
-
-    def _expect(self, what=None):  # None = nothing exact, caller inspects it
-        while True:
-            reply = self._recv()
-            self.vm.log.debug(f'expecting: {what}')
-            self.vm.log.debug(f'received: {reply}')
-            if 'event' in reply and reply['event'] in IGNORED_EVENTS:
-                self.vm.log.warning(f'ignoring: {reply}')
-                continue
-            break
-        if what is not None:
-            assert reply == what
-        return reply
+        with self._command_execution_lock:
+            self._execute(f'human-monitor-command', **{'command-line': cmd})
+            r = self._expect(None)
+            while 'timestamp' in r and 'event' in r:
+                r = self._expect(None)  # ignore these for now
+            assert set(r.keys()) == {'return'}
+            assert isinstance(r['return'], str)
+            r = r['return']
+            if 'Error while writing VM state: No space left on device' in r:
+                raise NotEnoughSpaceForSnapshotException(r)
+            elif r:
+                self.vm.log.error(r)
+                raise UnknownVMException(r)
+            return r
 
     def resume(self):
         self.vm.time_desync.report(self.vm.time_desync.SMALL)
-        self._execute('cont')
-        r = self._expect(None)
-        assert set(r.keys()) == {'timestamp', 'event'}
-        assert r['event'] == 'RESUME'
-        self._expect({'return': {}})
+        with self._command_execution_lock:
+            self._execute('cont')
+            r = self._expect(None)
+            assert set(r.keys()) == {'timestamp', 'event'}
+            assert r['event'] == 'RESUME'
+            self._expect({'return': {}})
 
     def pause(self):
         self.vm.hooks.disrupt()
         self.vm.time_desync.report(self.vm.time_desync.SMALL)
-        self._execute('stop')
-        r = self._expect(None)
-        assert set(r.keys()) == {'timestamp', 'event'}
-        assert r['event'] == 'STOP'
-        self._expect({'return': {}})
+        with self._command_execution_lock:
+            self._execute('stop')
+            r = self._expect(None)
+            assert set(r.keys()) == {'timestamp', 'event'}
+            assert r['event'] == 'STOP'
+            self._expect({'return': {}})
 
     def quit(self):
         self.vm.hooks.disrupt()
-        self._execute('quit')
-        self._expect({'return': {}})
-        self._disconnect()
+        with self._command_execution_lock:
+            self._execute('quit')
+            self._expect({'return': {}})
+            self._disconnect()
 
     def checkpoint(self, name=SNAPSHOT_BASE_NAME):
         self._execute_human_command(f'savevm {name}')
@@ -378,46 +421,143 @@ class Monitor:
         self._execute_human_command('hostfwd_add '
                                     f'tcp:127.0.0.1:{hostport}-:{guestport}')
 
-    def balloon(self, target_size, just_started=False):
-        start_time = time.time()
-        previous_size = self.vm.balloon_size
+    def balloon(self, target_size):
         target_size = units.parse_binary(target_size)
-        if previous_size == target_size:
-            if just_started:
-                #self.vm.log.warning(f'balloon-reminding to {target_size}')
-                #self._execute(f'balloon', **{'value': target_size})
-                #self._expect({'return': {}})
-                #self.vm.log.debug('balloon-reminding complete')
-                self.vm.log.debug('skipping balloon-reminding')
+        if self.vm.ram._actual != target_size:
+            with self._command_execution_lock:
+                self.vm.log.debug('sending a request to balloon to '
+                                  f'{units.binary(target_size)} from '
+                                  f'{units.binary(self.vm.ram._actual)}')
+                self._execute(f'balloon', **{'value': target_size})
+                self._expect({'return': {}})
+        else:
+            self.vm.log.debug('no ballooning needed, '
+                              f'already at {units.binary(target_size)}')
+
+
+class RAMNamespacedFeatures:
+    def __init__(self, m, min_, target, max_):
+        self._m = m
+        self._min = units.parse_binary(min_)
+        self._size = units.parse_binary(target)
+        self._target = self._size
+        self._max = units.parse_binary(max_)
+        self._actual = self._max
+        self._safeguard = 0
+
+    def set_size_async(self, new):
+        new = units.parse_binary(new)
+        if new < self._min:
+            self._m.log.warning(f'cannot set ram.size to {units.binary(new)}, '
+                                'clipping to ram.min '
+                                f'({units.binary(self._min)})')
+            new = self._min
+        if new < self._safeguard:
+            self._m.log.warning(f"won't set ram.size to {units.binary(new)}, "
+                                'clipping to ram.safeguard '
+                                f'({units.binary(self._safeguard)})')
+            new = self._safeguard
+        if new > self._max:
+            self._m.log.warning(f'cannot set ram.size to {units.binary(new)}, '
+                                'clipping to ram.max '
+                                f'({units.binary(self._max)})')
+            new = self._max
+        self._target = new
+        if self._m.qemu.live and self._actual != new:
+            self._m.log.debug(f'going to balloon to {units.binary(new)} '
+                              f'from {units.binary(self._m.ram._actual)}')
+            self._m.qemu.monitor._ram_target_changed.set()
+
+    def wait_for_ballooning(self):
+        start_time = time.time()
+        if self._actual != self._target:
+            while self._actual != self._target:
+                self._m.qemu.monitor._ram_actual_changed.wait()
+            ballooning_duration = time.time() - start_time
+            if ballooning_duration > 2.5:
+                self._m.log.warning(f'ballooning took {ballooning_duration}s, '
+                                    'increasing ram.min may help with delays')
             else:
-                self.vm.log.warning(f'NOT ballooning '
-                                    f'to {target_size} '
-                                    f'from {previous_size}')
+                self._m.log.debug(f'ballooning took {ballooning_duration}s')
+                self._m.qemu.monitor._ram_target_changed.set()
         else:
-            self.vm.log.warning(f'ballooning to {target_size} '
-                                f'from {previous_size}')
-            self._execute(f'balloon', **{'value': target_size})
-            got_return, got_right_size = False, False
-            while not (got_return and got_right_size):
-                self.vm.log.warning('ballooning: '
-                                    f'{got_return}, {got_right_size}')
-                r = self._expect(None)
-                if r == {'return': {}}:
-                    got_return = True
-                else:
-                    assert 'timestamp' in r and 'event' in r
-                    assert r['event'] == 'BALLOON_CHANGE'
-                    assert 'data' in r and 'actual' in r['data']
-                    if r['data']['actual'] == target_size:
-                        self.vm.balloon_size = r['data']['actual']
-                        got_right_size = True
-        self.vm.log.debug('done with ballooning')
-        ballooning_duration = time.time() - start_time
-        if ballooning_duration > 1:
-            self.vm.log.warning(f'ballooning took {ballooning_duration}s, '
-                                'increase ram.size.min to avoid that')
+            self._m.log.debug(f'ballooning not needed')
+
+    @property
+    def min(self):
+        return self._min
+
+    @min.setter
+    def min(self, new):
+        new = units.parse_binary(new)
+        if new < self._safeguard:
+            self._m.log.warning(f"won't set ram.min to {units.binary(new)}, "
+                                'clipping to ram.safeguard '
+                                f'({units.binary(self._safeguard)})')
+            new = self._safeguard
+        if new > self._max:
+            self._m.log.warning(f'cannot set ram.min to {units.binary(new)}, '
+                                'clipping to ram.max '
+                                f'({units.binary(self._max)})')
+            new = self._max
+        self._m.log.debug(f'setting ram.min to {units.binary(new)}')
+        self._min = new
+        if self._target < new:
+            self._m.log.debug(f'bumping ram.size to {units.binary(new)} '
+                              'along with ram.min')
+            self.size = new
+
+    @property
+    def size(self):
+        return self._target
+
+    @size.setter
+    def size(self, new):
+        self.set_size_async(new)
+        if self._m.qemu.live:
+            self.wait_for_ballooning()  # sync if up, async best-effort if down
+
+    @property
+    def max(self):
+        return self._max
+
+    @max.setter
+    def max(self, new):
+        self._m.log.error('cannot change ram.max dynamically, '
+                          'use `backend.qemu --ram-max=100500M + ...`')
+        return
+
+    @property
+    def safeguard(self):
+        return self._safeguard
+
+    @safeguard.setter
+    def safeguard(self, new):
+        self._safeguard = units.parse_binary(new)
+
+    @property
+    def actual(self):
+        return self._actual
+
+    @contextlib.contextmanager  # with m, m.ram('+2G'): ...
+    def __call__(self, size, wait=True, wait_post=True):
+        if isinstance(size, str) and size and size[0] in '+-':
+            new_size = self.size + units.parse_binary(size)
+        if isinstance(size, str) and size and size.startswith('>='):
+            new_size = max(self.size, units.parse_binary(size[2:]))
         else:
-            self.vm.log.debug(f'ballooning took {ballooning_duration}s')
+            new_size = units.parse_binary(size)
+
+        old_size = self.size
+        if wait:
+            self.size = new_size
+        else:
+            self.set_size_async(new_size)
+        yield
+        if wait_post:
+            self.size = old_size
+        else:
+            self.set_size_async(old_size)
 
 
 class SharedDirectory:
