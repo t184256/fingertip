@@ -6,7 +6,8 @@ import fingertip
 
 def setup(m):
     with m:
-        m.console.sendline("echo '>'pre-sleep; sleep 2; echo '>'post-sleep")
+        # yes, 5 sec is a lot, but ballooning down VM RAM might be slow
+        m.console.sendline("echo '>'pre-sleep; sleep 5; echo '>'post-sleep")
         m.console.expect_exact('>pre-sleep')
         return m
 

@@ -17,6 +17,7 @@ local-hostname: {HOSTNAME}
 
 USER_TEMPLATE = '''
 #cloud-config
+fqdn: {FQDN}
 final_message: cloud-config final message
 ssh_authorized_keys:
   - {SSH_PUBKEY}
@@ -91,6 +92,8 @@ def main(m=None, url=None):
         m.log.debug(f'm.prompt = {repr(m.prompt)}')
         m.console.sendline('')
         m.console.expect_exact(m.prompt)
+
+        m.ram.safeguard = '512M'  # sane for 2020, and it's overrideable anyway
 
         def login(username='root', password='fingertip'):
             m.console.expect(f'login: ')
