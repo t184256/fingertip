@@ -634,9 +634,9 @@ class SSH:
         linebreak = ord(b'\n')
         while True:
             sel.select(timeout=10)
-            if channel.recv_ready():
-                r = channel.recv(65536)
-                last_out_time = time.time()
+            activity = False
+            while channel.recv_ready():
+                r = channel.recv(16384)
                 out += r
                 out_buf += r
                 if linebreak in r:
@@ -644,9 +644,9 @@ class SSH:
                     for out_line in out_lines[:-1]:
                         m_log(log.strip_control_sequences(out_line))
                     out_buf = out_lines[-1]
-            elif channel.recv_stderr_ready():
-                r = channel.recv_stderr(65536)
-                last_out_time = time.time()
+                activity = True
+            while channel.recv_stderr_ready():
+                r = channel.recv_stderr(16384)
                 err += r
                 err_buf += r
                 if linebreak in r:
@@ -654,9 +654,12 @@ class SSH:
                     for err_line in err_lines[:-1]:
                         m_log(log.strip_control_sequences(err_line))
                     err_buf = err_lines[-1]
-            elif channel.exit_status_ready():
-                return out, err
+                activity = True
+            if activity:
+                last_out_time = time.time()
             else:
+                if channel.exit_status_ready():
+                    return out, err
                 new_silence_min = int(time.time() - last_out_time) // 60
                 if new_silence_min > silence_min:
                     silence_min = new_silence_min
