@@ -14,8 +14,6 @@ import re
 import sys
 import threading
 
-import colorlog
-
 from fingertip.util import path, reflink
 
 
@@ -23,25 +21,28 @@ _DISABLE_LINE_WRAP = '\x1b[?7l'
 _ENABLE_LINE_WRAP = '\x1b[?7h'
 _ERASE = '\x1b[K'
 _REWIND = '\x1b[1000D'  # hope nobody's term is wider than 1000 cols
-
-_COLORS = {'DEBUG': 'blue', 'WARNING': 'yellow',
-           'ERROR': 'red', 'CRITICAL': 'red,bg_white'}
+_RESET = '\033[0m'
 DEBUG = os.getenv('FINGERTIP_DEBUG') == '1'
-_FMT = '%(reset)s%(log_color)s%(name)s: %(message)s%(reset)s'
+
+_STRIP = re.compile(br'\x07|'  # BEL
+                    br'\x1b[c7-8]|'
+                    br'\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
 
 def strip_control_sequences(s):
-    s = re.sub(br'\x07', b'', s)  # BEL
-    s = re.sub(br'\x1b[c7-8]', b'', s)
-    s = re.sub(br'\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', b'', s)
-    s = s.decode() if r'\x' not in repr(s.decode()) else repr(s)
-    return s
+    d = _STRIP.sub(b'', s).decode()
+    r = repr(d)
+    return r if r'\x' in r else d
 
 
-class ErasingFormatter(colorlog.ColoredFormatter):
-    def __init__(self, fmt=_FMT, erasing=False, shorten_name=False):
+class ErasingFormatter(logging.Formatter):
+    _COLORS = {logging.DEBUG: '\033[0;34m',
+               logging.WARNING: '\033[1;33m',
+               logging.ERROR: '\033[1;31m',
+               logging.CRITICAL: '\033[0;31m\033[7m'}
+
+    def __init__(self, erasing=False, shorten_name=False):
         # Adds its own newlines, handler's .terminator is supposed to be ''
-        super().__init__(fmt, log_colors=_COLORS)
         self.erasing, self.shorten_name = erasing, shorten_name
         orig_excepthook = sys.excepthook
 
@@ -51,15 +52,16 @@ class ErasingFormatter(colorlog.ColoredFormatter):
         sys.excepthook = excepthook
 
     def format(self, record):
-        format_orig = self._style._fmt
+        msg = record.msg.strip()
+        name = record.name
 
-        # record.message = strip_control_sequences(record.getMessage())
-        if hasattr(record, 'msg'):
-            record.msg = record.msg.replace('\r', '').replace('\n', r'\n')
-            record.msg = record.msg.lstrip()
+        if self.shorten_name and name.startswith('fingertip.plugins.'):
+            name = record.name[len('fingertip.plugins.'):]
 
-        if self.shorten_name and record.name.startswith('fingertip.plugins.'):
-            record.name = record.name[len('fingertip.plugins.'):]
+        result = f'{name}: {msg}'
+
+        if record.levelno in self._COLORS:
+            result = self._COLORS[record.levelno] + result + _RESET
 
         if self.erasing:
             if record.levelno < logging.WARNING:
@@ -67,14 +69,11 @@ class ErasingFormatter(colorlog.ColoredFormatter):
                 post = _ENABLE_LINE_WRAP + _REWIND
             else:
                 pre, post = _ERASE, '\n'
-            self._style._fmt = pre + self._style._fmt + post
-
-        result = super().format(record)
-        self._style._fmt = format_orig
+            return pre + result + post
         return result
 
 
-class ErasingStreamHandler(colorlog.StreamHandler):
+class ErasingStreamHandler(logging.StreamHandler):
     def __init__(self, stream=None, erasing=True, shorten_name=True):
         super().__init__(stream)
         stream = stream or sys.stderr
