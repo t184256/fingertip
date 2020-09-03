@@ -168,7 +168,9 @@ class QEMUNamespacedFeatures:
                         self.image = temp.disappearing_file(
                             '/tmp', hint='fingertip-qemu'
                         )
+                        self.vm.log.debug('copying image to /tmp...')
                         reflink.auto(self._image_to_clone, self.image)
+                        self.vm.log.debug('copying image to tmpfs completed')
                         cloned_to_tmp = True
             if not cloned_to_tmp:
                 reflink.auto(self._image_to_clone, self.image)
