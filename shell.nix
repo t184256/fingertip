@@ -61,7 +61,6 @@ in
   cachecontrol
   cloudpickle
   colorama
-  colorlog
   fasteners
   #fsmonitor
   inotify-simple

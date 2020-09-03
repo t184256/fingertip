@@ -20,7 +20,6 @@ PREINSTALL_DEPS = [
     'python3-GitPython',
     'python3-cloudpickle',
     'python3-colorama',
-    'python3-colorlog',
     'python3-devel',
     'python3-fasteners',
     'python3-inotify_simple',

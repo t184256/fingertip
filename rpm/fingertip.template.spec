@@ -21,7 +21,6 @@ Requires:	python3-CacheControl
 Requires:	python3-GitPython
 Requires:	python3-cloudpickle
 Requires:	python3-colorama
-Requires:	python3-colorlog
 Requires:	python3-fasteners
 Requires:	python3-inotify_simple
 Requires:	python3-lockfile
