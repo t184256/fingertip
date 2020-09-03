@@ -70,7 +70,7 @@ class Machine:
         assert self._state == 'spun_up'
         self._up_counter -= 1
         if not self._up_counter:
-            if not self._transient:
+            if not self._transient or exc_type:
                 # the machine needs to be spun down, will be finalized later
                 self.hooks.down.in_reverse()
                 self._state = 'spun_down'
@@ -78,8 +78,7 @@ class Machine:
                 # the machine can be dropped and finalized, fast and dirty
                 self.hooks.drop.in_reverse()
                 self._state = 'dropped'
-                if not exc_type:
-                    self._finalize()
+                self._finalize()
 
     def _finalize(self, link_as=None, name_hint=None):
         log.debug(f'finalize hint={name_hint} link_as={link_as} {self._state}')
