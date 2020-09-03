@@ -12,7 +12,12 @@ def func_and_autotag(smth, *args, **kwargs):
 
 def load_step(smth):
     if isinstance(smth, str):
-        if smth.startswith('.'):  #
+        if smth.startswith('.') and '=' in smth:
+            # this is for changing values on objects, e.g., ... + .ram.size=2G
+            chain, value = smth.split('=', 1)
+            chain = chain.split('.')[1:]
+            return make_assigner(smth.split('.')[1:], value)
+        elif smth.startswith('.'):  #
             # this is for calling methods on objects, e.g. ... + .hooks.smth
             return make_method_caller(smth.split('.')[1:])
         try:
@@ -54,3 +59,14 @@ def make_method_caller(name_chain):
             x(*args, **kwargs)
         return m
     return method_caller
+
+
+def make_assigner(name_chain, value):
+    def assigner(m):
+        with m:
+            x = m
+            for name in name_chain[:-1]:
+                x = getattr(x, name)
+            setattr(x, name_chain[-1], value)
+        return m
+    return assigner
