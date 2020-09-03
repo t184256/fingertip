@@ -629,26 +629,29 @@ class SSH:
         out, err, out_buf, err_buf = b'', b'', b'', b''
         last_out_time = time.time()
         silence_min = 0
+        linebreak = ord(b'\n')
         while True:
             sel.select(timeout=10)
             if channel.recv_ready():
-                r = channel.recv(512)
+                r = channel.recv(65536)
                 last_out_time = time.time()
                 out += r
                 out_buf += r
-                out_lines = out_buf.split(b'\n')
-                for out_line in out_lines[:-1]:
-                    m_log(log.strip_control_sequences(out_line))
-                out_buf = out_lines[-1]
+                if linebreak in r:
+                    out_lines = out_buf.split(b'\n')
+                    for out_line in out_lines[:-1]:
+                        m_log(log.strip_control_sequences(out_line))
+                    out_buf = out_lines[-1]
             elif channel.recv_stderr_ready():
-                r = channel.recv_stderr(512)
+                r = channel.recv_stderr(65536)
                 last_out_time = time.time()
                 err += r
                 err_buf += r
-                err_lines = err_buf.split(b'\n')
-                for err_line in err_lines[:-1]:
-                    m_log(log.strip_control_sequences(err_line))
-                err_buf = err_lines[-1]
+                if linebreak in r:
+                    err_lines = err_buf.split(b'\n')
+                    for err_line in err_lines[:-1]:
+                        m_log(log.strip_control_sequences(err_line))
+                    err_buf = err_lines[-1]
             elif channel.exit_status_ready():
                 return out, err
             else:
