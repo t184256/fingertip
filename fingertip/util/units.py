@@ -26,7 +26,10 @@ def parse_binary(value):
 
 def binary(value):
     value = int(value)
+    if not value:
+        return '0'
+    r = str(value)
     for suffix, suffix_value in BINARY.items():
-        if value >= suffix_value:
-            break
-    return f'{int(value / suffix_value)}{suffix}'
+        if value // suffix_value * suffix_value == value:
+            r = f'{int(value / suffix_value)}{suffix}'
+    return r
