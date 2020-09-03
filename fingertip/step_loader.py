@@ -16,7 +16,7 @@ def load_step(smth):
             # this is for changing values on objects, e.g., ... + .ram.size=2G
             chain, value = smth.split('=', 1)
             chain = chain.split('.')[1:]
-            return make_assigner(smth.split('.')[1:], value)
+            return make_assigner(chain, value)
         elif smth.startswith('.'):  #
             # this is for calling methods on objects, e.g. ... + .hooks.smth
             return make_method_caller(smth.split('.')[1:])
