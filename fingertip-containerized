@@ -2,7 +2,7 @@
 
 set -ue
 
-DISTRO=fedora:31
+DISTRO=fedora:32
 FINGERTIPDIR=$(dirname "$0")
 
 if command -v podman > /dev/null; then

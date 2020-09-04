@@ -1,4 +1,4 @@
-FROM fedora:31
+FROM fedora:32
 
 RUN dnf -y update && dnf clean all
 RUN dnf -y --setopt=install_weak_deps=False --best install \
@@ -10,7 +10,7 @@ RUN dnf -y --setopt=install_weak_deps=False --best install \
 	python3-cloudpickle \
 	python3-colorama \
 	python3-fasteners \
-	python3-fsmonitor \
+	python3-inotify_simple \
 	python3-lockfile \
 	python3-paramiko \
 	python3-pexpect \
