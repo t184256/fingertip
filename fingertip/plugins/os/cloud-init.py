@@ -52,6 +52,7 @@ def main(m=None, url=None):
                              stdout=logging.INFO, stderr=logging.ERROR)
     run(['qemu-img', 'resize', image_file, m.qemu.disk_size], check=True)
     m.qemu._image_to_clone = image_file
+    m.qemu.virtio_scsi = True  # in case it's Linux <5
 
     with m:
         hostname = url.rsplit('/', 1)[-1].rsplit('.', 1)[0].replace('.', '_')

@@ -128,6 +128,7 @@ class QEMUNamespacedFeatures:
         self.disk_size = disk_size
         self.custom_args = custom_args
         self.image, self._image_to_clone = None, None
+        self.virtio_scsi = False  # flip before OS install for TRIM on Linux<5
         self._qemu = f'qemu-system-{self.vm.arch}'
 
     def run(self, load=SNAPSHOT_BASE_NAME, guest_forwards=[], extra_args=[]):
@@ -175,8 +176,14 @@ class QEMUNamespacedFeatures:
             if not cloned_to_tmp:
                 reflink.auto(self._image_to_clone, self.image)
             self._image_to_clone = None
-        run_args += ['-drive',
-                     f'file={self.image},cache=unsafe,if=virtio,discard=unmap']
+        if self.virtio_scsi:
+            run_args += ['-device', 'virtio-scsi-pci',
+                         '-device', 'scsi-hd,drive=hd',
+                         '-drive', f'file={self.image},cache=unsafe,'
+                                   'if=none,id=hd,discard=unmap']
+        else:
+            run_args += ['-drive', f'file={self.image},cache=unsafe,'
+                                   'if=virtio,discard=unmap']
 
         run_args += ['-m', str(self.vm.ram.max // 2**20)]
 
