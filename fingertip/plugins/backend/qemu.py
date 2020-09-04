@@ -481,8 +481,8 @@ class RAMNamespacedFeatures:
             self._m.qemu.monitor._ram_target_changed.set()
 
     def wait_for_ballooning(self):
-        start_time = time.time()
         if self._actual != self._target:
+            start_time = time.time()
             while self._actual != self._target:
                 self._m.qemu.monitor._ram_actual_changed.wait()
                 self._m.qemu.monitor._ram_actual_changed.clear()
