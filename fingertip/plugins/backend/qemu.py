@@ -140,7 +140,7 @@ class QEMUNamespacedFeatures:
         run_args += ['-qmp', (f'tcp:127.0.0.1:{self.monitor.port},'
                               'server,nowait,nodelay')]
 
-        self.vm.ssh.port = self.vm.ssh.port or free_port.find()
+        self.vm.ssh.port = free_port.find()
         self.vm.shared_directory = SharedDirectory(self.vm)
         self.vm.exec = self.vm.ssh.exec
         host_forwards = [(self.vm.ssh.port, 22)] + self.vm._host_forwards
