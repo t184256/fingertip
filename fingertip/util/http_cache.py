@@ -82,6 +82,7 @@ class HTTPCache:
                 self.end_headers()
 
             def _serve(self, uri, headers, meth='GET'):
+                uri = uri.lstrip('/')
                 if uri in http_cache._mocks:
                     return self._serve_http(uri, headers, meth, cache=False)
                 sources = saviour_sources()
