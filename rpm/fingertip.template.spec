@@ -127,11 +127,13 @@ getent group fingertip >/dev/null || groupadd -r fingertip
 %{_sbindir}/fingertip-shared-cache-use
 
 %post shared-cache
-chmod -R 2775 %{statedir}
-chgrp -R fingertip %{statedir}
-setfacl -dR --set u::rwx,g::rwx,o::- %{statedir}
-semanage fcontext -a -t httpd_sys_content_t "%{statedir}/shared_cache(/.*)?"
-restorecon -v %{statedir}/shared_cache
+if [[ $1 == 1 ]]; then
+    chmod -R 2775 %{statedir}
+    chgrp -R fingertip %{statedir}
+    setfacl -dR --set u::rwx,g::rwx,o::- %{statedir}
+    semanage fcontext -a -t httpd_sys_content_t "%{statedir}/shared_cache(/.*)?"
+    restorecon -v %{statedir}/shared_cache
+fi
 
 # templated from build.sh
 %changelog
