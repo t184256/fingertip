@@ -144,7 +144,7 @@ def _symlink(src, dst):
     os.replace(tmp, dst)
 
 
-def mirror(config, *what_to_mirror):
+def mirror(config, *what_to_mirror, deduplicate=True):
     total_failures = []
     failures = collections.defaultdict(list)
 
@@ -240,10 +240,11 @@ def mirror(config, *what_to_mirror):
                 sublog.info('removing now obsolete snapshot...')
                 _remove(temp)
 
-            try:
-                deduplicate(sublog, resource_name, timeout=1)
-            except lock.LockTimeout:
-                log.warning('skipped deduplication, db was locked')
+            if deduplicate:
+                try:
+                    deduplicate(sublog, resource_name, timeout=1)
+                except lock.LockTimeout:
+                    log.warning('skipped deduplication, db was locked')
     if total_failures:
         fingertip.util.log.error(f'failed: {", ".join(total_failures)}')
         raise SystemExit()
