@@ -242,7 +242,7 @@ def mirror(config, *what_to_mirror, deduplicate=True):
 
             if deduplicate:
                 try:
-                    deduplicate(sublog, resource_name, timeout=1)
+                    _deduplicate(sublog, resource_name, timeout=1)
                 except lock.LockTimeout:
                     log.warning('skipped deduplication, db was locked')
     if total_failures:
@@ -261,3 +261,6 @@ def deduplicate(log, *subpath, timeout=None):
                  '--hashfile', path.saviour('.duperemove.hashfile'),
                  '-hdr', path.saviour('_', *subpath)])
         assert r.returncode in (0, 22)  # nothing to deduplicate
+
+
+_deduplicate = deduplicate
