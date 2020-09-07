@@ -158,7 +158,11 @@ def mirror(config, *what_to_mirror, deduplicate=True):
                           if any((fnmatch.fnmatch(k, req)
                                   for req in what_to_mirror))]
 
-    for resource_name in what_to_mirror or whats.keys():
+    if not what_to_mirror:
+        log.error(f'nothing to mirror')
+        return
+
+    for resource_name in what_to_mirror:
         s = whats[resource_name]
         log.debug(f'processing {resource_name}...')
 
