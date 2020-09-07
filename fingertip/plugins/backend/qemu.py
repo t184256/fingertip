@@ -556,7 +556,6 @@ class RAMNamespacedFeatures:
     def __call__(self, size, wait=True, wait_post=True):
         if isinstance(size, str) and size and size[0] in '+-':
             new_size = self.size + units.parse_binary(size)
-            log.warning(f'{new_size}')
         elif isinstance(size, str) and size and size.startswith('>='):
             new_size = max(self.size, units.parse_binary(size[2:]))
         else:
