@@ -92,7 +92,7 @@ def method_reposync(log, src, base, dst,
          f'--download-path={dst}', '--repoid=repo',
          '--delete', '--remote-time'] +
         [f'--arch={arch}' for arch in arches] +
-        (['--download-metadata'] if not metadata != 'generate' else []) +
+        (['--download-metadata'] if metadata != 'generate' else []) +
         (['--source'] if source else []) +
         options,
         check=True)
