@@ -244,11 +244,11 @@ def mirror(config, *what_to_mirror, deduplicate=True):
                 sublog.info('removing now obsolete snapshot...')
                 _remove(temp)
 
-            if deduplicate:
-                try:
-                    _deduplicate(sublog, resource_name, timeout=1)
-                except lock.LockTimeout:
-                    log.warning('skipped deduplication, db was locked')
+        if deduplicate:
+            try:
+                _deduplicate(sublog, resource_name, timeout=1)
+            except lock.LockTimeout:
+                log.warning('skipped deduplication, db was locked')
     if total_failures:
         fingertip.util.log.error(f'failed: {", ".join(total_failures)}')
         raise SystemExit()
