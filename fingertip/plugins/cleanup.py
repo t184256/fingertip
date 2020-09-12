@@ -82,7 +82,7 @@ def machines(expired_for=0):
 
 
 def periodic():
-    machines('12h')
+    machines('6h')
 
 
 def everything():
