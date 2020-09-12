@@ -41,7 +41,7 @@ from fingertip.util import lock, log, path, reflink, temp
 
 
 def _remove(tgt):
-    assert tgt.startswith(path.SAVIOUR)
+    assert tgt.startswith(os.path.realpath(path.SAVIOUR))
     if not os.path.exists(tgt):
         pass
     elif os.path.isdir(tgt):
@@ -195,13 +195,13 @@ def mirror(config, *what_to_mirror, deduplicate=True):
         symlink = path.saviour(url.rstrip('/'))
         # usually symlink points to data, but while we're working on it,
         # it temporarily points to a consistent snapshot of it named `snap`
-        data = path.saviour('_', resource_name, 'data')
-        snap = path.saviour('_', resource_name, 'snap')
-        temp = path.saviour('_', resource_name, 'temp')
+        data = os.path.realpath(path.saviour('_', resource_name, 'data'))
+        snap = os.path.realpath(path.saviour('_', resource_name, 'snap'))
+        temp = os.path.realpath(path.saviour('_', resource_name, 'temp'))
         lockfile = path.saviour('_', resource_name) + '-lock'
-        assert data.startswith(path.SAVIOUR)
-        assert snap.startswith(path.SAVIOUR)
-        assert temp.startswith(path.SAVIOUR)
+        assert data.startswith(os.path.realpath(path.SAVIOUR))
+        assert snap.startswith(os.path.realpath(path.SAVIOUR))
+        assert temp.startswith(os.path.realpath(path.SAVIOUR))
 
         sublog = log.Sublogger(f'{method} {resource_name}')
         sublog.info('locking...')
