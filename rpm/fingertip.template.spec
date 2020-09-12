@@ -86,6 +86,7 @@ install -m 755 rpm/fingertip-shared-cache-setup %{buildroot}%{_libexecdir}/finge
 
 install -d -m 755 %{buildroot}%{statedir}
 install -d -m 2755 %{buildroot}%{statedir}/shared_cache
+install -d -m 2755 %{buildroot}%{statedir}/shared_cache/saviour
 
 %files
 %license COPYING
@@ -120,6 +121,7 @@ getent group fingertip >/dev/null || groupadd -r fingertip
 %files shared-cache
 %{statedir}
 %attr(2775,root,fingertip) %{statedir}/shared_cache
+%attr(2775,root,fingertip) %{statedir}/shared_cache/saviour
 %{_libexecdir}/fingertip/shared-cache-setup
 %{_unitdir}/fingertip-shared-cache.service
 %{_sbindir}/fingertip-shared-cache-demolish
@@ -131,7 +133,7 @@ if [[ $1 == 1 ]]; then
     chmod -R 2775 %{statedir}
     chgrp -R fingertip %{statedir}
     setfacl -dR --set u::rwx,g::rwx,o::- %{statedir}
-    semanage fcontext -a -t httpd_sys_content_t "%{statedir}/shared_cache(/.*)?"
+    semanage fcontext -a -t httpd_sys_content_t "%{statedir}/shared_cache/saviour(/.*)?"
     restorecon -v %{statedir}/shared_cache
 fi
 
