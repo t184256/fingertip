@@ -150,6 +150,10 @@ def mirror(config, *what_to_mirror, deduplicate=True):
 
     with open(config) as f:
         config = ruamel.yaml.YAML(typ='safe').load(f)
+    if 'mirror' in config and not config['mirror']:
+        log.warning('mirroring is disabled in config')
+        return
+
     hows, whats = config['how'], config['what']
     if not what_to_mirror:
         what_to_mirror = whats.keys()
