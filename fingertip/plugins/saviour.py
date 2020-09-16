@@ -144,7 +144,7 @@ def _symlink(src, dst):
     os.replace(tmp, dst)
 
 
-def mirror(config, *what_to_mirror, deduplicate=True):
+def mirror(config, *what_to_mirror, deduplicate=None):
     total_failures = []
     failures = collections.defaultdict(list)
 
@@ -153,6 +153,9 @@ def mirror(config, *what_to_mirror, deduplicate=True):
     if 'mirror' in config and not config['mirror']:
         log.warning('mirroring is disabled in config')
         return
+
+    if deduplicate is None:
+        deduplicate = config.get('deduplicate', True)
 
     hows, whats = config['how'], config['what']
     if not what_to_mirror:
@@ -189,7 +192,7 @@ def mirror(config, *what_to_mirror, deduplicate=True):
         sources = (how['sources'] if 'sources' in how else [how['url']])
         sources = [s + suffix for s in sources]
         extra_args = {k: v for k, v in how.items()
-                      if k not in ('url', 'sources', 'method')}
+                      if k not in ('url', 'sources', 'method', 'deduplicate')}
 
         if f'method_{method}' not in globals():
             log.error(f'unsupported method {method}')
