@@ -153,10 +153,11 @@ class HTTPCache:
                     r = m_func(uri if '://' in uri else 'http://self' + uri,
                                headers=headers, allow_redirects=False)
                     data = r.content
-                    length = int(r.headers.get('Content-Length', 0))
-                    if len(data) != length:
-                        data = hack_around_unpacking(uri, headers, data)
-                    assert len(data) == length
+                    if 'Content-Length' in r.headers:
+                        length = int(r.headers['Content-Length'])
+                        if len(data) != length:
+                            data = hack_around_unpacking(uri, headers, data)
+                        assert len(data) == length
                 except BrokenPipeError:
                     error = f'Upwards broken pipe for {meth} {uri}'
                 except ConnectionResetError:
@@ -176,7 +177,7 @@ class HTTPCache:
                         log.error(f'{error} (out of retries)')
                         self.send_error(http.HTTPStatus.SERVICE_UNAVAILABLE)
                         return
-                log.debug(f'{meth} {basename} fetched {length} ({uri})')
+                log.debug(f'{meth} {basename} fetched {r.status_code} ({uri})')
                 try:
                     self._status_and_headers(r.status_code, r.headers)
                     if meth == 'GET':
