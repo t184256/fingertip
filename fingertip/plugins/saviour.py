@@ -154,9 +154,6 @@ def mirror(config, *what_to_mirror, deduplicate=None):
         log.warning('mirroring is disabled in config')
         return
 
-    if deduplicate is None:
-        deduplicate = config.get('deduplicate', True)
-
     hows, whats = config['how'], config['what']
     if not what_to_mirror:
         what_to_mirror = whats.keys()
@@ -251,11 +248,11 @@ def mirror(config, *what_to_mirror, deduplicate=None):
                 sublog.info('removing now obsolete snapshot...')
                 _remove(temp)
 
-        if deduplicate:
-            try:
-                _deduplicate(sublog, resource_name, timeout=1)
-            except lock.LockTimeout:
-                log.warning('skipped deduplication, db was locked')
+            if how.get('deduplicate', True) and deduplicate is not False:
+                try:
+                    _deduplicate(sublog, resource_name, timeout=1)
+                except lock.LockTimeout:
+                    log.warning('skipped deduplication, db was locked')
     if total_failures:
         fingertip.util.log.error(f'failed: {", ".join(total_failures)}')
         raise SystemExit()
