@@ -122,6 +122,23 @@ def method_command(log, src, base, dst, command='false', reuse=True):
         check=True)
 
 
+def validate_rpm_repository(log, _unused_src, dst):
+    repo_desc_for_mirroring = textwrap.dedent(f'''
+        [repo]
+        baseurl = {dst}
+        name = repo
+        enabled = 1
+        gpgcheck = 0
+    ''')
+    repodir = temp.disappearing_dir()
+    with open(os.path.join(repodir, f'whatever.repo'), 'w') as f:
+        f.write(repo_desc_for_mirroring)
+    run = log.pipe_powered(subprocess.run,
+                           stdout=logging.INFO, stderr=logging.WARNING)
+    run(['dnf', f'--setopt=reposdir={repodir}', '--repoid=repo', '--refresh',
+         '--setopt=skip_if_unavailable=0', 'makecache'], check=True)
+
+
 @fingertip.transient
 def main(*args):
     if len(args) >= 1:
@@ -189,7 +206,8 @@ def mirror(config, *what_to_mirror, deduplicate=None):
         sources = (how['sources'] if 'sources' in how else [how['url']])
         sources = [s + suffix for s in sources]
         extra_args = {k: v for k, v in how.items()
-                      if k not in ('url', 'sources', 'method', 'deduplicate')}
+                      if k not in ('url', 'sources', 'method', 'validate',
+                                   'deduplicate')}
 
         if f'method_{method}' not in globals():
             log.error(f'unsupported method {method}')
@@ -230,6 +248,11 @@ def mirror(config, *what_to_mirror, deduplicate=None):
                 try:
                     meth(sublog, source, snap, data, **extra_args)
                     assert os.path.exists(data)
+                    if 'validate' in how:
+                        sublog.info(f'validating with {how["validate"]}...')
+                        validator = globals()[f'validate_{how["validate"]}']
+                        validator(sublog, source, data)
+                        sublog.info('validated')
                     break
                 except Exception as _:
                     traceback.print_exc()

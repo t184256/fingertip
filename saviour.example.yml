@@ -23,6 +23,7 @@ how:
     method: reposync
     sources:
       - https://download.copr.fedorainfracloud.org/results
+    validate: rpm_repository
   fedora-pkgs:
     url: http://src.fedoraproject.org/rpms
     method: git
