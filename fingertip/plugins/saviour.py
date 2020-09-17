@@ -266,6 +266,7 @@ def deduplicate(log, *subpath, timeout=None):
         run = log.pipe_powered(subprocess.run,
                                stdout=logging.INFO, stderr=logging.WARNING)
         r = run(['duperemove', '--dedupe-options=nofiemap',
+                 '--io-threads=2', '--cpu-threads=2',
                  '--hashfile', path.saviour('.duperemove.hashfile'),
                  '-hdr', path.saviour('_', *subpath)])
         assert r.returncode in (0, 22)  # nothing to deduplicate
