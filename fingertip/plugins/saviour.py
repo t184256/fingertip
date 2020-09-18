@@ -25,6 +25,7 @@ Requires git and rsync, also dnf for dnf method.
 
 import collections
 import fnmatch
+import glob
 import logging
 import os
 import shutil
@@ -134,9 +135,18 @@ def validate_rpm_repository(log, _unused_src, dst):
     with open(os.path.join(repodir, f'whatever.repo'), 'w') as f:
         f.write(repo_desc_for_mirroring)
     run = log.pipe_powered(subprocess.run,
-                           stdout=logging.INFO, stderr=logging.WARNING)
+                           stdout=logging.DEBUG, stderr=logging.WARNING)
     run(['dnf', f'--setopt=reposdir={repodir}', '--repoid=repo', '--refresh',
          '--setopt=skip_if_unavailable=0', 'makecache'], check=True)
+
+
+def validate_rpm_repositories(log, _unused_src, dst):
+    indicator = 'repodata/repomd.xml'
+    g = os.path.join(dst, '**', indicator)
+    repo_paths = [p[:-1-len(indicator)] for p in glob.glob(g, recursive=True)]
+    assert repo_paths
+    for p in repo_paths:
+        validate_rpm_repository(log, _unused_src, p)
 
 
 @fingertip.transient
@@ -275,7 +285,8 @@ def mirror(config, *what_to_mirror, deduplicate=None):
             try:
                 _deduplicate(sublog, resource_name, timeout=1)
             except lock.LockTimeout:
-                log.warning('skipped deduplication, db was locked')
+                log.warning(f'skipped deduplication of {resource_name}, '
+                            'db was locked')
     if total_failures:
         fingertip.util.log.error(f'failed: {", ".join(total_failures)}')
         raise SystemExit()
@@ -285,10 +296,13 @@ def mirror(config, *what_to_mirror, deduplicate=None):
 def deduplicate(log, *subpath, timeout=None):
     log.info('locking the deduplication db...')
     with lock.Lock(path.saviour('.duperemove.hashfile-lock'), timeout=timeout):
-        log.info('deduplicating...')
+        log.info('deduplicating...' if not subpath else
+                 f'deduplicating {subpath[-1]}')
         run = log.pipe_powered(subprocess.run,
                                stdout=logging.INFO, stderr=logging.WARNING)
         r = run(['duperemove', '--dedupe-options=nofiemap',
+                 # NOTE: --exclude _/*/snap/ and _/*/temp
+                 # when duperemove with --exclude gets released
                  '--io-threads=2', '--cpu-threads=2',
                  '--hashfile', path.saviour('.duperemove.hashfile'),
                  '-hdr', path.saviour('_', *subpath)])
