@@ -147,5 +147,6 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
         m.hooks.timesync.append(lambda: m('hwclock -s'))
 
         m.fedora = version
+        m.dist_git_branch = f'f{version}' if version != 'rawhide' else 'master'
 
         return m
