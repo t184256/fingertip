@@ -3,7 +3,7 @@
 set -ue
 
 DISTRO=fedora:32
-FINGERTIPDIR=$(dirname "$0")
+FINGERTIPDIR=$(realpath $(dirname "$0"))
 
 if command -v podman > /dev/null; then
 	BACKEND=podman
@@ -18,7 +18,7 @@ if [[ -n "${FINGERTIP_DEBUG+x}" ]] && [[ "$FINGERTIP_DEBUG" == 1 ]]; then
 	EXTRA_OPTS="-e FINGERTIP_DEBUG=1"
 fi
 
-mkdir -p ~/.config/fingertip
+mkdir -p ~/.cache/fingertip
 
 MARKER=$FINGERTIPDIR/.$BACKEND-build-marker
 if [[ ! -e "$MARKER" ||  -n "$(find "$FINGERTIPDIR"/* -newer "$MARKER")" ]]
@@ -30,7 +30,7 @@ then
 	fi
 	echo "Building a fingertip image for $BACKEND..."
 	pushd "$FINGERTIPDIR"
-	$BACKEND build -t fingertip "$FINGERTIPDIR"
+	$BACKEND build -t fingertip .
 	popd
 	touch "$MARKER"
 fi
