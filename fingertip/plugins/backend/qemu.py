@@ -588,7 +588,7 @@ class SharedDirectory:
     def __exit__(self, *_):
         self.mount_count -= 1
         if not self.mount_count:
-            self.m('umount /shared')
+            self.m('umount /shared || ! mountpoint /shared')
 
 
 class SSH:
