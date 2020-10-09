@@ -108,6 +108,25 @@ class Repo(git.Repo, lock.Lock):
         lock.Lock.__exit__(self, *args)
 
 
+class Checkout(git.Repo, lock.Lock):
+    def __init__(self, url, *path_components, enough_to_have=None):
+        with Repo(url, *path_components, enough_to_have=enough_to_have) as r:
+            cache_path = path.downloads('git', *path_components, makedirs=True)
+            self.path = temp.disappearing_dir(os.path.dirname(cache_path),
+                                              path_components[-1])
+            self.self_destruct = False
+            git.Repo.clone_from(r.path, self.path)
+        git.Repo.__init__(self, self.path)
+
+    def __enter__(self):
+        git.Repo.__enter__(self)
+        return self
+
+    def __exit__(self, *args):
+        git.Repo.__exit__(self, *args)
+        _remove(self.path)
+
+
 def upload_clone(m, url, path_in_m, rev=None, rev_is_enough=True):
     assert hasattr(m, 'ssh')
     with m:
