@@ -155,8 +155,6 @@ def main(*args):
         subcmd, *args = args
         if subcmd == 'mirror':
             return mirror(*args)
-        if subcmd == 'deduplicate' and not args:
-            return deduplicate(log.Sublogger('deduplicate'))
     log.error('usage: ')
     log.error('    fingertip saviour mirror <config-file> [<what-to-mirror>]')
     log.error('    fingertip saviour deduplicate')
@@ -198,15 +196,15 @@ def mirror(config, *what_to_mirror, deduplicate=None):
         log.debug(f'processing {resource_name}...')
 
         if s is None:
-            how, suffix = resource_name, ''
+            how_name, suffix = resource_name, ''
         elif '/' in s:
-            how, suffix = s.split('/', 1)
+            how_name, suffix = s.split('/', 1)
             suffix = '/' + suffix
         else:
-            how, suffix = s, ''
+            how_name, suffix = s, ''
 
         try:
-            how = hows[how]
+            how = hows[how_name]
         except KeyError:
             log.error(f'missing how section on {how}')
             raise SystemExit()
@@ -283,7 +281,8 @@ def mirror(config, *what_to_mirror, deduplicate=None):
 
         if how.get('deduplicate', True) and deduplicate is not False:
             try:
-                _deduplicate(sublog, resource_name, timeout=1)
+                db_name = how.get('deduplicate', how_name)
+                _deduplicate(sublog, db_name, resource_name, timeout=1)
             except lock.LockTimeout:
                 log.warning(f'skipped deduplication of {resource_name}, '
                             'db was locked')
@@ -293,20 +292,18 @@ def mirror(config, *what_to_mirror, deduplicate=None):
     log.info('saviour has completed mirroring')
 
 
-def deduplicate(log, *subpath, timeout=None):
+def _deduplicate(log, db_name, resource_name, timeout=None):
     log.info('locking the deduplication db...')
-    with lock.Lock(path.saviour('.duperemove.hashfile-lock'), timeout=timeout):
-        log.info('deduplicating...' if not subpath else
-                 f'deduplicating {subpath[-1]}')
+    db_file = path.saviour('.duperemove', 'hashfiles', db_name, makedirs=True)
+    db_lock = path.saviour('.duperemove', 'locks', db_name, makedirs=True)
+    with lock.Lock(db_lock, timeout=timeout):
+        log.info(f'deduplicating {resource_name} ({db_name})')
         run = log.pipe_powered(subprocess.run,
                                stdout=logging.INFO, stderr=logging.WARNING)
         r = run(['duperemove', '--dedupe-options=nofiemap',
-                 # NOTE: --exclude _/*/snap/ and _/*/temp
+                 # NOTE: --exclude snap and temp
                  # when duperemove with --exclude gets released
                  '--io-threads=2', '--cpu-threads=2',
-                 '--hashfile', path.saviour('.duperemove.hashfile'),
-                 '-hdr', path.saviour('_', *subpath)])
+                 '--hashfile', db_file,
+                 '-hdr', path.saviour('_', resource_name)])
         assert r.returncode in (0, 22)  # nothing to deduplicate
-
-
-_deduplicate = deduplicate
