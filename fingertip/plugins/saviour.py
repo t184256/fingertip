@@ -286,7 +286,7 @@ def mirror(config, *what_to_mirror, deduplicate=None):
                 _deduplicate(sublog, db_name, resource_name, timeout=1)
             except lock.LockTimeout:
                 log.warning(f'skipped deduplication of {resource_name}, '
-                            'db {db_name} was locked')
+                            f'db {db_name} was locked')
     if total_failures:
         fingertip.util.log.error(f'failed: {", ".join(total_failures)}')
         raise SystemExit()
