@@ -3,52 +3,54 @@
 
 import os
 import shutil
+import tempfile
 import time
 
 import fasteners
 
 import fingertip.expiration
 import fingertip.machine
-from fingertip.util import log, path, units
+from fingertip.util import log, path, temp, units
 
 
 @fingertip.transient
-def main(what=None, older_than=0):
+def main(what=None, *args, **kwargs):
     if what == 'everything':
         return everything()
     if what == 'periodic':
         return periodic()
-    elif what in ('downloads', 'logs', 'machines'):
-        return globals()[what](older_than)
+    elif what in ('downloads', 'logs', 'machines', 'tempfiles'):
+        return globals()[what](*args, **kwargs)
     log.error('usage: ')
     log.error('    fingertip cleanup downloads [<older-than>]')
     log.error('    fingertip cleanup logs [<older-than>]')
     log.error('    fingertip cleanup machines [<expired-for>|all]')
+    log.error('    fingertip cleanup tempfiles [<older-than> [<location]]')
     log.error('    fingertip cleanup everything')
     log.error('    fingertip cleanup periodic')
     raise SystemExit()
 
 
 def downloads(older_than=0):
-    _cleanup_dir(path.DOWNLOADS, older_than, lambda f: os.stat(f).st_ctime)
+    cutoff_time = time.time() - units.parse_time_interval(older_than)
+    _cleanup_dir(path.DOWNLOADS, lambda f: os.stat(f).st_ctime >= cutoff_time)
 
 
 def logs(older_than=0):
-    _cleanup_dir(path.LOGS, older_than, lambda f: os.stat(f).st_ctime)
-
-
-def _cleanup_dir(dirpath, older_than, time_func):
     cutoff_time = time.time() - units.parse_time_interval(older_than)
+    _cleanup_dir(path.LOGS, lambda f: os.stat(f).st_ctime >= cutoff_time)
+
+
+def _cleanup_dir(dirpath, preserve_func):
     for root, dirs, files in os.walk(dirpath, topdown=False):
         for f in (os.path.join(root, x) for x in files):
             assert os.path.realpath(f).startswith(os.path.realpath(dirpath))
-            if time_func(f) <= cutoff_time:
+            if not preserve_func(f):
                 log.info(f'removing {os.path.realpath(f)}')
                 os.unlink(f)
         for d in (os.path.join(root, x) for x in dirs):
             assert os.path.realpath(d).startswith(os.path.realpath(dirpath))
             try:
-                log.info(f'removing {os.path.realpath(d)}')
                 os.rmdir(d)
             except OSError:  # directory not empty => ignore
                 pass
@@ -81,11 +83,22 @@ def machines(expired_for=0):
             lock.release()
 
 
+def tempfiles(older_than='6h', location=None):
+    location = location or tempfile.gettempdir()
+    cutoff_time = time.time() - units.parse_time_interval(older_than)
+    _cleanup_dir(path.LOGS, lambda f: (os.stat(f).st_ctime >= cutoff_time or
+                                       temp.AUTOREMOVE_PREFIX not in f))
+
+
 def periodic():
     machines('6h')
+    tempfiles()
+    tempfiles(location='/tmp')  # backend.qemu uses /tmp specifically
 
 
 def everything():
     downloads()
     logs()
     machines('all')
+    tempfiles(0)
+    tempfiles(0, '/tmp')  # backend.qemu uses /tmp specifically
