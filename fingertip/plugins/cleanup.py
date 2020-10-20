@@ -92,6 +92,8 @@ def tempfiles(older_than='6h', location=None):
 
 def periodic():
     machines('6h')
+    downloads('30d')
+    logs('30d')
     tempfiles()
     tempfiles(location='/tmp')  # backend.qemu uses /tmp specifically
 
