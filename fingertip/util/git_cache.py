@@ -32,7 +32,6 @@ class Repo(git.Repo, lock.Lock):
         assert path_components
         self.url = url
         cache_path = path.downloads('git', *path_components, makedirs=True)
-        cache_exists = os.path.exists(cache_path)
         self.path = temp.disappearing_dir(os.path.dirname(cache_path),
                                           path_components[-1])
         lock_working_copy_path = self.path + '-lock'
@@ -42,25 +41,30 @@ class Repo(git.Repo, lock.Lock):
         sources = saviour_sources()
         self.self_destruct = False
         with lock.Lock(lock_cache_path), lock.Lock(lock_working_copy_path):
-            _remove(self.path)
-
-            for i, (source, cache) in enumerate(sources):
-                last_source = i == len(sources) - 1
-
-                if cache and cache_exists and update_not_needed is None:
+            cache_is_enough = False
+            if os.path.exists(cache_path):
+                try:
                     cr = git.Repo(cache_path)
-                    update_not_needed = enough_to_have and (
+                    cache_is_enough = enough_to_have and (
                         enough_to_have in (t.name for t in cr.tags) or
                         enough_to_have in (h.name for h in cr.heads) or
                         enough_to_have in (c.hexsha for c in cr.iter_commits())
                         # that's not all revspecs, but best-effort is fine
                     )
-                    if update_not_needed:
-                        log.info(f'not re-fetching {url} from {source} '
-                                 f'because {enough_to_have} '
-                                 'is already present in cache')
-                        git.Repo.clone_from(cache_path, self.path, mirror=True)
-                        break
+                except git.GitError as e:
+                    log.error(f'something wrong with git cache {cache_path}')
+                    log.error(str(e))
+                _remove(self.path)
+
+            for i, (source, cache) in enumerate(sources):
+                last_source = i == len(sources) - 1
+
+                if cache and cache_is_enough:
+                    log.info(f'not re-fetching {url} from {source} '
+                             f'because {enough_to_have} '
+                             'is already present in cache')
+                    git.Repo.clone_from(cache_path, self.path, mirror=True)
+                    break
 
                 if source == 'local':
                     surl = path.saviour(url).replace('//', '/')  # workaround
@@ -76,7 +80,7 @@ class Repo(git.Repo, lock.Lock):
                     surl = 'http://' + surl if '://' not in source else surl
 
                 log.info(f'cloning {url} from {source} '
-                         f'cache_exists={cache_exists}...')
+                         f'cache_exists={os.path.exists(cache_path)}...')
                 try:
                     # TODO: bare clone
                     # no harm in referencing cache, even w/o cached+
