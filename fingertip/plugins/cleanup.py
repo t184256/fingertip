@@ -91,8 +91,8 @@ def machines(expired_for=0):
 def tempfiles(older_than='6h', location=None):
     location = location or tempfile.gettempdir()
     cutoff_time = time.time() - units.parse_time_interval(older_than)
-    _cleanup_dir(path.LOGS, lambda f: (_time(f) >= cutoff_time or
-                                       temp.AUTOREMOVE_PREFIX not in f))
+    _cleanup_dir(location, lambda f: (_time(f) >= cutoff_time or
+                                      temp.AUTOREMOVE_PREFIX not in f))
 
 
 def periodic():
