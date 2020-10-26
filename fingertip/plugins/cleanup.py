@@ -13,6 +13,11 @@ import fingertip.machine
 from fingertip.util import log, path, temp, units
 
 
+def _time(path):
+    s = os.stat(path)
+    return max(s.st_mtime, s.st_atime, s.st_ctime)
+
+
 @fingertip.transient
 def main(what=None, *args, **kwargs):
     if what == 'everything':
@@ -33,12 +38,12 @@ def main(what=None, *args, **kwargs):
 
 def downloads(older_than=0):
     cutoff_time = time.time() - units.parse_time_interval(older_than)
-    _cleanup_dir(path.DOWNLOADS, lambda f: os.stat(f).st_ctime >= cutoff_time)
+    _cleanup_dir(path.DOWNLOADS, lambda f: _time(f) >= cutoff_time)
 
 
 def logs(older_than=0):
     cutoff_time = time.time() - units.parse_time_interval(older_than)
-    _cleanup_dir(path.LOGS, lambda f: os.stat(f).st_ctime >= cutoff_time)
+    _cleanup_dir(path.LOGS, lambda f: _time(f) >= cutoff_time)
 
 
 def _cleanup_dir(dirpath, preserve_func):
@@ -86,7 +91,7 @@ def machines(expired_for=0):
 def tempfiles(older_than='6h', location=None):
     location = location or tempfile.gettempdir()
     cutoff_time = time.time() - units.parse_time_interval(older_than)
-    _cleanup_dir(path.LOGS, lambda f: (os.stat(f).st_ctime >= cutoff_time or
+    _cleanup_dir(path.LOGS, lambda f: (_time(f) >= cutoff_time or
                                        temp.AUTOREMOVE_PREFIX not in f))
 
 
