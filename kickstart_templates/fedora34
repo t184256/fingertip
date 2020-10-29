@@ -1,0 +1,37 @@
+{REPOS}
+
+authselect --passalgo=sha512 --useshadow
+autopart
+bootloader --timeout=0
+cmdline
+keyboard us
+lang en_US
+rootpw fingertip
+timezone UTC --utc
+timesource --ntp-disable
+zerombr
+
+firewall --disabled
+#network --device link --hostname={HOSTNAME}
+network --hostname={HOSTNAME}
+sshkey --username root '{SSH_PUBKEY}'
+
+%packages --exclude-weakdeps --timeout 900
+@Core --nodefaults
+openssh-server
+%end
+
+%post --erroronfail
+sed -i 's|\blocalhost\b|{HOSTNAME} localhost|' /etc/hosts
+sed -i 's|^\[main\]$|[main]\nproxy={PROXY}\ndeltarpm=0\nzchunk=0\ninstall_weak_deps=0\ntimeout=900|' /etc/dnf/dnf.conf
+sed -i 's|^enabled=1|enabled=0|' /etc/yum.repos.d/fedora-cisco-openh264.repo
+sed -i 's|^#baseurl=|baseurl=|' /etc/yum.repos.d/*
+sed -i 's|^baseurl=https://|baseurl=http://|' /etc/yum.repos.d/*
+sed -i 's|^metalink=|#metalink=http://|' /etc/yum.repos.d/*
+sed -i 's|^baseurl=http://download.example/pub/fedora/linux|baseurl={MIRROR}|' /etc/yum.repos.d/*
+sed -i 's|/releases/|/development/|' /etc/yum.repos.d/fedora*.repo
+dnf clean all
+fstrim -av
+%end
+
+poweroff

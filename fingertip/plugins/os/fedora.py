@@ -10,10 +10,11 @@ from fingertip.util import http_cache, log, path
 
 
 FEDORA_GEOREDIRECTOR = 'http://download.fedoraproject.org/pub/fedora/linux'
-LATEST = 33
+RELEASED = 33
 
 
-def main(m=None, version=32, mirror=None, specific_mirror=True, fips=False):
+def main(m=None, version=RELEASED, mirror=None, specific_mirror=True,
+         fips=False):
     m = m or fingertip.build('backend.qemu')
     if hasattr(m, 'qemu'):
         m = m.apply(install_in_qemu, version=version, mirror=mirror,
@@ -57,7 +58,8 @@ def determine_mirror(mirror, version, releases_development):
 
 def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
     version = int(version) if version != 'rawhide' else 'rawhide'
-    releases_development = ('development' if version in (LATEST, 'rawhide')
+    releases_development = ('development'
+                            if version in (RELEASED + 1, 'rawhide')
                             else 'releases')
     if mirror is None:
         if not specific_mirror:
@@ -85,7 +87,7 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
 
         ks_fname = path.fingertip('kickstart_templates',
                                   f'fedora{version}' if version != 'rawhide'
-                                  else f'fedora{LATEST}')
+                                  else f'fedora{RELEASED+1}')
         with open(ks_fname) as f:
             ks_text = f.read().format(HOSTNAME=fqdn,
                                       SSH_PUBKEY=ssh_pubkey,
