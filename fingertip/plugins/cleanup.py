@@ -71,7 +71,8 @@ def machines(expired_for=0):
             lock.acquire()
             try:
                 remove = fingertip.machine.needs_a_rebuild(d, by=adjusted_time)
-            except (FileNotFoundError, EOFError, UnboundLocalError):
+            except Exception as ex:
+                log.warning(f'while processing {d}: {ex}')
                 remove = True
             if (expired_for == 'all' or remove):
                 assert os.path.realpath(d).startswith(
