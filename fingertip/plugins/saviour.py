@@ -302,9 +302,7 @@ def _deduplicate(log, db_name, resource_name, timeout=None):
         run = log.pipe_powered(subprocess.run,
                                stdout=logging.INFO, stderr=logging.WARNING)
         r = run(['duperemove', '--dedupe-options=nofiemap',
-                 # NOTE: --exclude snap and temp
-                 # when duperemove with --exclude gets released
                  '--io-threads=2', '--cpu-threads=2',
                  '--hashfile', db_file,
-                 '-hdr', path.saviour('_', resource_name)])
+                 '-hdr', path.saviour('_', resource_name, 'data')])
         assert r.returncode in (0, 22)  # nothing to deduplicate
