@@ -29,7 +29,6 @@ sed -i 's|^#baseurl=|baseurl=|' /etc/yum.repos.d/*
 sed -i 's|^baseurl=https://|baseurl=http://|' /etc/yum.repos.d/*
 sed -i 's|^metalink=|#metalink=http://|' /etc/yum.repos.d/*
 sed -i 's|^baseurl=http://download.example/pub/fedora/linux|baseurl={MIRROR}|' /etc/yum.repos.d/*
-sed -i 's|/releases/|/development/|' /etc/yum.repos.d/fedora*.repo
 dnf clean all
 fstrim -av
 %end
