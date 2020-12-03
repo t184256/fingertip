@@ -295,7 +295,11 @@ def mirror(config, *what_to_mirror, deduplicate=None):
 
 def _deduplicate(log, db_name, resource_name, timeout=None):
     log.info(f'locking the deduplication db {db_name}...')
-    db_file = path.saviour('.duperemove', 'hashfiles', db_name, makedirs=True)
+    hashfilesdir = path.saviour('.duperemove', 'hashfiles')
+    if not os.path.exists(hashfilesdir):
+        os.makedirs(hashfilesdir)
+        os.system(f'chattr +C {hashfilesdir} || true')
+    db_file = path.saviour('.duperemove', 'hashfiles', db_name)
     db_lock = path.saviour('.duperemove', 'locks', db_name, makedirs=True)
     with lock.Lock(db_lock, timeout=timeout):
         log.info(f'deduplicating {resource_name} ({db_name})...')
