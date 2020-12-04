@@ -188,7 +188,7 @@ class HTTPCache:
                     log.warning(f'Downwards connection reset for {meth} {uri}')
                 except requests.exceptions.ConnectionError:
                     log.warning(f'Downwards connection error for {meth} {uri}')
-                log.info(f'{meth} {basename} served {length} ({uri})')
+                log.info(f'{meth} {basename} served ({uri})')
 
             def do_HEAD(self):
                 if self.path in http_cache._local_files_to_serve:
