@@ -687,10 +687,9 @@ class SSH:
             time.sleep(2)
             self.connect(force_reconnect=True)
             channel = self._transport.open_session()
-        if quiet:
-            self.m.log.debug(f'ssh command: {cmd}')
-        else:
-            self.m.log.info(f'ssh command: {cmd}')
+        log_func = self.m.log.debug if quiet else self.m.log.info
+        for l in cmd.split('\n'):
+            log_func(f'ssh: {l}')
         channel.exec_command(cmd)
         out, err = self._stream_out_and_err(channel)
         retval = channel.recv_exit_status()
