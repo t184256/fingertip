@@ -40,7 +40,7 @@ $ sudo <your package manager> install qemu ansible xfsprogs
 To run fingertip with system Python packages, first install all required dependencies:
 
 ``` bash
-$ sudo <your package manager> install python3-colorama python3-paramiko python3-pexpect python3-pyxdg python3-CacheControl python3-requests python3-requests-mock python3-fasteners python3-lockfile python3-cloudpickle python3-GitPython
+$ sudo <your package manager> install python3-colorama python3-paramiko python3-pexpect python3-pyxdg python3-CacheControl python3-requests python3-requests-mock python3-fasteners python3-lockfile python3-cloudpickle python3-GitPython python3-rangehttpserver
 ```
 
 Invoke as
