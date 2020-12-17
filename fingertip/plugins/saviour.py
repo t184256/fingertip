@@ -157,7 +157,6 @@ def main(*args):
             return mirror(*args)
     log.error('usage: ')
     log.error('    fingertip saviour mirror <config-file> [<what-to-mirror>]')
-    log.error('    fingertip saviour deduplicate')
     raise SystemExit()
 
 
