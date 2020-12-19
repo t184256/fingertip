@@ -116,7 +116,7 @@ def main(arch='x86_64', ram_min='1G', ram_size='1G', ram_max='4G',
     load()
     run = m.log.pipe_powered(subprocess.run,
                              stdout=logging.INFO, stderr=logging.ERROR)
-    run(['qemu-img', 'create', '-f', 'qcow2',
+    run(['qemu-img', 'create', '-f', 'qcow2', '-o', 'lazy_refcounts=on',
          os.path.join(m.path, 'image.qcow2'), disk_size], check=True)
     return m
 
