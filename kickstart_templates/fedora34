@@ -12,13 +12,22 @@ timesource --ntp-disable
 zerombr
 
 firewall --disabled
-#network --device link --hostname={HOSTNAME}
 network --hostname={HOSTNAME}
 sshkey --username root '{SSH_PUBKEY}'
 
 %packages --exclude-weakdeps --timeout 900
 @Core --nodefaults
 openssh-server
+glibc-minimal-langpack
+glibc-langpack-en
+python3-libselinux
+-parted
+-dracut-config-rescue
+-plymouth*
+-langpacks-en
+-iwl*firmware
+-lshw
+-sssd-*
 %end
 
 %post --erroronfail
@@ -29,8 +38,10 @@ sed -i 's|^#baseurl=|baseurl=|' /etc/yum.repos.d/*
 sed -i 's|^baseurl=https://|baseurl=http://|' /etc/yum.repos.d/*
 sed -i 's|^metalink=|#metalink=http://|' /etc/yum.repos.d/*
 sed -i 's|^baseurl=http://download.example/pub/fedora/linux|baseurl={MIRROR}|' /etc/yum.repos.d/*
-sed -i 's|/releases/|/development/|' /etc/yum.repos.d/fedora*.repo
-dnf clean all
+dnf -y makecache
+dnf -y remove linux-firmware
+dnf -y update
+dnf -y clean packages
 fstrim -av
 %end
 
