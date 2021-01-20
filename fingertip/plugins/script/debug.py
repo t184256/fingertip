@@ -519,7 +519,7 @@ def main(m, scriptpath, language='bash', unseal=True,
             class Formatter(logging.Formatter):
                 def format(self, record):
                     formatted = repl.format(record.msg)
-                    if m.in_fast_forward:
+                    if hasattr(m, 'in_fast_forward') and m.in_fast_forward:
                         formatted = dim(formatted)
                     return formatted + colorama.Style.RESET_ALL
             fingertip.util.log.current_handler.setFormatter(Formatter())
