@@ -103,10 +103,12 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
         m.log.info(f'fetching initrd: {url}/isolinux/initrd.img')
         initrd = os.path.join(m.path, 'initrd')
         m.http_cache.fetch(f'{url}/isolinux/initrd.img', initrd)
-        append = ('ks=http://mock/ks inst.ksstrict console=ttyS0 inst.notmux '
-                  'inst.zram=off ' +
-                  f'proxy={m.http_cache.internal_url} ' +
-                  f'inst.proxy={m.http_cache.internal_url} ' +
+        append = ('ks=http://mock/ks inst.ks=http://mock/ks '
+                  'inst.ksstrict '
+                  'console=ttyS0 inst.notmux '
+                  'inst.zram=off '
+                  f'proxy={m.http_cache.internal_url} '
+                  f'inst.proxy={m.http_cache.internal_url} '
                   f'inst.repo={url} ' +
                   ('fips=1' if fips else ''))
         extra_args = ['-kernel', kernel, '-initrd', initrd, '-append', append]
