@@ -40,8 +40,9 @@ sed -i 's|^metalink=|#metalink=http://|' /etc/yum.repos.d/*
 sed -i 's|^baseurl=http://download.example/pub/fedora/linux|baseurl={MIRROR}|' /etc/yum.repos.d/*
 sed -i 's|/releases/|/development/|' /etc/yum.repos.d/*
 dnf -y makecache
-dnf -y remove linux-firmware
-dnf -y update
+# First boot failed otherwise
+# dnf -y update
+# dnf -y remove linux-firmware
 dnf -y clean packages
 fstrim -av
 %end
