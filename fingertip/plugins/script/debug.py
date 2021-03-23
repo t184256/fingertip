@@ -393,6 +393,7 @@ class REPLBash(REPLBase):
     def prepare(cls, m, scriptpath, terse):
         with m:
             cls.install_interpreter_if_missing(m)
+            m('echo set enable-bracketed-paste Off >> .inputrc')
 
             if terse != 'most':
                 bash_version = m('bash --version').out.split('\n')[0]
