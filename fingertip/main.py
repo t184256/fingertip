@@ -4,6 +4,7 @@
 import itertools
 import os
 import sys
+import textwrap
 
 import fingertip
 import fingertip.util.cleanup_job
@@ -46,7 +47,16 @@ def main():
     args = sys.argv[1:]
 
     if not args:
-        fingertip.util.log.error('no plugin specified')
+        info = """
+        Name:
+                fingertip - a tool to control VMs/containers
+        Usage:
+                fingertip os.fedora + script.debug myscript.sh # checkpoint-powered debugger
+                fingertip os.fedora --version=34 + script.debug myscript.sh # install Fedora 34 and debug a script
+                fingertip os.fedora + ssh  # install Fedora and SSH into it
+                fingertip cleanup machines all # empty your ~/.cache/fingertip/machines often, at least after each update
+                fingertip cleanup everything # clean ~/.cache/fingertip occasionally"""
+        print(textwrap.dedent(info).lstrip())
         sys.exit(1)
 
     subcmds = [list(ws)
