@@ -25,7 +25,6 @@ kexec-tools
 -cronie
 -sg3_*
 -parted
-
 -kernel-tools
 -prefixdevname
 -NetworkManager-team

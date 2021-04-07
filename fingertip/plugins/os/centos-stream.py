@@ -46,7 +46,7 @@ def install_in_qemu(m=None):
         m.ram.safeguard = '768M'
         with m.ram('>=4G'):
             m.qemu.run(load=None, extra_args=extra_args)
-            m.console.expect('Running post-installation scripts')
+            m.console.expect('Installation complete.')
             m.console.expect('Power down.')
             m.qemu.wait()
         m.qemu.run(load=None)  # cold boot
