@@ -38,11 +38,10 @@ QEMU_COMMON_ARGS = ['-enable-kvm', '-cpu', 'host', '-smp', '4',
 
 
 def main(arch='x86_64', ram_min='1G', ram_size='1G', ram_max='4G',
-         disk_size='20G', custom_args=[], guest_forwards=[]):
+         disk_size='20G', custom_args=[]):
     assert arch == 'x86_64'
     m = fingertip.machine.Machine('qemu')
     m.arch = arch
-    m._host_forwards = []
     m.ram = RAMNamespacedFeatures(m, ram_min, ram_size, ram_max)
     m.qemu = QEMUNamespacedFeatures(m, disk_size, custom_args)
     m.snapshot = SnapshotNamespacedFeatures(m)
@@ -105,12 +104,6 @@ def main(arch='x86_64', ram_min='1G', ram_size='1G', ram_max='4G',
             m.ssh.invalidate()
     m.hooks.disrupt.append(disrupt)
 
-    def forward_host_port(hostport, guestport):
-        if m.qemu.live:
-            m.qemu.monitor.forward_host_port(hostport, guestport)
-        m._host_forwards.append((hostport, guestport))
-    m.forward_host_port = forward_host_port
-
     m.breakpoint = lambda: m.apply('ssh', unseal=False)
 
     load()
@@ -130,8 +123,9 @@ class QEMUNamespacedFeatures:
         self.image, self._image_to_clone = None, None
         self.virtio_scsi = False  # flip before OS install for TRIM on Linux<5
         self._qemu = f'qemu-system-{self.vm.arch}'
+        self.usernet = UserNet(self.vm)
 
-    def run(self, load=SNAPSHOT_BASE_NAME, guest_forwards=[], extra_args=[]):
+    def run(self, load=SNAPSHOT_BASE_NAME, extra_args=[]):
         if load:
             self.vm.time_desync.report(self.vm.time_desync.LARGE)
         run_args = ['-loadvm', load] if load else []
@@ -143,17 +137,7 @@ class QEMUNamespacedFeatures:
         self.vm.ssh.port = free_port.find()
         self.vm.shared_directory = SharedDirectory(self.vm)
         self.vm.exec = self.vm.ssh.exec
-        host_forwards = [(self.vm.ssh.port, 22)] + self.vm._host_forwards
-        host_forwards = [f'hostfwd=tcp:127.0.0.1:{h}-:{g}'
-                         for h, g in host_forwards]
-        cache_guest_forward = (CACHE_INTERNAL_IP, CACHE_INTERNAL_PORT,
-                               f'nc 127.0.0.1 {self.vm.http_cache.port}')
-        guest_forwards = guest_forwards + [cache_guest_forward]
-        run_args += ['-device', 'virtio-net,netdev=net0', '-netdev',
-                     ','.join(['user', 'id=net0'] + host_forwards +
-                              (['restrict=yes'] if self.vm.sealed else []) +
-                              [f'guestfwd=tcp:{ip}:{port}-cmd:{cmd}'
-                               for ip, port, cmd in guest_forwards])]
+        run_args += self.usernet._netspec_cmd()
 
         self.image = os.path.join(self.vm.path, 'image.qcow2')
         if self._image_to_clone:
@@ -429,10 +413,6 @@ class Monitor:
         # just deduplicated with FS-level reflinks that QEMU is unaware of
         self._execute_human_command('commit all')
 
-    def forward_host_port(self, hostport, guestport):
-        self._execute_human_command('hostfwd_add '
-                                    f'tcp:127.0.0.1:{hostport}-:{guestport}')
-
     def balloon(self, target_size):
         target_size = units.parse_binary(target_size)
         if self.vm.ram._actual != target_size:
@@ -445,6 +425,11 @@ class Monitor:
         else:
             self.vm.log.debug('no ballooning needed, '
                               f'already at {units.binary(target_size)}')
+
+    def usernet_modify_conf(self, conf):
+        with self._command_execution_lock:
+            self.vm.qemu.monitor._execute('netdev_add', **conf)
+            self.vm.qemu.monitor._expect({'return': {}})
 
 
 class RAMNamespacedFeatures:
@@ -571,6 +556,60 @@ class RAMNamespacedFeatures:
             self.size = old_size
         else:
             self.set_size_async(old_size)
+
+
+class UserNet:
+    def __init__(self, vm):
+        self.vm = vm
+        self._hostfwds_extra = []
+        self._guestfwds_extra = []
+        self.restrict = True
+        self.vm.hooks.unseal.append(lambda: self._reconfigure({}))  # restrict
+
+    def forward_tcp_host_port(self, hostport, guestport,
+                              hostaddr='127.0.0.1', guestaddr=''):
+        self._hostfwds_extra.append((hostaddr, hostport, guestaddr, guestport))
+        # QEMU, what the? "List of strings", uh-huh.
+        # And what's up with differentiality?
+        self._reconfigure({'hostfwd': [
+            {'str': f'tcp:{hostaddr}:{hostport}-{guestaddr}:{guestport}'}
+        ]})
+
+    def forward_tcp_guest_port(self, intport, extport,
+                               intaddr, extaddr='127.0.0.1'):
+        self._guestfwds_extra.append((intaddr, intport, extaddr, extport))
+        self._reconfigure({'guestfwd': [
+            {'str': f'tcp:{intaddr}:{intport}-cmd:nc {extaddr} {extport}'}
+        ]})
+
+    def _host_forwards(self, prefix='hostfwd='):
+        dynamic_ssh = ('127.0.0.1', self.vm.ssh.port, '', 22)
+        return [f'tcp:{ha}:{hp}-{ga}:{gp}' for ha, hp, ga, gp in
+                [dynamic_ssh] + self._hostfwds_extra]
+
+    def _guest_forwards(self):
+        dynamic_http_cache = (CACHE_INTERNAL_IP, CACHE_INTERNAL_PORT,
+                              '127.0.0.1', self.vm.http_cache.port)
+        return [f'tcp:{intaddr}:{intport}-cmd:nc {extaddr} {extport}'
+                for intaddr, intport, extaddr, extport in
+                [dynamic_http_cache] + self._guestfwds_extra]
+
+    def _netspec_cmd(self):
+        return ['-device', 'virtio-net,netdev=net0', '-netdev',
+                ','.join(['user', 'id=net0'] +
+                         [f'hostfwd={fw}' for fw in self._host_forwards()] +
+                         [f'guestfwd={fw}' for fw in self._guest_forwards()] +
+                         (['restrict=yes'] if self.vm.sealed else []))]
+
+    def _reconfigure(self, diff_conf):
+        if self.vm.qemu.live:
+            #self.vm.qemu.monitor._execute('netdev_del', **{'id': 'net0'})
+            #self.vm.qemu.monitor._expect({'return': {}})
+            conf = {
+                'type': 'user', 'id': 'net0', 'restrict': self.vm.sealed,
+            }
+            conf.update(diff_conf)
+            self.vm.qemu.monitor.usernet_modify_conf(conf)
 
 
 class SharedDirectory:
