@@ -125,7 +125,7 @@ class HTTPCache:
                             if nu.startswith('https://'):
                                 # no point in serving that, we have to pretend
                                 # that never happened
-                                log.info(f'suppressing HTTPS redirect {nu}')
+                                log.debug(f'suppressing HTTPS redirect {nu}')
                                 return self._serve_http(nu, headers, meth=meth,
                                                         cache=cache,
                                                         retries=retries)
@@ -141,8 +141,8 @@ class HTTPCache:
                             direct.append('ranged request, playing safe')
                         if direct:
                             # Don't cache, don't reencode, stream it as is
-                            log.info(f'streaming {basename} directly '
-                                     f'from {uri} ({", ".join(direct)})')
+                            log.debug(f'streaming {basename} directly '
+                                      f'from {uri} ({", ".join(direct)})')
                             r = sess_dir.get(uri, headers=headers, stream=True)
                             self._status_and_headers(r.status_code, r.headers)
                             shutil.copyfileobj(r.raw, self.wfile)
@@ -188,7 +188,7 @@ class HTTPCache:
                     log.warning(f'Downwards connection reset for {meth} {uri}')
                 except requests.exceptions.ConnectionError:
                     log.warning(f'Downwards connection error for {meth} {uri}')
-                log.info(f'{meth} {basename} served ({uri})')
+                log.debug(f'{meth} {basename} served ({uri})')
 
             def do_HEAD(self):
                 if self.path in http_cache._local_files_to_serve:
@@ -208,8 +208,8 @@ class HTTPCache:
                     local_path = http_cache._local_files_to_serve[http_path]
                 else:
                     local_path = super().translate_path(http_path)
-                log.info(f'serving {os.path.basename(http_path)} '
-                         f'directly from {local_path}')
+                log.debug(f'serving {os.path.basename(http_path)} '
+                          f'directly from {local_path}')
                 return local_path
 
         httpd = ThreadingHTTPServer((host, port), Handler)
