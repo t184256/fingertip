@@ -167,6 +167,29 @@ def make_m_segment_aware(m):
     def execute_segment(segment, checkpoint=True):
         start_time = time.time()
 
+        if 'fingertip:interact' in segment.input:
+            logfile_read_bak = m.console.logfile_read
+            m.console.logfile_read = None
+
+            b = b''
+            def of(output_bit):
+                nonlocal b
+                try:
+                    b += output_bit
+                    if re.search(m.retcode_match, b.decode()):
+                        m.console.logfile_read = logfile_read_bak
+                        raise RewindNeededException()
+                except UnicodeDecodeError:
+                    pass
+                return output_bit
+            # hack to show prompt
+            sys.stderr.write('~~ interactive session; '
+                             'remove `fingertip:interact` and '
+                             '^D to proceed further ~~')
+            m.console.sendline('')
+            sys.stderr.flush()
+            m.console.interact(output_filter=of)
+
         m.log.debug(f'sending {repr(segment.input)}')
         m.never_executed_anything = False
         pre = ''
@@ -400,6 +423,7 @@ class REPLBash(REPLBase):
                 m.repl_header = bash_version + '\n' + cls.PS1
             else:
                 m.repl_header = cls.PS1
+            m.retcode_match = cls.RETCODE_MATCH
 
             # trick taken from pexpect.replwrap
             # this is not visible in actual PS1, but visible in, e.g., env
@@ -445,6 +469,7 @@ class REPLPython(REPLBase):
                 m.repl_header = m.console.match.group(1) + '\n' + cls.PS1
             else:
                 m.repl_header = cls.PS1
+            m.retcode_match = cls.RETCODE_MATCH
 
             m.console.sendline('import sys')
             m.console.sendline(f'sys.ps1, sys.ps2 = "{cls.PS1}", "{cls.PS2}"')
