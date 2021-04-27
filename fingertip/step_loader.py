@@ -12,6 +12,7 @@ def func_and_autotag(smth, *args, **kwargs):
 
 def load_step(smth):
     if isinstance(smth, str):
+        smth = smth.replace('-', '_')  # python module name restrictions
         if smth.startswith('.') and '=' in smth:
             # this is for changing values on objects, e.g., ... + .ram.size=2G
             chain, value = smth.split('=', 1)

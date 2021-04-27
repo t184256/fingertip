@@ -21,7 +21,7 @@ def install_in_qemu(m=None):
             ssh_pubkey = f.read().strip()
         m.expiration.depend_on_a_file(ssh_key_path)
 
-        ks = path.fingertip('fingertip', 'plugins', 'os', 'centos-stream.ks')
+        ks = path.fingertip('fingertip', 'plugins', 'os', 'centos_stream.ks')
         HOSTNAME = 'centos'
 
         fqdn = HOSTNAME + '.fingertip.local'
