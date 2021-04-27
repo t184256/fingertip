@@ -43,7 +43,7 @@ def existing():
              re.findall(r'hostfwd=tcp:127.0.0.1:(\d+)-:22', stdout.decode())]
     if len(ports) == 1:
         return _connect(ports[0], key_file)
-    else:
+    elif len(ports) > 1:
         print('several fingertip VMs found, which port?')
         for i, p in enumerate(ports):
             print(f'[{i}] {p}')
