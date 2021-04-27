@@ -167,7 +167,7 @@ def make_m_segment_aware(m):
     def execute_segment(segment, checkpoint=True):
         start_time = time.time()
 
-        if 'fingertip:interact' in segment.input:
+        if segment.input and 'fingertip:interact' in segment.input:
             logfile_read_bak = m.console.logfile_read
             m.console.logfile_read = None
 
