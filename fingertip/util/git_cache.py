@@ -45,12 +45,8 @@ class Repo(git.Repo, lock.Lock):
             if os.path.exists(cache_path):
                 try:
                     cr = git.Repo(cache_path)
-                    cache_is_enough = enough_to_have and (
-                        enough_to_have in (t.name for t in cr.tags) or
-                        enough_to_have in (h.name for h in cr.heads) or
-                        enough_to_have in (c.hexsha for c in cr.iter_commits())
-                        # that's not all revspecs, but best-effort is fine
-                    )
+                    cache_is_enough = (enough_to_have
+                                       and _has_rev(cr, enough_to_have))
                 except git.GitError as e:
                     log.error(f'something wrong with git cache {cache_path}')
                     log.error(str(e))
@@ -178,3 +174,17 @@ def upload_contents(m, url, path_in_m, rev=None, rev_is_enough=True):
             rm -f {tar_in_m}
         ''')
     return m
+
+
+def _has_rev(repo, rev):
+    try:
+        repo.rev_parse(rev)
+        return True
+    except (git.exc.BadName, git.exc.BadObject, ValueError):
+        return False
+
+
+# TODO: get rid of
+def has_rev(url, rev):
+    with Repo(url, url.replace('/', '::'), enough_to_have=rev) as repo:
+        return _has_rev(repo, rev)
