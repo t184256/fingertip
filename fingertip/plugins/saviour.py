@@ -41,6 +41,10 @@ import fingertip.machine
 from fingertip.util import lock, log, path, reflink, temp
 
 
+class FailureToMirrorError(RuntimeError):
+    pass
+
+
 def _remove(tgt):
     assert tgt.startswith(os.path.realpath(path.SAVIOUR))
     if not os.path.exists(tgt):
@@ -154,7 +158,10 @@ def main(*args):
     if len(args) >= 1:
         subcmd, *args = args
         if subcmd == 'mirror':
-            return mirror(*args)
+            try:
+                return mirror(*args)
+            except FailureToMirrorError:
+                raise SystemExit()
     log.error('usage: ')
     log.error('    fingertip saviour mirror <config-file> [<what-to-mirror>]')
     raise SystemExit()
@@ -294,7 +301,7 @@ def mirror(config, *what_to_mirror, deduplicate=None):
                             f'db {db_name} was locked')
     if total_failures:
         fingertip.util.log.error(f'failed: {", ".join(total_failures)}')
-        raise SystemExit()
+        raise FailureToMirrorError(", ".join(total_failures))
     log.info('saviour has completed mirroring')
 
 
