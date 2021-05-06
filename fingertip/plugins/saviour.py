@@ -182,17 +182,23 @@ def mirror(config, *what_to_mirror, deduplicate=None):
     if not what_to_mirror:
         what_to_mirror = whats.keys()
     else:
-        what_to_mirror = [k for k in whats.keys()
-                          if any((fnmatch.fnmatch(k, req)
-                                  for req in what_to_mirror))]
+        what_to_mirror = ([k for k in whats.keys()
+                           if any(fnmatch.fnmatch(k, req)
+                                  for req in what_to_mirror)]
+                          + [k for k in what_to_mirror if '=' in k])
 
     if not what_to_mirror:
-        log.error(f'nothing to mirror')
+        log.error('nothing to mirror')
         return
 
-    for resource_name in what_to_mirror:
-        s = whats[resource_name]
-        log.debug(f'processing {resource_name}...')
+    for resource in what_to_mirror:
+        log.debug(f'processing {resource}...')
+
+        if '=' not in resource:  # example: alpine-3.13=alpine/v3.13/main/x86
+            resource_name, tail = resource, ''
+            s = whats[resource_name]
+        else:  # example: alpine-3.13=alpine/v3.13/main/x86
+            resource_name, s = resource.split('=', 1)
 
         if s is None:
             how_name, suffix = resource_name, ''
