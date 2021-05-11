@@ -10,7 +10,7 @@ from fingertip.util import http_cache, log, path
 
 
 FEDORA_GEOREDIRECTOR = 'http://download.fedoraproject.org/pub/fedora/linux'
-RELEASED = 33
+RELEASED = 34
 
 
 def main(m=None, version=RELEASED, mirror=None, specific_mirror=True,
