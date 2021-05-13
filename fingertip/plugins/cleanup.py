@@ -64,6 +64,8 @@ def _cleanup_dir(dirpath, preserve_func):
 def machines(expired_for=0):
     if expired_for != 'all':
         adjusted_time = time.time() - units.parse_time_interval(expired_for)
+    else:
+        adjusted_time = None
     for root, dirs, files in os.walk(path.MACHINES, topdown=False):
         for d in (os.path.join(root, x) for x in dirs):
             lock_path = os.path.join(root, '.' + os.path.basename(d) + '-lock')
