@@ -27,6 +27,7 @@ STRIP_HEADERS = ('TE', 'Transfer-Encoding', 'Keep-Alive', 'Trailer', 'Upgrade',
 SAVIOUR_DEFAULTS = 'local,cached+direct'
 RETRIES_MAX = 7
 COOLDOWN = 20
+WARN_ON_DIRECT = os.getenv('FINGERTIP_SAVIOUR_WARN_ON_DIRECT', None) == '1'
 
 
 def is_cache_group_writeable():
@@ -94,6 +95,8 @@ class HTTPCache:
                             elif meth == 'HEAD':
                                 return super().do_HEAD()
                         elif source == 'direct':
+                            if WARN_ON_DIRECT:
+                                log.warning(f'{uri} not found on any mirror')
                             su = uri
                         else:
                             su = source + '/' + uri
@@ -244,6 +247,8 @@ class HTTPCache:
                     return
                 sess = self._get_requests_session(direct=not cache)
                 if source == 'direct':
+                    if WARN_ON_DIRECT:
+                        log.warning(f'{url} not found on any mirror')
                     surl = url
                 else:
                     surl = source + '/' + url

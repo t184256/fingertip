@@ -207,6 +207,7 @@ def mirror(config, *what_to_mirror, deduplicate=None):
         else:  # example: alpine-3.13=alpine/v3.13/main/x86
             resource_name, s = resource.split('=', 1)
             # FIXME UGLY: config overrides are stronger that = (more syntax?)
+            # TODO: whats shouldn't be a dict, I think, just a list of strings
             if resource_name in whats:
                 s = whats[resource_name]
 
