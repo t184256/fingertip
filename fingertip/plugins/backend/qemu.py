@@ -373,7 +373,8 @@ class Monitor:
         with self._command_execution_lock:
             self._execute('cont')
             r = self._expect(None)
-            assert set(r.keys()) == {'timestamp', 'event'}
+            assert 'timestamp' in r
+            assert 'event' in r
             assert r['event'] == 'RESUME'
             self._expect({'return': {}})
 
@@ -383,7 +384,8 @@ class Monitor:
         with self._command_execution_lock:
             self._execute('stop')
             r = self._expect(None)
-            assert set(r.keys()) == {'timestamp', 'event'}
+            assert 'timestamp' in r
+            assert 'event' in r
             assert r['event'] == 'STOP'
             self._expect({'return': {}})
 
