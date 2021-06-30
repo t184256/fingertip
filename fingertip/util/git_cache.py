@@ -29,7 +29,8 @@ def _remove(p):
 
 class Repo(git.Repo, lock.Lock):
     def __init__(self, url, *path_components, enough_to_have=None):
-        assert path_components
+        if not path_components:
+            path_components = [url.replace('/', '::')]
         self.url = url
         cache_path = path.downloads('git', *path_components, makedirs=True)
         self.path = temp.disappearing_dir(os.path.dirname(cache_path),
@@ -37,7 +38,6 @@ class Repo(git.Repo, lock.Lock):
         lock_working_copy_path = self.path + '-lock'
         lock_cache_path = cache_path + '-lock'
         lock.Lock.__init__(self, lock_working_copy_path)
-        update_not_needed = None
         sources = saviour_sources()
         self.self_destruct = False
         with lock.Lock(lock_cache_path), lock.Lock(lock_working_copy_path):
@@ -110,6 +110,8 @@ class Repo(git.Repo, lock.Lock):
 
 class Checkout(git.Repo, lock.Lock):
     def __init__(self, url, *path_components, enough_to_have=None):
+        if not path_components:
+            path_components = [url.replace('/', '::')]
         with Repo(url, *path_components, enough_to_have=enough_to_have) as r:
             cache_path = path.downloads('git', *path_components, makedirs=True)
             self.path = temp.disappearing_dir(os.path.dirname(cache_path),
