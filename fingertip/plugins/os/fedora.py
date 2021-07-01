@@ -139,6 +139,8 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
 
         m.login()
         m.log.info('Fedora installation finished')
+        os.unlink(kernel)
+        os.unlink(initrd)
 
         def disable_proxy():
             return m.apply('ansible', 'ini_file', path='/etc/dnf/dnf.conf',
