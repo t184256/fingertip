@@ -13,7 +13,7 @@ REPO = MIRROR + '/v3.12/main/'
 
 
 def main(m=None):
-    m = m or fingertip.build('backend.qemu', ram_size='128M')
+    m = m or fingertip.build('backend.qemu', ram_size='256M', ram_min='512M')
     if hasattr(m, 'qemu'):
         m = m.apply(install_in_qemu).apply(first_boot)
     elif hasattr(m, 'container'):
@@ -36,7 +36,6 @@ def install_in_qemu(m):
 
     with m, m.ram('512M'):
         m.ram.safeguard = '256M'  # alpine is quite a slim distro
-
         m.qemu.run(load=None, extra_args=['-cdrom', iso_file])
         m.console.expect_exact('localhost login: ')
         m.console.sendline('root')
