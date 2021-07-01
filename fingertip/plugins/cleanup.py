@@ -91,7 +91,7 @@ def machines(expired_for=0):
             lock.release()
 
 
-def tempfiles(older_than='6h', location=None):
+def tempfiles(older_than='4h', location=None):
     location = location or tempfile.gettempdir()
     cutoff_time = time.time() - units.parse_time_interval(older_than)
     _cleanup_dir(location, lambda f: (_time(f) >= cutoff_time or
@@ -99,7 +99,7 @@ def tempfiles(older_than='6h', location=None):
 
 
 def periodic():
-    machines('6h')
+    machines('4h')
     downloads('30d')
     logs('30d')
     tempfiles()
