@@ -33,8 +33,8 @@ def nice_exec(m, *args,
     exec_result = m.exec(*args, shell=shell)
 
     if decode:
-        exec_result.out = exec_result.out.decode()
-        exec_result.err = exec_result.err.decode()
+        exec_result.out = exec_result.out.decode('utf-8', 'backslashreplace')
+        exec_result.err = exec_result.err.decode('utf-8', 'backslashreplace')
 
     if check and not exec_result:
         m.log.error('stdout')

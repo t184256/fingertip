@@ -30,7 +30,7 @@ _STRIP = re.compile(br'\x07|'  # BEL
 
 
 def strip_control_sequences(s):
-    d = _STRIP.sub(b'', s).decode()
+    d = _STRIP.sub(b'', s).decode('utf-8', 'backslashreplace')
     r = repr(d)
     return r if r'\x' in r else d
 
