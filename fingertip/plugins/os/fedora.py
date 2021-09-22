@@ -7,6 +7,7 @@ import os
 
 import fingertip.machine
 from fingertip.util import http_cache, log, path
+from fingertip.plugins.os.common import red_hat_based
 
 
 FEDORA_GEOREDIRECTOR = 'http://download.fedoraproject.org/pub/fedora/linux'
@@ -142,11 +143,6 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
         os.unlink(kernel)
         os.unlink(initrd)
 
-        def disable_proxy():
-            return m.apply('ansible', 'ini_file', path='/etc/dnf/dnf.conf',
-                           section='main', option='proxy', state='absent')
-        m.hooks.disable_proxy.append(disable_proxy)
-
         m.hooks.unseal += [lambda: m('systemctl restart NetworkManager'),
                            lambda: m('nm-online')]
 
@@ -154,5 +150,7 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
 
         m.fedora = version
         m.dist_git_branch = f'f{version}' if version != 'rawhide' else 'master'
+
+        red_hat_based.proxy_dnf(m)
 
         return m
