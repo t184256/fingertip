@@ -128,6 +128,8 @@ class QEMUNamespacedFeatures:
     def run(self, load=SNAPSHOT_BASE_NAME, extra_args=[]):
         if load:
             self.vm.time_desync.report(self.vm.time_desync.LARGE)
+        else:
+            self.vm.ram._actual = self.vm.ram.max
         run_args = ['-loadvm', load] if load else []
 
         self.monitor = Monitor(self.vm)
