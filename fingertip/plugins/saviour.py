@@ -136,12 +136,14 @@ def validate_rpm_repository(log, _unused_src, dst):
         gpgcheck = 0
     ''')
     repodir = temp.disappearing_dir()
+    cachedir = temp.disappearing_dir()
     with open(os.path.join(repodir, f'whatever.repo'), 'w') as f:
         f.write(repo_desc_for_mirroring)
     run = log.pipe_powered(subprocess.run,
                            stdout=logging.DEBUG, stderr=logging.WARNING)
-    run(['dnf', f'--setopt=reposdir={repodir}', '--repoid=repo', '--refresh',
-         '--setopt=skip_if_unavailable=0', 'makecache'], check=True)
+    run(['dnf', '--setopt=skip_if_unavailable=0',
+         f'--setopt=reposdir={repodir}', f'--setopt=cachedir={cachedir}',
+         '--repoid=repo', '--refresh', 'makecache'], check=True)
 
 
 def validate_rpm_repositories(log, _unused_src, dst):
