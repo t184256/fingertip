@@ -199,7 +199,7 @@ def make_m_segment_aware(m):
             m.console.expect_exact(segment.input.lstrip()[:40])
             ignored, pre = m.console.before, m.console.after
             if ignored.lstrip():
-                m.log.warning(f'(ignored: {repr(ignored)})')
+                m.log.debug(f'(ignored: {repr(ignored)})')
         else:
             m.console.sendcontrol('d')
         m.log.debug(f'sent {repr(segment.input)}')
