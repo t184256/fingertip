@@ -464,18 +464,22 @@ class REPLPython(REPLBase):
             cls.install_interpreter_if_missing(m)
             cls.launch_interpreter(m, scriptpath)
 
-            m.console.expect(r'\r+\n(Python.*?)\r\n')
+            m.console.expect(r'(Python.*?)\r\n')
             if terse != 'most':
                 m.repl_header = m.console.match.group(1) + '\n' + cls.PS1
             else:
                 m.repl_header = cls.PS1
+            m.log.debug(f'found: repl header "{m.repl_header}"')
             m.retcode_match = cls.RETCODE_MATCH
 
             m.console.sendline('import sys')
             m.console.sendline(f'sys.ps1, sys.ps2 = "{cls.PS1}", "{cls.PS2}"')
             m.console.sendline('del sys')
             m.console.sendline(r'print("\u200C" + "READY")')
+            m.console.expect(r'print')
+            m.log.debug(f'found: evidence of issuing a print')
             m.console.expect(r'\r+\n\u200CREADY\r+\n' + cls.rPS1)
+            m.log.debug(f'found: readiness marker')
         return m
 
     @staticmethod
