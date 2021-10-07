@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import sys
+import textwrap
 import threading
 import time
 
@@ -451,6 +452,17 @@ class REPLPython(REPLBase):
     PS1, PS2 = '\u200C>>> ', '\u200C... '
     rPS1, rPS2 = r'\u200C>>> ', r'\u200C... '
     COMMENT_SIGN = '#'
+    EXCEPTHOOK = textwrap.dedent(r'''
+        def _excepthook(*args, original_eh=sys.excepthook, **kwargs):
+            original_eh(*args, **kwargs)
+            import sys
+            sys.stderr.flush()
+            sys.stderr.write('\u200C^ UNCAUGHT EXCEPTION ^\n')
+
+        sys.excepthook = _excepthook
+        del _excepthook
+    ''').strip()
+    EXC_MARKER = '\u200C^ UNCAUGHT EXCEPTION ^'
 
     @classmethod
     def segment(cls, code):
@@ -474,6 +486,7 @@ class REPLPython(REPLBase):
 
             m.console.sendline('import sys')
             m.console.sendline(f'sys.ps1, sys.ps2 = "{cls.PS1}", "{cls.PS2}"')
+            m.console.sendline(cls.EXCEPTHOOK)
             m.console.sendline('del sys')
             m.console.sendline(r'print("\u200C" + "READY")')
             m.console.expect(r'print')
@@ -482,8 +495,10 @@ class REPLPython(REPLBase):
             m.log.debug(f'found: readiness marker')
         return m
 
-    @staticmethod
-    def line_is_an_error(line):
+    @classmethod
+    def line_is_an_error(cls, line):
+        if line.rstrip() == cls.EXC_MARKER:
+            return True
         return bool(re.match(r'\w*Error: ', line))
 
     @staticmethod
