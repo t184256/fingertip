@@ -38,6 +38,9 @@ class ProxyAll(dnf.Plugin):
             if repo.metalink:
                 repo.metalink = repo.metalink.replace('https:', 'http:')
                 repo.metalink = repo.metalink + '&protocol=http'
+            if repo.gpgkey:
+                repo.gpgkey = [k.replace('https:', 'http:')
+                               for k in repo.gpgkey]
 """
 
 
