@@ -18,7 +18,7 @@ how:
       - rsync://mirror.karneval.cz/fedora/linux                  # CZ
       - rsync://mirror.atl.genesisadaptive.com/fedora            # US
       - rsync://dl.fedoraproject.org/fedora-buffet/fedora/linux  # high tier
-  copr:
+  copr.fedorainfracloud.org:
     url: http://download.copr.fedorainfracloud.org/results
     method: reposync
     sources:
@@ -42,4 +42,4 @@ what:
 # f32: fedora/releases/32/
 # f32-updates: fedora/updates/32/
 # rawhide: fedora/development/rawhide/
-  copr-fingertip-f32: copr/asosedkin/fingertip/fedora-32-x86_64/
+  copr.fedorainfracloud.org/asosedkin/fingertip/fedora-32-x86_64: ~

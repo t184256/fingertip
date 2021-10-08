@@ -214,8 +214,8 @@ def mirror(config, *what_to_mirror, deduplicate=None):
                 s = whats[resource_name]
 
         if s is None:
-            how_name, suffix = resource_name, ''
-        elif '/' in s:
+            s = resource_name
+        if '/' in s:
             how_name, suffix = s.split('/', 1)
             suffix = '/' + suffix
         else:
@@ -224,7 +224,7 @@ def mirror(config, *what_to_mirror, deduplicate=None):
         try:
             how = hows[how_name]
         except KeyError:
-            log.error(f'missing how section on {how}')
+            log.error(f'missing how section on {how_name}')
             raise SystemExit()
 
         url = how['url'] + suffix
