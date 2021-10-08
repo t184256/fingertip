@@ -1,50 +1,21 @@
 # Licensed under GNU General Public License v3 or later, see COPYING.
 # Copyright (c) 2021 Red Hat, Inc., see CONTRIBUTORS.
 
-COPR_PATCH = """
+COPR_PATCH = r"""
 diff --git a/plugins/copr.py b/plugins/copr.py
-index 43aa896..9476b35 100644
+index 43aa896..faa56bd 100644
 --- a/plugins/copr.py
 +++ b/plugins/copr.py
-@@ -476,9 +476,12 @@ def _download_repo(self, project_name, repo_filename):
-         short_chroot = '-'.join(self.chroot_parts[:-1])
-         arch = self.chroot_parts[-1]
-         api_path = "/coprs/{0}/repo/{1}/dnf.repo?arch={2}".format(project_name, short_chroot, arch)
-+        url = self.copr_url
+@@ -196,6 +196,9 @@ class CoprCommand(dnf.cli.Command):
+                 self.copr_hostname = copr_hub.split('://', 1)[1]
+                 self.copr_url = copr_hub
+
 +        if os.access('/etc/dnf/plugins/proxyall', os.F_OK):
-+            url = url.replace('https://', 'http://')
-
++            self.copr_url = self.copr_url.replace('https://', 'http://')
++
+     def _read_config_item(self, config, hub, section, default):
          try:
--            f = self.base.urlopen(self.copr_url + api_path, mode='w+')
-+            f = self.base.urlopen(url + api_path, mode='w+')
-         except IOError as e:
-             if os.path.exists(repo_filename):
-                 os.remove(repo_filename)
-@@ -486,13 +489,13 @@ Bugzilla. In case of problems, contact the owner of this repository.
-                 if PY3:
-                     import urllib.request
-                     try:
--                        res = urllib.request.urlopen(self.copr_url + "/coprs/" + project_name)
-+                        res = urllib.request.urlopen(url + "/coprs/" + project_name)
-                         status_code = res.getcode()
-                     except urllib.error.HTTPError as e:
-                         status_code = e.getcode()
-                 else:
-                     import urllib
--                    res = urllib.urlopen(self.copr_url + "/coprs/" + project_name)
-+                    res = urllib.urlopen(url + "/coprs/" + project_name)
-                     status_code = res.getcode()
-                 if str(status_code) != '404':
-                     raise dnf.exceptions.Error(_("This repository does not have"
-@@ -508,7 +511,7 @@ Bugzilla. In case of problems, contact the owner of this repository.
-             break
-
-         # if using default hub, remove possible old repofile
--        if self.copr_url == self.default_url:
-+        if url == self.default_url:
-             # copr:hub:user:project.repo => _copr_user_project.repo
-             old_repo_filename = repo_filename.replace("_copr:", "_copr", 1)\
-                 .replace(self.copr_hostname, "").replace(":", "_", 1).replace(":", "-")\
+             return config.get(hub, section)
 """
 
 
