@@ -18,6 +18,7 @@ sshkey --username root '{SSH_PUBKEY}'
 %packages --exclude-weakdeps --timeout 900
 @Core --nodefaults
 openssh-server
+patch
 %end
 
 %post --erroronfail

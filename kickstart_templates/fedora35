@@ -21,6 +21,7 @@ openssh-server
 glibc-minimal-langpack
 glibc-langpack-en
 python3-libselinux
+patch
 -parted
 -dracut-config-rescue
 -plymouth*
