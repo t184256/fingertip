@@ -419,7 +419,7 @@ class REPLBash(REPLBase):
             cls.install_interpreter_if_missing(m)
             m('echo set enable-bracketed-paste Off >> .inputrc')
 
-            if terse != 'most':
+            if not terse:
                 bash_version = m('bash --version').out.split('\n')[0]
                 m.repl_header = bash_version + '\n' + cls.PS1
             else:
@@ -477,7 +477,7 @@ class REPLPython(REPLBase):
             cls.launch_interpreter(m, scriptpath)
 
             m.console.expect(r'(Python.*?)\r\n')
-            if terse != 'most':
+            if not terse:
                 m.repl_header = m.console.match.group(1) + '\n' + cls.PS1
             else:
                 m.repl_header = cls.PS1
