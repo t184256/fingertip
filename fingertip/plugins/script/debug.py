@@ -595,13 +595,23 @@ def main(m, scriptpath, language='bash', unseal=True,
                                           halt)
                 if any_changes:
                     m.console.eat_trailing()
+                    out_length = sum(
+                        result.full_output.count('\n')
+                        for result in m.results
+                    )
+                    if not terse and out_length > 25:
+                        print(dim('(too much output? try --terse,'
+                                  ' --terse=more or --terse=most)'))
                     if not terse:
-                        m.log.info('(too much output? try --terse,'
-                                   ' --terse=more or --terse=most)')
-                    checkpoints_i = [str(i) for i in m.checkpoint_positions()]
-                    m.log.info(f'done. checkpoints: {checkpoints_i}, '
-                               f'sparsity={m.checkpoint_sparsity}s. '
-                               'waiting for changes...')
+                        print(dim('checkpoints: '
+                                  f'{m.checkpoint_positions()}, '
+                                  f'sparsity={m.checkpoint_sparsity}s.'))
+                        print(dim('waiting for changes...'))
+                    else:
+                        print(dim('snapshots '
+                                  f'@{m.checkpoint_positions()} '
+                                  f'~{m.checkpoint_sparsity}s, '
+                                  'waiting for changes...'))
                 watcher.rewind_needed.wait()
             except RewindNeededException:
                 continue
