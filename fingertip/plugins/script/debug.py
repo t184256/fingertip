@@ -352,9 +352,13 @@ class REPLBase:
 
     @classmethod
     def install_interpreter_if_missing(cls, m):
-        if m(f'command -v {cls.INTERPRETER}', check=False).retcode:
-            m.apply('ansible', 'package',
-                    name=['bash', cls.PACKAGE], state='installed')
+        pkgs = []
+        if not m(f'command -v bash', check=False):
+            pkgs.append('bash')
+        if not m(f'command -v {cls.INTERPRETER}', check=False):
+            pkgs.append(cls.PACKAGE)
+        if pkgs:
+            m.apply('ansible', 'package', name=pkgs, state='installed')
         m(f'command -v {cls.INTERPRETER}')
 
     @classmethod
