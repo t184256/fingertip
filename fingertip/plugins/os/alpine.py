@@ -8,8 +8,8 @@ from fingertip.util import path
 
 
 MIRROR = 'http://dl-cdn.alpinelinux.org/alpine'
-ISO = MIRROR + '/v3.12/releases/x86_64/alpine-virt-3.12.0-x86_64.iso'
-REPO = MIRROR + '/v3.12/main/'
+ISO = MIRROR + '/v3.14/releases/x86_64/alpine-virt-3.14.2-x86_64.iso'
+REPO = MIRROR + '/v3.14/main/'
 
 
 def main(m=None):
@@ -34,7 +34,7 @@ def install_in_qemu(m):
     iso_file = os.path.join(m.path, os.path.basename(ISO))
     m.http_cache.fetch(ISO, iso_file)
 
-    with m:
+    with m, m.ram('512M'):
         m.ram.safeguard = '256M'  # alpine is quite a slim distro
         m.qemu.run(load=None, extra_args=['-cdrom', iso_file])
         m.console.expect_exact('localhost login: ')
@@ -45,9 +45,9 @@ def install_in_qemu(m):
         m.prompt = f'{m.hostname}:~# '
 
         m.console.sendline('setup-alpine -q')
-        m.console.expect_exact('Select keyboard layout [none]:')
+        m.console.expect_exact('Select keyboard layout: [none]')
         m.console.sendline('us')
-        m.console.expect_exact('Select variant []:')
+        m.console.expect_exact("Select variant (or 'abort'):")
         m.console.sendline('us')
         m.console.expect_exact(m.prompt)
 
@@ -71,7 +71,7 @@ def install_in_qemu(m):
         m.console.expect_exact(m.prompt)
 
         m.console.sendline('setup-disk -m sys /dev/vda')
-        m.console.expect_exact('Erase the above disk(s) and continue? [y/N]:')
+        m.console.expect_exact('Erase the above disk(s) and continue? (y/n)')
         m.console.sendline('y')
         m.console.expect_exact(m.prompt)
 

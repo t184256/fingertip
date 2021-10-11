@@ -8,6 +8,7 @@ how:
     method: rsync
     sources:
       - rsync://rsync.alpinelinux.org/alpine
+    excludes: ['freeswitch-sounds-*.apk']
   fedora:
     url: http://download.fedoraproject.org/pub/fedora/linux
     method: rsync
@@ -35,8 +36,8 @@ how:
     command: '[ -e $DST ] || (wget -q $SRC -O $DST-tmp && mv $DST-tmp $DST)'
 what:
   custom: ~
-  alpine-3.12: alpine/v3.12/main/x86_64/
-  alpine-3.12-iso: alpine/v3.12/releases/x86_64/alpine-virt-3.12.0-x86_64.iso
+  alpine-3.14: alpine/v3.14/main/x86_64/
+  alpine-3.14-iso: alpine/v3.14/releases/x86_64/alpine-virt-3.14.2-x86_64.iso
   fedora-pkgs-libxcrypt: fedora-pkgs/libxcrypt/
   fedora-lookaside-libxcrypt-4.4.16.tar.gz: fedora-lookaside/libxcrypt/libxcrypt-4.4.16.tar.gz/sha512/e1d3b1262c6be7c6c8847b8c4eb8191d9e5e482798be6f1186876c72f3d8c737124378ec45a38aa464f556e10a557b96f855bd371f03c3611eada27904bf6781/libxcrypt-4.4.16.tar.gz
 # f32: fedora/releases/32/
