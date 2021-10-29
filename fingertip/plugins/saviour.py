@@ -78,9 +78,10 @@ def method_git(log, src, base, dst):
 
 def method_reposync(log, src, base, dst,
                     arches=['noarch', 'x86_64'], source='auto',
-                    metadata='download', options=[]):
+                    metadata='download', options=[], excludes=[]):
     if source == 'auto':
         source = '/source' in src or '/SRPM' in src
+    excludes = [e[:-4] if e.endswith('.rpm') else e for e in excludes]
     repo_desc_for_mirroring = textwrap.dedent(f'''
         [repo]
         baseurl = {src}
@@ -99,6 +100,7 @@ def method_reposync(log, src, base, dst,
         [f'--arch={arch}' for arch in arches] +
         (['--download-metadata'] if metadata != 'generate' else []) +
         (['--source'] if source else []) +
+        (['--exclude=' + ','.join(excludes)] if excludes else []) +
         options,
         check=True)
     run = log.pipe_powered(subprocess.run,  # either too silent or too noisy =/
