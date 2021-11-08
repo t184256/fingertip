@@ -11,7 +11,7 @@ from fingertip.plugins.os.common import red_hat_based
 
 
 FEDORA_GEOREDIRECTOR = 'http://download.fedoraproject.org/pub/fedora/linux'
-RELEASED = 34
+RELEASED = 35
 
 
 def main(m=None, version=RELEASED, mirror=None, specific_mirror=True,
