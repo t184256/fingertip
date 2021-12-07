@@ -49,11 +49,13 @@ def logs(older_than=0):
 def _cleanup_dir(dirpath, preserve_func):
     for root, dirs, files in os.walk(dirpath, topdown=False):
         for f in (os.path.join(root, x) for x in files):
+            if preserve_func(f):
+                continue
             assert os.path.realpath(f).startswith(os.path.realpath(dirpath))
-            if not preserve_func(f):
-                log.info(f'removing {os.path.realpath(f)}')
-                os.unlink(f)
+            os.unlink(f)
         for d in (os.path.join(root, x) for x in dirs):
+            if preserve_func(d):
+                continue
             assert os.path.realpath(d).startswith(os.path.realpath(dirpath))
             try:
                 os.rmdir(d)
