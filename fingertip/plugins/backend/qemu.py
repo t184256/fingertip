@@ -137,6 +137,7 @@ class QEMUNamespacedFeatures:
                               'server,nowait,nodelay')]
 
         self.vm.ssh.port = free_port.find()
+        self.usernet.remember_settings()
         self.vm.shared_directory = SharedDirectory(self.vm)
         self.vm.exec = self.vm.ssh.exec
         run_args += self.usernet._netspec_cmd()
@@ -282,6 +283,9 @@ class Monitor:
                 server_greeting = self._expect()
                 assert set(server_greeting.keys()) == {'QMP'}
                 self._expect({'return': {}})  # from qmp_capabilities
+                self._execute('query-version')
+                version = self._expect(None)
+                self.vm.qemu.major_version = version['return']['qemu']['major']
                 self.vm.log.debug(f'QMP is ready')
             threading.Thread(target=self._ballooning_thread,
                              daemon=True).start()
@@ -320,6 +324,8 @@ class Monitor:
         self.vm.log.debug(f'expected: {what}')
         self.vm.log.debug(f'received: {reply}')
         if what is not None:
+            if reply != what:
+                self.vm.log.error(f'{what} does not match received {reply}')
             assert reply == what
         return reply
 
@@ -431,9 +437,24 @@ class Monitor:
                               f'already at {units.binary(target_size)}')
 
     def usernet_modify_conf(self, conf):
-        with self._command_execution_lock:
-            self.vm.qemu.monitor._execute('netdev_add', **conf)
-            self.vm.qemu.monitor._expect({'return': {}})
+        if self.vm.qemu.major_version >= 6:
+            self.vm.log.error('QEMU 6 broke dynamic network reconfiguration')
+            self.vm.log.error('Port forwarding will not work until a machine '
+                              'gets brought down and up again')
+        else:
+            with self._command_execution_lock:
+                #self.vm.qemu.monitor._execute('device_del',
+                #                              id='virtio-net-pci-0')
+                #self.vm.qemu.monitor._expect({'return': {}})
+                self.vm.qemu.monitor._execute('netdev_del', **{'id': 'net0'})
+                self.vm.qemu.monitor._expect({'return': {}})
+                self.vm.qemu.monitor._execute('netdev_add', **conf)
+                self.vm.qemu.monitor._expect({'return': {}})
+                #self.vm.qemu.monitor._execute('device_add',
+                #                              id='virtio-net-pci.0',
+                #                              driver='virtio-net-pci',
+                #                              netdev='net0')
+                #self.vm.qemu.monitor._expect({'return': {}})
 
 
 class RAMNamespacedFeatures:
@@ -568,23 +589,24 @@ class UserNet:
         self._hostfwds_extra = []
         self._guestfwds_extra = []
         self.restrict = True
-        self.vm.hooks.unseal.append(lambda: self._reconfigure({}))  # restrict
+        self.vm.hooks.unseal.append(lambda: self._reconfigure())  # restrict
+
+    def remember_settings(self):
+        self._applied_conf = self._netspec_conf()
 
     def forward_tcp_host_port(self, hostport, guestport,
                               hostaddr='127.0.0.1', guestaddr=''):
         self._hostfwds_extra.append((hostaddr, hostport, guestaddr, guestport))
-        # QEMU, what the? "List of strings", uh-huh.
-        # And what's up with differentiality?
-        self._reconfigure({'hostfwd': [
-            {'str': f'tcp:{hostaddr}:{hostport}-{guestaddr}:{guestport}'}
-        ]})
+        self._reconfigure_append('hostfwd',
+            f'tcp:{hostaddr}:{hostport}-{guestaddr}:{guestport}'
+        )
 
     def forward_tcp_guest_port(self, intport, extport,
                                intaddr, extaddr='127.0.0.1'):
         self._guestfwds_extra.append((intaddr, intport, extaddr, extport))
-        self._reconfigure({'guestfwd': [
-            {'str': f'tcp:{intaddr}:{intport}-cmd:nc {extaddr} {extport}'}
-        ]})
+        self._reconfigure_append('guestfwd',
+            f'tcp:{intaddr}:{intport}-cmd:nc {extaddr} {extport}'
+        )
 
     def _host_forwards(self, prefix='hostfwd='):
         dynamic_ssh = ('127.0.0.1', self.vm.ssh.port, '', 22)
@@ -599,21 +621,50 @@ class UserNet:
                 [dynamic_http_cache] + self._guestfwds_extra]
 
     def _netspec_cmd(self):
-        return ['-device', 'virtio-net,netdev=net0', '-netdev',
+        return ['-device', 'virtio-net-pci,netdev=net0,id=virtio-net-pci-0',
+                '-netdev',
                 ','.join(['user', 'id=net0'] +
                          [f'hostfwd={fw}' for fw in self._host_forwards()] +
                          [f'guestfwd={fw}' for fw in self._guest_forwards()] +
                          (['restrict=yes'] if self.vm.sealed else []))]
 
-    def _reconfigure(self, diff_conf):
+    def _netspec_conf(self):  # used for QEMU 6 full reconfiguration
+        return {
+            'type': 'user', 'id': 'net0', 'restrict': self.vm.sealed,
+            'hostfwd': [{'str': hf} for hf in self._host_forwards()],
+            'guestfwd': [{'str': gf} for gf in self._guest_forwards()],
+        }
+
+    def _reconfigure_append(self, kind, strdesc):
         if self.vm.qemu.live:
-            #self.vm.qemu.monitor._execute('netdev_del', **{'id': 'net0'})
-            #self.vm.qemu.monitor._expect({'return': {}})
-            conf = {
-                'type': 'user', 'id': 'net0', 'restrict': self.vm.sealed,
-            }
-            conf.update(diff_conf)
-            self.vm.qemu.monitor.usernet_modify_conf(conf)
+            if self.vm.qemu.major_version < 6:
+                # What's up with having them differential in QEMU 5?
+                # Also, "list of strings"? You wish.
+                conf = {
+                    'type': 'user', 'id': 'net0', 'restrict': self.vm.sealed,
+                    kind: {'str': strdesc},
+                }
+            else:
+                # full update based on the previous conf + new changes
+                conf = self._netspec_conf()
+            if conf != self._applied_conf:
+                self.vm.log.debug(f'netconf applied: {self._applied_conf}')
+                self.vm.log.debug(f'netconf request: {conf}')
+                self.vm.qemu.monitor.usernet_modify_conf(conf)
+                self._applied_conf = conf
+
+    def _reconfigure(self):
+        if self.vm.qemu.live:
+            if self.vm.qemu.major_version < 6:
+                conf = {
+                    'type': 'user', 'id': 'net0', 'restrict': self.vm.sealed,
+                }
+            else:
+                conf = self._netspec_conf()
+            if conf != self._applied_conf:
+                self.vm.debug(f'netconf applied: {self._applied_conf}')
+                self.vm.debug(f'netconf request: {conf}')
+                self.vm.qemu.monitor.usernet_modify_conf(conf)
 
 
 class SharedDirectory:
