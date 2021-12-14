@@ -662,8 +662,8 @@ class UserNet:
             else:
                 conf = self._netspec_conf()
             if conf != self._applied_conf:
-                self.vm.debug(f'netconf applied: {self._applied_conf}')
-                self.vm.debug(f'netconf request: {conf}')
+                self.vm.log.debug(f'netconf applied: {self._applied_conf}')
+                self.vm.log.debug(f'netconf request: {conf}')
                 self.vm.qemu.monitor.usernet_modify_conf(conf)
 
 
