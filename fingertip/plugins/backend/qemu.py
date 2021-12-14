@@ -642,7 +642,7 @@ class UserNet:
                 # Also, "list of strings"? You wish.
                 conf = {
                     'type': 'user', 'id': 'net0', 'restrict': self.vm.sealed,
-                    kind: {'str': strdesc},
+                    kind: [{'str': strdesc}],
                 }
             else:
                 # full update based on the previous conf + new changes
