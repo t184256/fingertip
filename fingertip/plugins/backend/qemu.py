@@ -708,7 +708,7 @@ class SSH:
         pubkey = paramiko.ECDSAKey.from_private_key_file(SSH.key_file_paramiko)
 
         def connect():
-            self.m.log.debug('Trying to connect ...')
+            self.m.log.debug(f'Trying to connect to SSH, port {self.port} ...')
             t = paramiko.Transport((self.host, self.port))
             t.start_client()
             return t
