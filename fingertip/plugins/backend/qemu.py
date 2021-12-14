@@ -446,8 +446,8 @@ class Monitor:
                 #self.vm.qemu.monitor._execute('device_del',
                 #                              id='virtio-net-pci-0')
                 #self.vm.qemu.monitor._expect({'return': {}})
-                self.vm.qemu.monitor._execute('netdev_del', **{'id': 'net0'})
-                self.vm.qemu.monitor._expect({'return': {}})
+                #self.vm.qemu.monitor._execute('netdev_del', **{'id': 'net0'})
+                #self.vm.qemu.monitor._expect({'return': {}})
                 self.vm.qemu.monitor._execute('netdev_add', **conf)
                 self.vm.qemu.monitor._expect({'return': {}})
                 #self.vm.qemu.monitor._execute('device_add',
