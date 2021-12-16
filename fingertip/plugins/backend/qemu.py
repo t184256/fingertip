@@ -23,7 +23,7 @@ from fingertip.util import free_port, log, path, reflink, repeatedly, temp
 from fingertip.util import units
 
 
-IGNORED_EVENTS = ('NIC_RX_FILTER_CHANGED', 'RTC_CHANGE', 'RESET')
+IGNORED_EVENTS = ('NIC_RX_FILTER_CHANGED', 'RTC_CHANGE', 'RESET', 'SHUTDOWN')
 SNAPSHOT_BASE_NAME = 'tip'  # it has to have some name
 CACHE_INTERNAL_IP, CACHE_INTERNAL_PORT = '10.0.2.244', 8080
 CACHE_INTERNAL_URL = f'http://{CACHE_INTERNAL_IP}:{CACHE_INTERNAL_PORT}'
