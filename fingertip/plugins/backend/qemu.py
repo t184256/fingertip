@@ -485,7 +485,7 @@ class RAMNamespacedFeatures:
                                 f'({units.binary(self._max)})')
             new = self._max
         self._target = new
-        if self._m.qemu.live and self._actual != new:
+        if hasattr(self._m.qemu, 'monitor') and self._actual != new:
             self._m.log.debug(f'going to balloon to {units.binary(new)} '
                               f'from {units.binary(self._m.ram._actual)}')
             self._m.qemu.monitor._ram_target_changed.set()
@@ -636,7 +636,7 @@ class UserNet:
         }
 
     def _reconfigure_append(self, kind, strdesc):
-        if self.vm.qemu.live:
+        if hasattr(self.vm.qemu, 'monitor'):
             if self.vm.qemu.major_version < 6:
                 # What's up with having them differential in QEMU 5?
                 # Also, "list of strings"? You wish.
@@ -654,7 +654,7 @@ class UserNet:
                 self._applied_conf = conf
 
     def _reconfigure(self):
-        if self.vm.qemu.live:
+        if hasattr(self.vm.qemu, 'monitor'):
             if self.vm.qemu.major_version < 6:
                 conf = {
                     'type': 'user', 'id': 'net0', 'restrict': self.vm.sealed,
