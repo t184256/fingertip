@@ -11,6 +11,8 @@ from fingertip.plugins.os.common import red_hat_based
 
 
 FEDORA_GEOREDIRECTOR = 'http://download.fedoraproject.org/pub/fedora/linux'
+F35_FIX_URL = ('http://rvykydal.fedorapeople.org/update-images/'
+               'updates.f35-2019579-resolvconf.img')
 RELEASED = 35
 
 
@@ -104,6 +106,10 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
         m.log.info(f'fetching initrd: {url}/isolinux/initrd.img')
         initrd = os.path.join(m.path, 'initrd')
         m.http_cache.fetch(f'{url}/isolinux/initrd.img', initrd)
+        if version == 35:
+            # work around bz2019579
+            f35_fix = os.path.join(m.path, 'resolvconf-f35-fix.img')
+            m.http_cache.fetch(F35_FIX_URL, f35_fix)
         append = ('ks=http://mock/ks inst.ks=http://mock/ks '
                   'inst.ksstrict '
                   'console=ttyS0 inst.notmux '
@@ -111,6 +117,7 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
                   f'proxy={m.http_cache.internal_url} '
                   f'inst.proxy={m.http_cache.internal_url} '
                   f'inst.repo={url} ' +
+                  (f'inst.updates={F35_FIX_URL} ' if version == 35 else '') +
                   ('fips=1' if fips else ''))
         extra_args = ['-kernel', kernel, '-initrd', initrd, '-append', append]
 
