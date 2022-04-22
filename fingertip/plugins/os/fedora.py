@@ -110,8 +110,7 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
             # work around bz2019579
             f35_fix = os.path.join(m.path, 'resolvconf-f35-fix.img')
             m.http_cache.fetch(F35_FIX_URL, f35_fix)
-        append = ('ks=http://mock/ks inst.ks=http://mock/ks '
-                  'inst.ksstrict '
+        append = ('inst.ks=http://mock/ks inst.ksstrict '
                   'console=ttyS0 inst.notmux '
                   'inst.zram=off '
                   f'proxy={m.http_cache.internal_url} '
