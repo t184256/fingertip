@@ -6,6 +6,7 @@ command -v wget || dnf install -y wget
 
 # [ -z "$(git status --porcelain)" ] || exit 1
 
+git config --global --add safe.directory $(realpath .)
 git_commit=$(git rev-parse HEAD)
 version=$(git describe --tags --abbrev=0 | tail -c +2)
 release=$(git describe --tags --long | tail -c +2 | sed s/^$version-// | sed s/-/./)
