@@ -58,6 +58,7 @@ sed -i 's|^baseurl=https://|baseurl=http://|' /etc/yum.repos.d/*
 sed -i 's|^metalink=https://|metalink=http://|' /etc/yum.repos.d/*
 sed -i 's|^metalink=\(.*\)$|metalink=\1\&protocol=http|' /etc/yum.repos.d/*
 sed -i 's|gpgcheck=1|gpgcheck=0|' /etc/dnf/dnf.conf
+rm -f /etc/yum.repos.d/fedora-*
 
 # don't download metadata for debuginfo / source repositories
 dnf -y config-manager --disable '*-debuginfo' '*-source'
