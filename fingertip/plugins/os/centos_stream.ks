@@ -60,25 +60,11 @@ sed -i 's|^\[main\]$|[main]\nproxy={PROXY}\ndeltarpm=0\nzchunk=0\ninstall_weak_d
 sed -i 's|^baseurl=https://|baseurl=http://|' /etc/yum.repos.d/*
 sed -i 's|^metalink=https://|metalink=http://|' /etc/yum.repos.d/*
 sed -i 's|^metalink=\(.*\)$|metalink=\1\&protocol=http|' /etc/yum.repos.d/*
+sed -i 's|enabled=0|enabled=1|' /etc/yum.repos.d/CentOS-Stream-PowerTools.repo
 sed -i 's|gpgcheck=1|gpgcheck=0|' /etc/dnf/dnf.conf
 
 mkdir /etc/yum.repos.d/
 cat >/etc/yum.repos.d/appstream.repo <<EOF
-[appstream]
-name=CentOS Stream - AppStream
-baseurl=http://mirror.centos.org/centos/8-stream/AppStream/x86_64/os/
-gpgcheck=0
-enabled=1
-EOF
-
-cat >/etc/yum.repos.d/baseos.repo <<EOF
-[baseos]
-name=CentOS Stream - BaseOS
-baseurl=http://mirror.centos.org/centos/8-stream/BaseOS/x86_64/os/
-gpgcheck=0
-enabled=1
-EOF
-
 cat >/etc/yum.repos.d/c8s-debuginfo.repo <<EOF
 [c8s-debuginfo]
 name=CentOS Stream - debuginfo

@@ -38,9 +38,10 @@ def install_in_qemu(m=None):
         m.log.info(f'fetching initrd: {URL}/isolinux/initrd.img')
         initrd = os.path.join(m.path, 'initrd')
         m.http_cache.fetch(f'{URL}/isolinux/initrd.img', initrd)
-        append = ('ks=http://mock/ks console=ttyS0 ' +
+        append = ('inst.ks=http://mock/ks console=ttyS0 ' +
                   'inst.text inst.notmux inst.cmdline ' +
-                  f'proxy={m.http_cache.internal_url} ' + f'repo={URL} ')
+                  f'proxy={m.http_cache.internal_url} ' +
+                  f'inst.repo={URL} ')
         extra_args = ['-kernel', kernel, '-initrd', initrd, '-append', append]
 
         m.ram.safeguard = '768M'
