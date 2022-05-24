@@ -76,7 +76,7 @@ def install_in_qemu(m=None, extra_cmdline=''):
 
         m.ram.safeguard = '1536M'
         with m.ram('>=4G'):
-            m.expiration.cap('2d')  # non-immutable repositories
+            m.expiration.cap('1d')  # non-immutable repositories
             m.qemu.run(load=None, extra_args=extra_args)
             m.console.expect('Installation complete')
             m.qemu.wait()
