@@ -55,13 +55,17 @@ def proxy_dnf(m):
     m.hooks.disable_proxy.append(disable_proxy)
 
     with m:
-        plugindir = m('find /usr/lib/py* -name dnf-plugins').out.strip()
-        source = DNF_PLUGIN_SOURCE.replace('$PROXY', m.http_cache.internal_url)
-        m(f'cat > {plugindir}/proxyall.py <<EOF\n{source}EOF')
         source = COPR_PATCH.replace('$PROXY', m.http_cache.internal_url)
-        m('patch -p1 /usr/lib/pyth*/site-packages/dnf-plugins/copr.py'
-          f' <<EOF\n{source}EOF')
-        m('touch /etc/dnf/plugins/proxyall')
+        copr_py_files = m('find /usr/lib/py*/*/dnf-plugins -name copr.py').out
+        for copr_py_file in copr_py_files.strip().split():
+            m(f'patch -p1 {copr_py_file} <<EOF\n{source}EOF',
+              check=not hasattr(m, 'package_manager_proxied'))  # 1st time
+
+        source = DNF_PLUGIN_SOURCE.replace('$PROXY', m.http_cache.internal_url)
+        plugindirs = m('find /usr/lib/py* -name dnf-plugins').out
+        for plugindir in plugindirs.strip().split():
+            m(f'cat > {plugindir}/proxyall.py <<EOF\n{source}EOF')
+            m('touch /etc/dnf/plugins/proxyall')
         m._package_manager_proxied = True
         return m
 
