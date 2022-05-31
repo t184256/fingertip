@@ -27,8 +27,8 @@ IGNORED_EVENTS = ('NIC_RX_FILTER_CHANGED', 'RTC_CHANGE', 'RESET', 'SHUTDOWN')
 SNAPSHOT_BASE_NAME = 'tip'  # it has to have some name
 CACHE_INTERNAL_IP, CACHE_INTERNAL_PORT = '10.0.2.244', 8080
 CACHE_INTERNAL_URL = f'http://{CACHE_INTERNAL_IP}:{CACHE_INTERNAL_PORT}'
-# TODO: add a way to customize smp
-QEMU_COMMON_ARGS = ['-enable-kvm', '-cpu', 'host', '-smp', '4',
+MAX_AUTO_CORES = 8
+QEMU_COMMON_ARGS = ['-enable-kvm', '-cpu', 'host',
                     '-virtfs', f'local,id=shared9p,path={path.SHARED},'
                                'security_model=mapped-file,mount_tag=shared',
                     '-nographic',
@@ -38,12 +38,12 @@ QEMU_COMMON_ARGS = ['-enable-kvm', '-cpu', 'host', '-smp', '4',
 
 
 def main(arch='x86_64', ram_min='1G', ram_size='1G', ram_max='4G',
-         disk_size='20G', custom_args=[]):
+         disk_size='20G', cores=None, custom_args=[]):
     assert arch == 'x86_64'
     m = fingertip.machine.Machine('qemu')
     m.arch = arch
     m.ram = RAMNamespacedFeatures(m, ram_min, ram_size, ram_max)
-    m.qemu = QEMUNamespacedFeatures(m, disk_size, custom_args)
+    m.qemu = QEMUNamespacedFeatures(m, disk_size, cores, custom_args)
     m.snapshot = SnapshotNamespacedFeatures(m)
     m._backend_mode = 'pexpect'
 
@@ -115,10 +115,12 @@ def main(arch='x86_64', ram_min='1G', ram_size='1G', ram_max='4G',
 
 
 class QEMUNamespacedFeatures:
-    def __init__(self, vm, disk_size, custom_args):
+    def __init__(self, vm, disk_size, cores, custom_args):
         self.vm = vm
         self.live = False
         self.disk_size = disk_size
+        self.cores = (int(cores) if cores else
+                      max(1, min(os.cpu_count() // 2, MAX_AUTO_CORES)))
         self.custom_args = custom_args
         self.image, self._image_to_clone = None, None
         self.virtio_scsi = False  # flip before OS install for TRIM on Linux<5
@@ -173,6 +175,7 @@ class QEMUNamespacedFeatures:
                                    'if=virtio,discard=unmap']
 
         run_args += ['-m', str(self.vm.ram.max // 2**20)]
+        run_args += ['-smp', str(self.cores)]
 
         os.makedirs(path.SHARED, exist_ok=True)
 
