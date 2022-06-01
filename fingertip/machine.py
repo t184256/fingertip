@@ -70,7 +70,7 @@ class Machine:
         assert self._state == 'spun_up'
         self._up_counter -= 1
         if not self._up_counter:
-            if not self._transient or exc_type:
+            if not self._transient and not exc_type:
                 # the machine needs to be spun down, will be finalized later
                 self.hooks.down.in_reverse()
                 self._state = 'spun_down'
