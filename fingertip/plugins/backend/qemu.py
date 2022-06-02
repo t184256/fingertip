@@ -149,12 +149,13 @@ class QEMUNamespacedFeatures:
             # let's try to use /tmp (which is, hopefully, tmpfs) for transients
             # if it looks empty enough
             cloned_to_tmp = False
-            required_space = os.path.getsize(self._image_to_clone) + 2 * 2**30
+            required_space = os.path.getsize(self._image_to_clone)
             if self.vm._transient:
                 # Would be ideal to have it global (and multiuser-ok)
                 tmp_free_lock = path.cache('.tmp-free-space-check-lock')
                 with fasteners.process_lock.InterProcessLock(tmp_free_lock):
-                    if temp.has_space(required_space, where='/tmp'):
+                    if temp.has_space(required_space, where='/tmp',
+                                      safety_constant='4G', target_free=.5):
                         self.image = temp.disappearing_file(
                             '/tmp', hint='fingertip-qemu'
                         )

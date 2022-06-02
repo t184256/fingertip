@@ -91,12 +91,17 @@ def disappearing_dir(dstdir=None, hint=''):
     return disappearing(unique_dir(dstdir=dstdir, hint=hint))
 
 
-def has_space(how_much='2G', reserve_fraction=.5, where=None):
+def has_space(how_much='2G', safety_constant='1M', target_free=1,
+              where=None):
     where = where or tempfile.gettempdir()
-    how_much = units.parse_binary(how_much)
+    needed = units.parse_binary(how_much) + units.parse_binary(safety_constant)
     total, _, free = shutil.disk_usage(where)
-    if not free >= how_much:
-        log.warning(f'{where} does not have {how_much} of free space')
-    if not free >= total * reserve_fraction:
-        log.warning(f'{where} is {int((1 - reserve_fraction) * 100)}% full')
-    return free >= how_much and free >= total * reserve_fraction
+    if (free - needed) / total < target_free:
+        log.warning(f'{units.binary(total, coarseness="1M")} {where} '
+                    f'is {int((1 - free / total) * 100)}% full')
+        log.warning(f'extra ({units.binary(how_much, coarseness="1M")} '
+                    f'+ {safety_constant}) risks bringing it to '
+                    f'{int((1 - (free - needed) / total) * 100)}% full, which '
+                    f'is over {int((1 - target_free) * 100)}% target')
+        return False
+    return True

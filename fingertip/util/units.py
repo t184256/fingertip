@@ -23,8 +23,11 @@ def parse_binary(value):
         raise ValueError(f'Cannot parse binary-suffixed value {value}')
 
 
-def binary(value):
+def binary(value, coarseness=1):
     value = int(value)
+    if coarseness != 1:
+        coarseness = parse_binary(coarseness)
+        value = value // coarseness * coarseness
     if not value:
         return '0'
     r = str(value)
