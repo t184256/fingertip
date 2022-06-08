@@ -9,16 +9,16 @@ from fingertip.util import path
 from fingertip.plugins.os.common import red_hat_based
 
 URL = ('http://odcs.fedoraproject.org/composes/production/latest-Fedora-ELN/'
-       'compose/Everything')
+       'compose')
 HOSTNAME = 'Fedora-ELN'
 NEXT_RHEL = 10
 
 
-def _url(kind='', arch='x86_64'):
+def _url(reponame='BaseOS', kind='', arch='x86_64'):
     kinds = {'': f'{arch}/os',
              'debuginfo': f'{arch}/debug/tree',
              'source': 'source/tree'}
-    return (f'{URL}/{kinds[kind]}')
+    return (f'{URL}/{reponame}/{kinds[kind]}')
 
 
 def main(m=None, extra_cmdline=''):
@@ -30,17 +30,14 @@ def main(m=None, extra_cmdline=''):
 
 def install_in_qemu(m=None, extra_cmdline=''):
     repos = ''
-    for kind in ('', 'debuginfo', 'source'):
-        name = f'ELN-Everything' + (f'-{kind}' if kind else '')
-        url = _url(kind)
-        repos += f'repo --name={name} --baseurl={url} --install\n'
-    # https://github.com/fedora-eln/eln/issues/87
-    repos += repos.replace('Everything', 'BaseOS')
+    for reponame in 'BaseOS', 'AppStream', 'CRB', 'Extras':
+        for kind in ('', 'debuginfo', 'source'):
+            name = f'ELN-{reponame}' + (f'-{kind}' if kind else '')
+            url = _url(reponame, kind)
+            repos += f'repo --name={name} --baseurl={url} --install\n'
 
     m = m or fingertip.machine.build('backend.qemu')
     base_url = _url()
-    # https://github.com/fedora-eln/eln/issues/87
-    base_url = base_url.replace('Everything', 'BaseOS')
 
     with m:
         ssh_key_path = path.fingertip('ssh_key', 'fingertip.pub')
@@ -74,56 +71,14 @@ def install_in_qemu(m=None, extra_cmdline=''):
                   extra_cmdline)
         extra_args = ['-kernel', kernel, '-initrd', initrd, '-append', append]
 
-        m.ram.safeguard = '1536M'
+        m.ram.safeguard = m.ram.max  # fix to 1536M when virtio-ballon is fixed
         with m.ram('>=4G'):
             m.expiration.cap('1d')  # non-immutable repositories
             m.qemu.run(load=None, extra_args=extra_args)
             m.console.expect('Installation complete')
             m.qemu.wait()
 
-        # https://github.com/fedora-eln/eln/issues/88#issuecomment-1117015345
-        # hacky fixup
-        m.ram.min = '4G'
-        m.qemu.run(load=None)
-        m.console.expect('Give root password for maintenance')
-        m.console.sendline('fingertip')
-        m.console.expect(':/root# ')
-        m.console.sendline('mkdir /mnt')
-        m.console.expect(':/root# ')
-        m.console.sendline('mount /dev/vda3 /mnt; mount /dev/vda1 /mnt/boot')
-        m.console.expect(':/root# ')
-        for d in 'proc', 'dev', 'sys':
-            m.console.sendline(f'mount --bind /{d} /mnt/{d}')
-            m.console.expect(':/root# ')
-        m.console.sendline('chroot /mnt')
-        m.console.expect(':/# ')
-        m.console.sendline('grubby --info=ALL')
-        m.console.expect(':/# ')
-        m.console.sendline('. /etc/default/grub')
-        m.console.expect(':/# ')
-        for a in append.split():
-            if a == 'console=ttyS0' or a in extra_cmdline:
-                continue
-            m.console.sendline(f'grubby --update-kernel=ALL --remove-args {a}')
-            m.console.expect(':/# ')
-        m.console.sendline('grubby --update-kernel=ALL '
-                           '       --args $GRUB_CMDLINE_LINUX')
-        m.console.sendline('grubby --update-kernel=ALL --args root=/dev/vda3')
-        m.console.expect(':/# ')
-        m.console.sendline('grubby --info=ALL')
-        m.console.expect(':/# ')
-        m.console.sendline('exit')
-        m.console.expect(':/root# ')
-        for d in 'proc', 'dev', 'sys':
-            m.console.sendline(f'umount /mnt/{d}')
-            m.console.expect(':/root# ')
-        m.console.sendline('umount /mnt/boot; umount /mnt')
-        m.console.expect(':/root# ')
-        m.console.sendline('poweroff')
-        m.qemu.wait()
-        m.ram.min = '2G'
-
-        # second boot, first proper boot
+        # first boot
         m.qemu.run(load=None)
 
         def login(username='root', password='fingertip'):
