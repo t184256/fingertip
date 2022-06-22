@@ -56,12 +56,12 @@ def install_in_qemu(m=None, extra_cmdline=''):
         m.expiration.depend_on_a_file(ks)
 
         m.http_cache.mock('http://mock/ks', text=ks_text)
-        m.log.info(f'fetching kernel: {base_url}/isolinux/vmlinuz')
+        m.log.info(f'fetching kernel: {base_url}/images/pxeboot/vmlinuz')
         kernel = os.path.join(m.path, 'kernel')
-        m.http_cache.fetch(f'{base_url}/isolinux/vmlinuz', kernel)
-        m.log.info(f'fetching initrd: {base_url}/isolinux/initrd.img')
+        m.http_cache.fetch(f'{base_url}/images/pxeboot/vmlinuz', kernel)
+        m.log.info(f'fetching initrd: {base_url}/images/pxeboot/initrd.img')
         initrd = os.path.join(m.path, 'initrd')
-        m.http_cache.fetch(f'{base_url}/isolinux/initrd.img', initrd)
+        m.http_cache.fetch(f'{base_url}/images/pxeboot/initrd.img', initrd)
         append = ('inst.ks=http://mock/ks inst.ksstrict console=ttyS0 '
                   'inst.zram=off '
                   'inst.text inst.notmux inst.cmdline '
