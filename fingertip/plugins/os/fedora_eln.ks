@@ -22,7 +22,6 @@ sshkey --username root '{SSH_PUBKEY}'
 %packages --exclude-weakdeps --timeout 900
 @Core --nodefaults
 openssh-server
-glibc-minimal-langpack
 glibc-langpack-en
 python3-libselinux
 patch
