@@ -43,15 +43,16 @@ def saviour_sources():
             os.getenv('FINGERTIP_SAVIOUR', SAVIOUR_DEFAULTS).split(',')]
 
 
-def is_fetcheable(source, url, timeout=2):
+def is_fetcheable(source, url, allow_redirects=False, timeout=2):
     if source == 'local':
         return os.path.exists(path.saviour(url))
     elif source != 'direct':
         url = source + '/' + url
         url = 'http://' + url if '://' not in source else url
     try:
-        r = requests.head(url, allow_redirects=False, timeout=timeout)
-        return r.status_code < 400
+        r = requests.head(url, allow_redirects=allow_redirects,
+                          timeout=timeout)
+        return r.status_code < (300 if allow_redirects else 400)
     except (requests.exceptions.BaseHTTPError, urllib3.exceptions.HTTPError,
             requests.exceptions.Timeout, OSError) as ex:
         log.warning(f'{ex}')
@@ -235,8 +236,9 @@ class HTTPCache:
             sess.mount(uri, adapter)
         return sess
 
-    def is_fetcheable(self, url):
-        return any((is_fetcheable(src, url) for src in saviour_sources()))
+    def is_fetcheable(self, url, allow_redirects=False):
+        return any((is_fetcheable(src, url, allow_redirects=allow_redirects)
+                   for src, _ in saviour_sources()))
 
     def fetch(self, url, out_path):
         sources = saviour_sources()
