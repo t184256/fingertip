@@ -10,11 +10,14 @@ from fingertip.plugins.os.common import red_hat_based
 
 URL = ('http://odcs.fedoraproject.org/composes/production/latest-Fedora-ELN/'
        'compose')
+BUILDROOT='https://kojipkgs.fedoraproject.org/repos/eln-build/latest'
 HOSTNAME = 'Fedora-ELN'
 NEXT_RHEL = 10
 
 
 def _url(reponame='BaseOS', kind='', arch='x86_64'):
+    if reponame == 'buildroot':
+        return f'{BUILDROOT}/{arch}'
     kinds = {'': f'{arch}/os',
              'debuginfo': f'{arch}/debug/tree',
              'source': 'source/tree'}
@@ -112,6 +115,11 @@ def install_in_qemu(m=None, extra_cmdline=''):
                            lambda: m('nm-online'),
                            hack_resolv_conf]
         m.hooks.timesync.append(lambda: m('hwclock -s'))
+
+        m = m.apply('ansible', 'yum_repository', enabled=False, gpgcheck=False,
+                    name='eln-koji-buildroot',
+                    description='eln-koji-buildroot',
+                    baseurl=_url(reponame='buildroot'))
 
         m.rhel = NEXT_RHEL
         m.fedora_eln = True
