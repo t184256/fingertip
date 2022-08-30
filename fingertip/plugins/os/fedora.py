@@ -1,5 +1,5 @@
 # Licensed under GNU General Public License v3 or later, see COPYING.
-# Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
+# Copyright (c) 2019 - 2022 Red Hat, Inc., see CONTRIBUTORS.
 
 import requests
 
@@ -14,6 +14,43 @@ FEDORA_GEOREDIRECTOR = 'http://download.fedoraproject.org/pub/fedora/linux'
 F35_FIX_URL = ('http://rvykydal.fedorapeople.org/update-images/'
                'updates.f35-2019579-resolvconf.img')
 RELEASED = 36
+
+def prepare_upgrade(m, releasever = None):
+    assert hasattr(m, 'fedora')
+    assert hasattr(m, 'qemu')
+
+    releasever = releasever or m.fedora + 1
+
+    with m:
+        m('dnf upgrade -y --refresh')
+        m = m.apply('ansible', 'package', state='present', name='dnf-plugin-system-upgrade')
+        # if we upgrade to unreleased version, we need to tweak repo files
+        if releasever in (RELEASED + 1, 'rawhide'):
+            m(r'sed -i -e "s|\(baseurl=.*/\)releases/|\1development/|g" '
+               '/etc/yum.repos.d/fedora{,-modular}.repo')
+            m('cat /etc/yum.repos.d/fedora{,-modular}.repo')
+        m(f'dnf -y system-upgrade download --releasever={releasever}')
+        m.fedora_upgrade_prepared = True
+    return m
+
+def upgrade(m=None, releasever=None):
+    """
+    Upgrade Fedora to other release using dnf system upgrade plugin.
+    If no releasever is specified, upgrade to the next major version.
+    Useful to get pre-release versions.
+    """
+    m = m or fingertip.build('os.fedora')
+    assert hasattr(m, 'fedora')
+    assert hasattr(m, 'qemu')
+
+    if not hasattr(m, 'fedora_upgrade_prepared'):
+        m = m.apply(prepare_upgrade, releasever)
+
+    with m:
+        m.console.sendline('dnf system-upgrade reboot')
+        m.login()
+        m('systemctl is-system-running --wait || true')
+    return m
 
 
 def main(m=None, version=RELEASED, mirror=None, specific_mirror=True,
