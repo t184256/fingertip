@@ -116,7 +116,7 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
 
     with m:
         m.ram.safeguard = '768M'
-        m.expiration.cap('2d')  # non-immutable repositories
+        m.expiration.cap('1d')  # non-immutable repositories
 
         hostname = f'fedora{version}' + ('-fips' if fips else '')
         fqdn = hostname + '.fingertip.local'
