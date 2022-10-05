@@ -15,7 +15,7 @@ F35_FIX_URL = ('http://rvykydal.fedorapeople.org/update-images/'
                'updates.f35-2019579-resolvconf.img')
 RELEASED = 36
 
-def prepare_upgrade(m, releasever = None):
+def prepare_upgrade(m, releasever=None):
     assert hasattr(m, 'fedora')
     assert hasattr(m, 'qemu')
 
@@ -43,13 +43,22 @@ def upgrade(m=None, releasever=None):
     assert hasattr(m, 'fedora')
     assert hasattr(m, 'qemu')
 
+    releasever = releasever or m.fedora + 1
+
     if not hasattr(m, 'fedora_upgrade_prepared'):
         m = m.apply(prepare_upgrade, releasever)
 
     with m:
-        m.console.sendline('dnf system-upgrade reboot')
+        m.console.sendline(' dnf system-upgrade reboot')
         m.login()
         m('systemctl is-system-running --wait || true')
+
+        m.fedora = releasever
+        m.dist_git_branch = (f'f{releasever}'
+                             if releasever != 'rawhide' else 'rawhide')
+        m._package_manager_proxied = False
+        red_hat_based.proxy_dnf(m)
+
     return m
 
 
@@ -192,7 +201,8 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
         m.hooks.timesync.append(lambda: m('hwclock -s'))
 
         m.fedora = version
-        m.dist_git_branch = f'f{version}' if version != 'rawhide' else 'master'
+        m.dist_git_branch = (f'f{version}'
+                             if version != 'rawhide' else 'rawhide')
 
         red_hat_based.proxy_dnf(m)
 
