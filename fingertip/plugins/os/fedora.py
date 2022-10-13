@@ -52,13 +52,22 @@ def upgrade(m=None, releasever=None):
         m.console.sendline(' dnf system-upgrade reboot')
         m.login()
         m('systemctl is-system-running --wait || true')
-
+        prev_release = m.fedora
         m.fedora = releasever
         m.dist_git_branch = (f'f{releasever}'
                              if releasever != 'rawhide' else 'rawhide')
         m._package_manager_proxied = False
         red_hat_based.proxy_dnf(m)
 
+        m(f'''
+            dnf -y autoremove
+            dnf repoquery --installonly --latest-limit=-1 -q \
+                | grep f{prev_release} | xargs dnf -y remove
+            dnf -y clean all; dnf -y makecache; fstrim -va
+        ''')
+        m.console.sendline(' reboot')
+        m.login()
+        m('systemctl is-system-running --wait || true')
     return m
 
 
