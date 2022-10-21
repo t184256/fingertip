@@ -12,7 +12,7 @@ BuildRequires:	python3
 BuildRequires:	python3-devel
 BuildRequires:	systemd-rpm-macros
 
-Requires:	ansible
+Requires:	ansible-core
 Requires:	git-core
 Requires:	nmap-ncat
 Requires:	openssh-clients
