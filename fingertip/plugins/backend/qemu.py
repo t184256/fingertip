@@ -23,7 +23,8 @@ from fingertip.util import free_port, log, path, reflink, repeatedly, temp
 from fingertip.util import units
 
 
-IGNORED_EVENTS = ('NIC_RX_FILTER_CHANGED', 'RTC_CHANGE', 'RESET', 'SHUTDOWN')
+IGNORED_EVENTS = ('NIC_RX_FILTER_CHANGED', 'RTC_CHANGE', 'RESET', 'SHUTDOWN',
+                  'DEVICE_DELETED')
 SNAPSHOT_BASE_NAME = 'tip'  # it has to have some name
 CACHE_INTERNAL_IP, CACHE_INTERNAL_PORT = '10.0.2.244', 8080
 CACHE_INTERNAL_URL = f'http://{CACHE_INTERNAL_IP}:{CACHE_INTERNAL_PORT}'
@@ -43,6 +44,7 @@ def main(arch='x86_64', ram_min='1G', ram_size='1G', ram_max='4G',
     m = fingertip.machine.Machine('qemu')
     m.arch = arch
     m.ram = RAMNamespacedFeatures(m, ram_min, ram_size, ram_max)
+    m.swap = SwapNamespacedFeatures(m)
     m.qemu = QEMUNamespacedFeatures(m, disk_size, cores, custom_args)
     m.snapshot = SnapshotNamespacedFeatures(m)
     m._backend_mode = 'pexpect'
@@ -68,6 +70,7 @@ def main(arch='x86_64', ram_min='1G', ram_size='1G', ram_max='4G',
     m.hooks.up.append(up)
 
     def down():
+        assert m.swap.size is None
         if m.qemu.live:
             if m.ram.min != m.ram.actual:
                 m.log.info('driving RAM down to '
@@ -324,8 +327,8 @@ class Monitor:
                 self._ram_target_changed.clear()
 
     def _expect(self, what=None):  # None = nothing exact, caller inspects it
-        reply = self._queue.get()
         self.vm.log.debug(f'expected: {what}')
+        reply = self._queue.get()
         self.vm.log.debug(f'received: {reply}')
         if what is not None:
             if reply != what:
@@ -460,6 +463,38 @@ class Monitor:
                 #                              netdev='net0')
                 #self.vm.qemu.monitor._expect({'return': {}})
 
+    def attach_disk(self, filename, drive_name, dev_name):
+        driver = ('scsi-hd' if self.vm.qemu.virtio_scsi else
+                  'virtio-blk-pci')
+        with self._command_execution_lock:
+            self._execute('blockdev-add', **{
+                'driver': 'qcow2',
+                'node-name': drive_name,
+                'cache': {'no-flush': True},
+                'file': {'driver': 'file', 'filename': filename},
+            })
+            self._expect({'return': {}})
+        with self._command_execution_lock:
+            self._execute('device_add',
+                          driver=driver, drive=drive_name, id=dev_name)
+            self._expect({'return': {}})
+
+    def detach_disk(self, drive_name, dev_name):
+        in_use_error = {'error': {'class': 'GenericError',
+                                  'desc': f'Node {drive_name} is in use'}}
+        with self._command_execution_lock:
+            self._execute('device_del', **{'id': dev_name})
+            self._expect({'return': {}})
+        while True:
+            with self._command_execution_lock:
+                self._execute('blockdev-del', **{'node-name': drive_name})
+                r = self._expect(None)
+                if r == in_use_error:
+                    time.sleep(.01)
+                    continue
+                assert r == {'return': {}}
+                break
+
 
 class RAMNamespacedFeatures:
     def __init__(self, m, min_, target, max_):
@@ -586,6 +621,64 @@ class RAMNamespacedFeatures:
         else:
             self.set_size_async(old_size)
 
+
+class CannotShrinkSwap(VMException):
+    pass
+
+
+class CannotChangeSwapPriority(VMException):
+    pass
+
+
+class SwapNamespacedFeatures:
+    def __init__(self, m):
+        self._m = m
+        self.size = None
+        self.priority = None
+
+    def enable(self, size, priority=-1):
+        _size = units.parse_binary(size)
+        if self.size is not None:
+            if self.size >= _size:
+                self._m.warn.warning('larger or equal swap already enabled: '
+                                     f'{units.binary(self.size)}')
+                return
+            else:
+                self._m.warn.error('smaller swap already enabled: '
+                                   f'{units.binary(self.size)}')
+                raise CannotShrinkSwap()
+        if self.priority is not None and priority != self.priority:
+            self._m.warn.error('swap already enabled with priority '
+                               f'{self.priority}')
+            raise CannotChangeSwapPriority()
+        swap_path = os.path.join(self._m.path, 'swap.qcow2')
+        run = self._m.log.pipe_powered(subprocess.run, stdout=logging.INFO,
+                                       stderr=logging.ERROR)
+        run(['qemu-img', 'create', '-f', 'qcow2', '-o', 'lazy_refcounts=on',
+             swap_path, size], check=True)
+        self._m.qemu.monitor.attach_disk(swap_path, drive_name='SWAPDRIVE',
+                                         dev_name='SWAPDEV')
+        # HACKY: assumes linux and single other hdd
+        d = '/dev/sdb' if self._m.qemu.virtio_scsi else '/dev/vdb'
+        self._m(f' for i in {{0..50}}; do [ -e {d} ] && break; sleep .1; done')
+        self._m(f' mkswap {d} && swapon -p {priority} {d} && cat /proc/swaps')
+        self.size, self.priority = _size, priority
+
+    def disable(self):
+        assert self.size is not None and self.priority is not None
+        self.size = self.priority = None
+        # HACKY: assumes linux and single other hdd
+        d = '/dev/sdb' if self._m.qemu.virtio_scsi else '/dev/vdb'
+        self._m(f' swapoff {d} && cat /proc/swaps')
+        self._m.qemu.monitor.detach_disk(drive_name='SWAPDRIVE',
+                                         dev_name='SWAPDEV')
+        os.unlink(os.path.join(self._m.path, 'swap.qcow2'))
+
+    @contextlib.contextmanager  # with m, m.swap('2G'): ...
+    def __call__(self, size, priority=-1):
+        self.enable(size, priority=priority)
+        yield
+        self.disable()
 
 class UserNet:
     def __init__(self, vm):
