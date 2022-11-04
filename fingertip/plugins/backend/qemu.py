@@ -672,7 +672,8 @@ class SwapNamespacedFeatures:
         self._m(f' swapoff {d} && cat /proc/swaps')
         self._m.qemu.monitor.detach_disk(drive_name='SWAPDRIVE',
                                          dev_name='SWAPDEV')
-        os.unlink(os.path.join(self._m.path, 'swap.qcow2'))
+        if os.path.exists(os.path.join(self._m.path, 'swap.qcow2')):
+            os.unlink(os.path.join(self._m.path, 'swap.qcow2'))
 
     @contextlib.contextmanager  # with m, m.swap('2G'): ...
     def __call__(self, size, priority=-1):
