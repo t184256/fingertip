@@ -485,15 +485,20 @@ class Monitor:
         with self._command_execution_lock:
             self._execute('device_del', **{'id': dev_name})
             self._expect({'return': {}})
-        while True:
+        interval, max_retries = 0.01, 13
+        for _ in range(max_retries):
             with self._command_execution_lock:
                 self._execute('blockdev-del', **{'node-name': drive_name})
                 r = self._expect(None)
                 if r == in_use_error:
-                    time.sleep(.01)
+                    self.vm.log.debug('disk detach failed, '
+                                      f'retrying in {interval}s')
+                    time.sleep(interval)
+                    interval *= 2
                     continue
                 assert r == {'return': {}}
-                break
+                return
+        raise RuntimeError('disk detach failed')
 
 
 class RAMNamespacedFeatures:
