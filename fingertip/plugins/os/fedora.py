@@ -25,6 +25,8 @@ def prepare_upgrade(m, releasever=None):
         m('dnf upgrade -y --refresh')
         m = m.apply('ansible', 'package', state='present', name='dnf-plugin-system-upgrade')
         # if we upgrade to unreleased version, we need to tweak repo files
+        if releasever == 'rawhide':
+            m('rm /etc/yum.repos.d/fedora-updates*.repo')
         if releasever in (RELEASED + 1, 'rawhide'):
             m(r'sed -i -e "s|\(baseurl=.*/\)releases/|\1development/|g" '
                '/etc/yum.repos.d/fedora{,-modular}.repo')
