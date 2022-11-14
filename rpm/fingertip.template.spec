@@ -39,6 +39,7 @@ Requires:	xfsprogs
 Recommends:	duperemove
 Recommends:	createrepo_c
 Recommends:	podman
+Recommends:	ansible-collection-community-general  # ini_file
 
 %description
 This program/library aims to be a way to:
