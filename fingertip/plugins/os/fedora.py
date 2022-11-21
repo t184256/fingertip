@@ -13,7 +13,7 @@ from fingertip.plugins.os.common import red_hat_based
 FEDORA_GEOREDIRECTOR = 'http://download.fedoraproject.org/pub/fedora/linux'
 F35_FIX_URL = ('http://rvykydal.fedorapeople.org/update-images/'
                'updates.f35-2019579-resolvconf.img')
-RELEASED = 36
+RELEASED = 37
 
 def prepare_upgrade(m, releasever=None):
     assert hasattr(m, 'fedora')
@@ -98,7 +98,7 @@ def determine_mirror(mirror, version, releases_development):
     # let's check that a mirror has at least a repomd.xml and a kernel:
     updates_repomd = f'updates/{version}/Everything/x86_64/repodata/repomd.xml'
     kernel = (f'{releases_development}/{version}'
-              '/Everything/x86_64/os/isolinux/vmlinuz')
+              '/Everything/x86_64/os/images/pxeboot/vmlinuz')
 
     h = requests.head(mirror + '/' + updates_repomd, allow_redirects=False)
     if h.status_code in (301, 302, 303, 307, 308) and 'Location' in h.headers:
@@ -157,12 +157,12 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
         m.expiration.depend_on_a_file(ks_fname)
 
         m.http_cache.mock('http://mock/ks', text=ks_text)
-        m.log.info(f'fetching kernel: {url}/isolinux/vmlinuz')
+        m.log.info(f'fetching kernel: {url}/images/pxeboot/vmlinuz')
         kernel = os.path.join(m.path, 'kernel')
-        m.http_cache.fetch(f'{url}/isolinux/vmlinuz', kernel)
-        m.log.info(f'fetching initrd: {url}/isolinux/initrd.img')
+        m.http_cache.fetch(f'{url}/images/pxeboot/vmlinuz', kernel)
+        m.log.info(f'fetching initrd: {url}/images/pxeboot/initrd.img')
         initrd = os.path.join(m.path, 'initrd')
-        m.http_cache.fetch(f'{url}/isolinux/initrd.img', initrd)
+        m.http_cache.fetch(f'{url}/images/pxeboot/initrd.img', initrd)
         if version == 35:
             # work around bz2019579
             f35_fix = os.path.join(m.path, 'resolvconf-f35-fix.img')
