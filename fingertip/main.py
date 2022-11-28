@@ -28,9 +28,14 @@ def parse_kwarg(kwarg):
 
 def parse_subcmd(subcmd, *all_args):
     args = [a for a in all_args if not a.startswith('--')]
-    kwargs = [parse_kwarg(a[2:])
-              for a in sorted(all_args) if a.startswith('--')]
-    return subcmd, args, dict(kwargs)
+    kwargs = {}
+    for k, v in [parse_kwarg(a[2:]) for a in all_args if a.startswith('--')]:
+        if k not in kwargs:
+            kwargs[k] = v
+        else:
+            prev = kwargs[k]
+            kwargs[k] = (prev if isinstance(prev, list) else [prev]) + [v]
+    return subcmd, args, kwargs
 
 
 def main():
