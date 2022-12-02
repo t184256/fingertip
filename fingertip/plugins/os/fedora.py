@@ -6,7 +6,7 @@ import requests
 import os
 
 import fingertip.machine
-from fingertip.util import http_cache, log, path
+from fingertip.util import http_cache, log, path, units
 from fingertip.plugins.os.common import red_hat_based
 
 
@@ -136,6 +136,9 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
 
     with m:
         m.ram.safeguard = '768M'
+        # RAM size accommodates `dnf clean all && dnf install something`
+        if m.ram.size < units.parse_binary('1280M'):
+            m.ram.size = '1280M'
         m.expiration.cap('1d')  # non-immutable repositories
 
         hostname = f'fedora{version}' + ('-fips' if fips else '')
