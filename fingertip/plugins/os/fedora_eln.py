@@ -10,7 +10,7 @@ from fingertip.plugins.os.common import red_hat_based
 
 URL = ('http://odcs.fedoraproject.org/composes/production/latest-Fedora-ELN/'
        'compose')
-BUILDROOT='https://kojipkgs.fedoraproject.org/repos/eln-build/latest'
+BUILDROOT = 'https://kojipkgs.fedoraproject.org/repos/eln-build/latest'
 HOSTNAME = 'Fedora-ELN'
 NEXT_RHEL = 10
 
@@ -120,6 +120,13 @@ def install_in_qemu(m=None, extra_cmdline=''):
                     name='eln-koji-buildroot',
                     description='eln-koji-buildroot',
                     baseurl=_url(reponame='buildroot'))
+
+        for reponame in 'BaseOS', 'AppStream', 'CRB', 'Extras':
+            for kind in ('', 'debuginfo', 'source'):
+                _kind = f'-{kind}' if kind else ''
+                m("echo 'gpgkey = file:///etc/pki/rpm-gpg/"
+                  "RPM-GPG-KEY-fedora-eln-$basearch'"
+                  f" >> /etc/yum.repos.d/ELN-{reponame}{_kind}.repo")
 
         m.rhel = NEXT_RHEL
         m.fedora_eln = True
