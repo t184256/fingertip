@@ -40,7 +40,10 @@ sed -i 's|^baseurl=https://|baseurl=http://|' /etc/yum.repos.d/*
 sed -i 's|^metalink=|#metalink=|' /etc/yum.repos.d/*
 sed -i 's|^baseurl=http://download.example/pub/fedora/linux|baseurl={MIRROR}|' /etc/yum.repos.d/*
 sed -i 's|SRPMS|source/tree|' /etc/yum.repos.d/*updates*.repo
+sed -i 's|/releases/|/development/|' /etc/yum.repos.d/*
 sed -i 's|^enabled=.*|enabled=0|' /etc/yum.repos.d/*rawhide*
+dnf config-manager --set-enabled fedora
+dnf config-manager --set-enabled fedora-modular
 dnf -y makecache
 # First boot failed otherwise
 # dnf -y update
