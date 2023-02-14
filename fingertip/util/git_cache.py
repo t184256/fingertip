@@ -30,7 +30,7 @@ def _remove(p):
 class Repo(git.Repo, lock.Lock):
     def __init__(self, url, *path_components, enough_to_have=None):
         if not path_components:
-            path_components = [url.replace('/', '::')]
+            path_components = [url.replace('/', '__')]
         self.url = url
         cache_path = path.downloads('git', *path_components, makedirs=True)
         self.path = temp.disappearing_dir(os.path.dirname(cache_path),
@@ -111,7 +111,7 @@ class Repo(git.Repo, lock.Lock):
 class Checkout(git.Repo, lock.Lock):
     def __init__(self, url, *path_components, enough_to_have=None):
         if not path_components:
-            path_components = [url.replace('/', '::')]
+            path_components = [url.replace('/', '__')]
         with Repo(url, *path_components, enough_to_have=enough_to_have) as r:
             cache_path = path.downloads('git', *path_components, makedirs=True)
             self.path = temp.disappearing_dir(os.path.dirname(cache_path),
@@ -133,7 +133,7 @@ def upload_clone(m, url, path_in_m, rev=None, rev_is_enough=True):
     assert hasattr(m, 'ssh')
     with m:
         kwa = {} if not rev_is_enough else {'enough_to_have': rev}
-        with Repo(url, url.replace('/', '::'), **kwa) as repo:
+        with Repo(url, url.replace('/', '__'), **kwa) as repo:
             tar = temp.disappearing_file()
             tar_in_m = f'/.tmp-{os.path.basename(tar)}'
             extracted_in_m = f'/.tmp-{os.path.basename(tar)}-extracted'
@@ -161,7 +161,7 @@ def upload_contents(m, url, path_in_m, rev=None, rev_is_enough=True):
     assert hasattr(m, 'ssh')
     with m:
         kwa = {} if not rev_is_enough else {'enough_to_have': rev}
-        with Repo(url, url.replace('/', '::'), **kwa) as repo:
+        with Repo(url, url.replace('/', '__'), **kwa) as repo:
             tar = temp.disappearing_file()
             log.info(f'packing {url} contents at rev {rev}...')
             tar_in_m = f'/.tmp-{os.path.basename(tar)}'
@@ -188,5 +188,5 @@ def _has_rev(repo, rev):
 
 # TODO: get rid of
 def has_rev(url, rev):
-    with Repo(url, url.replace('/', '::'), enough_to_have=rev) as repo:
+    with Repo(url, url.replace('/', '__'), enough_to_have=rev) as repo:
         return _has_rev(repo, rev)
