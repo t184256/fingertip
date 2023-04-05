@@ -137,8 +137,9 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
     with m:
         m.ram.safeguard = '768M'
         # RAM size accommodates `dnf clean all && dnf install something`
-        if m.ram.size < units.parse_binary('1280M'):
-            m.ram.size = '1280M'
+        # Fedora 36, 2023-04-05
+        if m.ram.size < units.parse_binary('1536M'):
+            m.ram.size = '1536M'
         m.expiration.cap('1d')  # non-immutable repositories
 
         hostname = f'fedora{version}' + ('-fips' if fips else '')
