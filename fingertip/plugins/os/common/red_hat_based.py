@@ -32,6 +32,8 @@ class ProxyAll(dnf.Plugin):
             return
         self.base.conf.proxy = '$PROXY'
         for name, repo in self.base.repos.items():
+            if any('://localhost' in url for url in repo.baseurl):
+                repo.proxy = ''
             if repo.baseurl:
                 repo.baseurl = [b.replace('https:', 'http:')
                                 for b in repo.baseurl]
