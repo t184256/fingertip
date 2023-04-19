@@ -13,7 +13,7 @@ from fingertip.plugins.os.common import red_hat_based
 FEDORA_GEOREDIRECTOR = 'http://download.fedoraproject.org/pub/fedora/linux'
 F35_FIX_URL = ('http://rvykydal.fedorapeople.org/update-images/'
                'updates.f35-2019579-resolvconf.img')
-RELEASED = 37
+RELEASED = 38
 
 def prepare_upgrade(m, releasever=None):
     assert hasattr(m, 'fedora')
