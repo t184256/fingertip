@@ -82,7 +82,8 @@ class Repo(git.Repo, lock.Lock):
                     # no harm in referencing cache, even w/o cached+
                     git.Repo.clone_from(surl, self.path, mirror=True,
                                         dissociate=True,
-                                        reference_if_able=cache_path)
+                                        reference_if_able=cache_path,
+                                        env={'GIT_TERMINAL_PROMPT': '0'})
                 except git.GitError:
                     log.warning(f'could not clone {url} from {source}')
                     if last_source:
@@ -188,5 +189,10 @@ def _has_rev(repo, rev):
 
 # TODO: get rid of
 def has_rev(url, rev):
-    with Repo(url, url.replace('/', '__'), enough_to_have=rev) as repo:
-        return _has_rev(repo, rev)
+    try:
+        with Repo(url, url.replace('/', '__'), enough_to_have=rev) as repo:
+            return _has_rev(repo, rev)
+    except git.GitError as e:
+        if hasattr(e.stderr) and 'could not read Username for ' in e.stderr:
+            return False
+        raise
