@@ -193,6 +193,6 @@ def has_rev(url, rev):
         with Repo(url, url.replace('/', '__'), enough_to_have=rev) as repo:
             return _has_rev(repo, rev)
     except git.GitError as e:
-        if hasattr(e.stderr) and 'could not read Username for ' in e.stderr:
+        if hasattr(e, 'stderr') and 'could not read Username for ' in e.stderr:
             return False
         raise
