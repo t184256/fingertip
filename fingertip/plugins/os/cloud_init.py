@@ -67,6 +67,11 @@ def main(m=None, url=None):
             f.write(meta_data)
         m.http_cache.serve_local_file('/cloud-init/meta-data', meta_file)
 
+        vendor_file = os.path.join(m.path, 'vendor-data')
+        with open(vendor_file, 'w') as f:
+            pass
+        m.http_cache.serve_local_file('/cloud-init/vendor-data', vendor_file)
+
         user_data = USER_TEMPLATE.format(FQDN=fqdn,
                                          HOSTNAME=hostname,
                                          SSH_PUBKEY=m.ssh.pubkey)
