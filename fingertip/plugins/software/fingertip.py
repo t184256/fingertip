@@ -67,6 +67,7 @@ def build(m, from_=None, preinstall=False):
         m(r'''
             set -uex
             mkdir -p /tmp/fingertip/builddir
+            git config --global --add safe.directory /tmp/fingertip/builddir
             cd /tmp/fingertip/builddir
             tar xf /tmp/fingertip.tar
             ./.copr/build-local.sh
