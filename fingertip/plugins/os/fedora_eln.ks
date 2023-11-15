@@ -32,7 +32,6 @@ patch
 -kexec-tools
 -kernel-tools
 -prefixdevname
--NetworkManager-team
 -NetworkManager-tui
 -firewalld
 -irqbalance
