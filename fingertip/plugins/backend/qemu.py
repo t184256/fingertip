@@ -28,7 +28,7 @@ IGNORED_EVENTS = ('NIC_RX_FILTER_CHANGED', 'RTC_CHANGE', 'RESET', 'SHUTDOWN',
 SNAPSHOT_BASE_NAME = 'tip'  # it has to have some name
 CACHE_INTERNAL_IP, CACHE_INTERNAL_PORT = '10.0.2.244', 8080
 CACHE_INTERNAL_URL = f'http://{CACHE_INTERNAL_IP}:{CACHE_INTERNAL_PORT}'
-MAX_AUTO_CORES = 8
+DEFAULT_MAX_AUTO_CORES = 8
 QEMU_COMMON_ARGS = ['-enable-kvm', '-cpu', 'host',
                     '-virtfs', f'local,id=shared9p,path={path.SHARED},'
                                'security_model=mapped-file,mount_tag=shared',
@@ -122,6 +122,9 @@ class QEMUNamespacedFeatures:
         self.vm = vm
         self.live = False
         self.disk_size = disk_size
+        MAX_AUTO_CORES = DEFAULT_MAX_AUTO_CORES
+        if os.getenv('FINGERTIP_MAX_AUTO_CORES'):
+            MAX_AUTO_CORES = int(os.getenv('FINGERTIP_MAX_AUTO_CORES'))
         self.cores = (int(cores) if cores else
                       max(1, min(os.cpu_count() // 2, MAX_AUTO_CORES)))
         self.custom_args = custom_args
