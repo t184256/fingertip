@@ -82,7 +82,7 @@ def proxy_copr(m):
 # ---
 
 
-YUM_PATCH = """
+YUM_PATCH = r"""
 diff --git a/yum/yumRepo.py b/yum/yumRepo.py
 index 31b7c85..e449f7a 100644
 --- a/yum/yumRepo.py
