@@ -29,8 +29,8 @@ def prepare_upgrade(m, releasever=None):
             m('rm /etc/yum.repos.d/fedora-updates*.repo')
         if releasever in (RELEASED + 1, 'rawhide'):
             m(r'sed -i -e "s|\(baseurl=.*/\)releases/|\1development/|g" '
-               '/etc/yum.repos.d/fedora{,-modular}.repo')
-            m('cat /etc/yum.repos.d/fedora{,-modular}.repo')
+               '/etc/yum.repos.d/fedora.repo')
+            m('cat /etc/yum.repos.d/fedora.repo')
         m(f'dnf -y system-upgrade download --releasever={releasever}')
         m.fedora_upgrade_prepared = True
     return m
