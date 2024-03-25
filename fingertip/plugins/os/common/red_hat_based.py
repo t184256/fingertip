@@ -1,6 +1,40 @@
 # Licensed under GNU General Public License v3 or later, see COPYING.
 # Copyright (c) 2021 Red Hat, Inc., see CONTRIBUTORS.
 
+# DNF 5 (ELN, Fedora 41+?)
+
+
+ACTION_TMPL = """
+#!/usr/bin/bash
+if [ ! -e /etc/dnf/plugins/proxyall ]; then exit 0; fi
+# Override proxy on the fly if the file is present
+echo conf.proxy={PROXY}
+# Downgrade HTTPS to HTTP in repo configurations on-disk, see
+# https://github.com/rpm-software-management/dnf5/issues/1345
+sed -i 's|https://|http://|' /etc/yum.repos.d/*.repo
+# Change metalinks to baseurls while we are at it
+sed -i 's|^metalink|#metalink|' /etc/yum.repos.d/*.repo
+sed -i 's|^#baseurl|baseurl|' /etc/yum.repos.d/*.repo
+""".lstrip()
+
+
+def proxy_dnf_action(m):
+    with m:
+        action = ACTION_TMPL.format(PROXY=m.http_cache.internal_url)
+        m(f'cat > /usr/sbin/_fingertip_dnfaction <<\\EOF\n' + action + 'EOF\n')
+        m('''
+            chmod +x /usr/sbin/_fingertip_dnfaction
+            echo post_base_setup::::/usr/sbin/_fingertip_dnfaction \
+                    > /etc/dnf/libdnf5-plugins/actions.d/fingertip.actions
+            EOF
+            touch /etc/dnf/plugins/proxyall
+        ''')
+    return m
+
+
+# DNF <4 (RHEL-8, RHEL-9, RHEL-10?, Fedora <41)
+
+
 COPR_PATCH = r"""
 diff --git a/plugins/copr.py b/plugins/copr.py
 index 43aa896..faa56bd 100644
@@ -72,7 +106,7 @@ def proxy_dnf(m):
         return m
 
 
-# ---
+# YUM (RHEL-6, RHEL-7)
 
 
 YUM_PATCH = r"""
