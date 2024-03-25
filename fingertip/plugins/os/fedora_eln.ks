@@ -25,6 +25,7 @@ openssh-server
 glibc-langpack-en
 python3-libselinux
 patch
+libdnf5-plugin-actions
 -subscription-manager
 -cronie
 -sg3_*

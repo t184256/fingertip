@@ -132,6 +132,6 @@ def install_in_qemu(m=None, extra_cmdline=''):
         m.fedora_eln = True
         m.dist_git_branch = 'eln'
 
-        red_hat_based.proxy_dnf(m)
+        red_hat_based.proxy_dnf_action(m)
 
     return m
