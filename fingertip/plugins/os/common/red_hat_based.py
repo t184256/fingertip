@@ -72,13 +72,6 @@ def proxy_dnf(m):
         return m
 
 
-###
-
-
-def proxy_copr(m):
-    with m:
-        return m
-
 # ---
 
 
