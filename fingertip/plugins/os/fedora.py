@@ -11,7 +11,7 @@ from fingertip.plugins.os.common import red_hat_based
 
 
 FEDORA_GEOREDIRECTOR = 'http://download.fedoraproject.org/pub/fedora/linux'
-RELEASED = 39
+RELEASED = 40
 
 def prepare_upgrade(m, releasever=None):
     assert hasattr(m, 'fedora')
