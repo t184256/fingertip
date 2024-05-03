@@ -325,7 +325,7 @@ def _deduplicate(log, db_name, resource_name, timeout=None):
         log.info(f'deduplicating {resource_name} ({db_name})...')
         run = log.pipe_powered(subprocess.run,
                                stdout=logging.INFO, stderr=logging.WARNING)
-        r = run(['duperemove', '--dedupe-options=nofiemap',
+        r = run(['duperemove',
                  '--io-threads=2', '--cpu-threads=2',
                  '--hashfile', db_file,
                  '-hdr', path.saviour('_', resource_name, 'data')])
