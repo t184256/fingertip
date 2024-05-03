@@ -1,6 +1,7 @@
 # Licensed under GNU General Public License v3 or later, see COPYING.
 # Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
 
+import contextlib
 import logging
 import os
 import re
@@ -23,6 +24,16 @@ CHECKPOINT_SPARSITY = 2  # seconds
 TRAIL_EATING_TIMEOUT = .01  # seconds
 MID_PHASE_TIMEOUT = .25  # seconds
 DELAY_BEFORE_SEND = .01  # seconds
+
+
+# Eraseable output #
+
+@contextlib.contextmanager
+def progress_show(s):
+    sys.stdout.write(colorama.Style.DIM + s + colorama.Style.NORMAL)
+    sys.stdout.flush()
+    yield
+    sys.stdout.write('\33[2K\r')
 
 
 # Dimming colors #
@@ -157,12 +168,18 @@ def make_m_segment_aware(m):
         latest_checkpoint_age = since_last_checkpoint(m.results)
         if not m.results or latest_checkpoint_age > m.checkpoint_sparsity:
             checkpoint_name = f'after-{len(m.results)}'
+            checkpoint_msg = (f'after input line {len(m.results)}, '
+                              f'{latest_checkpoint_age:.02f}s / '
+                              f'{m.checkpoint_sparsity}s later')
             try:
                 m.log.debug(f'checkpointing after {checkpoint_name}')
-                m.snapshot.checkpoint(checkpoint_name)
+                with progress_show(f'... checkpointing {checkpoint_msg} ...'):
+                    m.snapshot.checkpoint(checkpoint_name)
             except NotEnoughSpaceForSnapshotException:
-                checkpoint_cleanup()  # try to remove at least one
-                m.snapshot.checkpoint(checkpoint_name)
+                with progress_show('... cleaning up older checkpoints ...'):
+                    checkpoint_cleanup()  # try to remove at least one
+                with progress_show(f'... checkpointing {checkpoint_msg} ...'):
+                    m.snapshot.checkpoint(checkpoint_name)
             return checkpoint_name
 
     def execute_segment(segment, checkpoint=True):
@@ -610,13 +627,16 @@ def main(m, scriptpath, language='bash', unseal=True,
                         print(dim('checkpoints: '
                                   f'{m.checkpoint_positions()}, '
                                   f'sparsity={m.checkpoint_sparsity}s.'))
-                        print(dim('waiting for changes...'))
+                        print(dim('waiting for changes...'), end='')
+                        sys.stdout.flush()
                     else:
                         print(dim('snapshots '
                                   f'@{m.checkpoint_positions()} '
                                   f'~{m.checkpoint_sparsity}s, '
-                                  'waiting for changes...'))
+                                  'waiting for changes...'), end='')
+                        sys.stdout.flush()
                 watcher.rewind_needed.wait()
+                print()
             except RewindNeededException:
                 continue
             except KeyboardInterrupt:
