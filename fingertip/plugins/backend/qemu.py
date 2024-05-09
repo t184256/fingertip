@@ -648,16 +648,16 @@ class SwapNamespacedFeatures:
         _size = units.parse_binary(size)
         if self.size is not None:
             if self.size >= _size:
-                self._m.warn.warning('larger or equal swap already enabled: '
-                                     f'{units.binary(self.size)}')
+                self._m.log.warning('larger or equal swap already enabled: '
+                                    f'{units.binary(self.size)}')
                 return
             else:
-                self._m.warn.error('smaller swap already enabled: '
-                                   f'{units.binary(self.size)}')
+                self._m.log.error('smaller swap already enabled: '
+                                  f'{units.binary(self.size)}')
                 raise CannotShrinkSwap()
         if self.priority is not None and priority != self.priority:
-            self._m.warn.error('swap already enabled with priority '
-                               f'{self.priority}')
+            self._m.log.error('swap already enabled with priority '
+                              f'{self.priority}')
             raise CannotChangeSwapPriority()
         swap_path = os.path.join(self._m.path, 'swap.qcow2')
         run = self._m.log.pipe_powered(subprocess.run, stdout=logging.INFO,
