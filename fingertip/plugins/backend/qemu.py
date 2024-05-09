@@ -670,6 +670,7 @@ class SwapNamespacedFeatures:
         d = '/dev/sdb' if self._m.qemu.virtio_scsi else '/dev/vdb'
         self._m(f' for i in {{0..50}}; do [ -e {d} ] && break; sleep .1; done')
         self._m(f' mkswap {d} && swapon -p {priority} {d} && cat /proc/swaps')
+        self._m(f' echo {d} none swap defaults >> /etc/fstab')
         self.size, self.priority = _size, priority
 
     def disable(self):
@@ -678,6 +679,7 @@ class SwapNamespacedFeatures:
         # HACKY: assumes linux and single other hdd
         d = '/dev/sdb' if self._m.qemu.virtio_scsi else '/dev/vdb'
         self._m(f' swapoff {d} && cat /proc/swaps')
+        self._m(f' sed -i "/{d} none swap defaults/d" /etc/fstab')
         self._m.qemu.monitor.detach_disk(drive_name='SWAPDRIVE',
                                          dev_name='SWAPDEV')
         if os.path.exists(os.path.join(self._m.path, 'swap.qcow2')):
