@@ -679,7 +679,7 @@ class SwapNamespacedFeatures:
         # HACKY: assumes linux and single other hdd
         d = '/dev/sdb' if self._m.qemu.virtio_scsi else '/dev/vdb'
         self._m(f' swapoff {d} && cat /proc/swaps')
-        self._m(f' sed -i "/{d} none swap defaults/d" /etc/fstab')
+        self._m(f' sed -i "\\|{d} none swap defaults|d" /etc/fstab')
         self._m.qemu.monitor.detach_disk(drive_name='SWAPDRIVE',
                                          dev_name='SWAPDEV')
         if os.path.exists(os.path.join(self._m.path, 'swap.qcow2')):
