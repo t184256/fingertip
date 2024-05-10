@@ -63,6 +63,8 @@ def upgrade(m=None, releasever=None):
             sed -i 's|^#baseurl=|baseurl=|' /etc/yum.repos.d/*
             sed -i 's|^baseurl=https://|baseurl=http://|' /etc/yum.repos.d/*
             sed -i 's|^metalink=|#metalink=|' /etc/yum.repos.d/*
+            sed -i 's|download\\.example|download.fedoraproject.org|' \
+                    /etc/yum.repos.d/*
             dnf -y autoremove
             dnf repoquery --installonly --latest-limit=-1 -q \
                 | grep f{prev_release} | xargs dnf -y remove
