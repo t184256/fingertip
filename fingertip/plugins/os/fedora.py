@@ -21,10 +21,13 @@ def prepare_upgrade(m, releasever=None):
 
     with m:
         m('dnf upgrade -y --refresh')
-        m = m.apply('ansible', 'package', state='present', name='dnf-plugin-system-upgrade')
-        # if we upgrade to unreleased version, we need to tweak repo files
+        pkgs = ['dnf-plugin-system-upgrade']
         if releasever == 'rawhide':
+            # if we upgrade to unreleased version, we need to tweak repo files
             m('rm /etc/yum.repos.d/fedora-updates*.repo')
+            # Fedora 40 -> Fedora 41 rawhide is now DNF4 -> DNF5, for proxy:
+            pkgs += ['libdnf5-plugin-actions']
+        m = m.apply('ansible', 'package', state='present', name=pkgs)
         if releasever in (RELEASED + 1, 'rawhide'):
             m(r'sed -i -e "s|\(baseurl=.*/\)releases/|\1development/|g" '
                '/etc/yum.repos.d/fedora.repo')
@@ -56,8 +59,13 @@ def upgrade(m=None, releasever=None):
         m.fedora = releasever
         m.dist_git_branch = (f'f{releasever}'
                              if releasever != 'rawhide' else 'rawhide')
+
         m._package_manager_proxied = False
-        red_hat_based.proxy_dnf(m)
+        if releasever == 'rawhide':
+            # Fedora 40 -> Fedora 41 rawhide is now DNF4 -> DNF5
+            red_hat_based.proxy_dnf_action(m)
+        else:
+            red_hat_based.proxy_dnf(m)
 
         m(f'''
             sed -i 's|^#baseurl=|baseurl=|' /etc/yum.repos.d/*

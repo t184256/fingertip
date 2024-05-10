@@ -19,16 +19,26 @@ sed -i 's|^#baseurl|baseurl|' /etc/yum.repos.d/*.repo
 
 
 def proxy_dnf_action(m):
+    if hasattr(m, '_package_manager_proxied') and m._package_manager_proxied:
+        return m
+
+    def disable_proxy():
+        if m._package_manager_proxied:
+            m._package_manager_proxied = False
+            return m('rm -f /etc/dnf/plugins/proxyall')
+    m.hooks.disable_proxy.append(disable_proxy)
+
     with m:
         action = ACTION_TMPL.format(PROXY=m.http_cache.internal_url)
         m(f'cat > /usr/sbin/_fingertip_dnfaction <<\\EOF\n' + action + 'EOF\n')
         m('''
+            set -uexo pipefail
             chmod +x /usr/sbin/_fingertip_dnfaction
             echo post_base_setup::::/usr/sbin/_fingertip_dnfaction \
                     > /etc/dnf/libdnf5-plugins/actions.d/fingertip.actions
-            EOF
             touch /etc/dnf/plugins/proxyall
         ''')
+        m._package_manager_proxied = True
     return m
 
 
