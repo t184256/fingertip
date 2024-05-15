@@ -67,16 +67,19 @@ def upgrade(m=None, releasever=None):
         else:
             red_hat_based.proxy_dnf(m)
 
+        if releasever == 'rawhide':
+            m('rm -f /etc/yum.repos.d/fedora-updates*.repo')
+
         m(f'''
-            sed -i 's|^#baseurl=|baseurl=|' /etc/yum.repos.d/*
-            sed -i 's|^baseurl=https://|baseurl=http://|' /etc/yum.repos.d/*
-            sed -i 's|^metalink=|#metalink=|' /etc/yum.repos.d/*
-            sed -i 's|download\\.example|download.fedoraproject.org|' \
-                    /etc/yum.repos.d/*
-            dnf -y autoremove
-            dnf repoquery --installonly --latest-limit=-1 -q \
-                | grep f{prev_release} | xargs dnf -y remove
-            dnf -y clean all; dnf -y makecache; fstrim -va
+          sed -i 's|^#baseurl=|baseurl=|' /etc/yum.repos.d/*
+          sed -i 's|^baseurl=https://|baseurl=http://|' /etc/yum.repos.d/*
+          sed -i 's|^metalink=|#metalink=|' /etc/yum.repos.d/*
+          sed -i 's|download\\.example|download.fedoraproject.org|' \
+                  /etc/yum.repos.d/*
+          dnf -y autoremove
+          dnf repoquery --installonly --latest-limit=-1 -q \
+              | grep f{prev_release} | xargs dnf -y remove
+          dnf -y clean all; dnf -y makecache; fstrim -va
         ''')
         m.console.sendline(' reboot')
         m.login()
