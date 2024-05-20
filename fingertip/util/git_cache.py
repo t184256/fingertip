@@ -146,7 +146,7 @@ def upload_clone(m, url, path_in_m, rev=None, rev_is_enough=True):
         log.info(f'performing {url} checkout...')
         m(f'''
             set -uex
-            tar xmf {tar_in_m} -C /
+            tar -xmf {tar_in_m} -C / --no-same-owner
             mkdir -p {path_in_m}
             git clone -n {extracted_in_m} {path_in_m}
             cd {path_in_m}
@@ -173,7 +173,7 @@ def upload_contents(m, url, path_in_m, rev=None, rev_is_enough=True):
         log.info(f'unpacking {url} contents at rev {rev}...')
         m(f'''
             set -uex
-            tar xmf {tar_in_m} -C /
+            tar -xmf {tar_in_m} -C / --no-same-owner
             rm -f {tar_in_m}
         ''')
     return m
