@@ -38,6 +38,14 @@ def proxy_dnf_action(m):
                     > /etc/dnf/libdnf5-plugins/actions.d/fingertip.actions
             touch /etc/dnf/plugins/proxyall
         ''')
+
+        # Also downgrade copr to http. no opt-out. --hub must be used
+        m('''
+            set -uexo pipefail
+            sed -i 's|protocol = https|protocol = http|g' \
+                    /etc/dnf/plugins/copr.conf
+            sed -i 's|port = 443|port = 80|g' /etc/dnf/plugins/copr.conf
+        ''')
         m._package_manager_proxied = True
     return m
 
