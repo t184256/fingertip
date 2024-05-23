@@ -327,6 +327,7 @@ def _deduplicate(log, db_name, resource_name, timeout=None):
                                stdout=logging.INFO, stderr=logging.WARNING)
         r = run(['duperemove',
                  '--io-threads=2', '--cpu-threads=2',
+                 '--dedupe-options=partial',
                  '--hashfile', db_file,
                  '-hdr', path.saviour('_', resource_name, 'data')])
         assert r.returncode in (0, 22)  # nothing to deduplicate
