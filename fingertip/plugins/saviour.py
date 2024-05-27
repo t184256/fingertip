@@ -106,6 +106,7 @@ def method_reposync(log, src, base, dst,
     run = log.pipe_powered(subprocess.run,  # either too silent or too noisy =/
                            stdout=logging.INFO, stderr=logging.INFO)
     createrepo_c_options = ['-v', '--error-exit-val', '--ignore-lock']
+    createrepo_c_options += ['--compatibility']
     if metadata == 'regenerate':
         log.info('regenerating metadata...')
         run(['createrepo_c'] + createrepo_c_options + ['--update', dst],
