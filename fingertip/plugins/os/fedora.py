@@ -55,6 +55,11 @@ def upgrade(m=None, releasever=None):
         m.console.sendline(' dnf system-upgrade reboot')
         m.login()
         m('systemctl is-system-running --wait || true')
+        rel = m('cat /etc/fedora-release').out
+        if releasever == 'rawhide':
+            assert 'Rawhide' in rel
+        else:
+            assert str(releasever) in rel
         prev_release = m.fedora
         m.fedora = releasever
         m.dist_git_branch = (f'f{releasever}'
