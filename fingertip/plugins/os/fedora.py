@@ -51,7 +51,7 @@ def upgrade(m=None, releasever=None):
     if not hasattr(m, 'fedora_upgrade_prepared'):
         m = m.apply(prepare_upgrade, releasever)
 
-    with m:
+    with m, m.ram('>=2G'):
         m('sudo systemctl enable getty@ttyS0')  # IDK why
         m.console.sendline(' dnf system-upgrade reboot')
         m.login()
