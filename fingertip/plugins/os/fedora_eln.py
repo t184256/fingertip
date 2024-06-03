@@ -78,7 +78,7 @@ def install_in_qemu(m=None, extra_cmdline=''):
         with m.ram('>=4G'):
             m.expiration.cap('1d')  # non-immutable repositories
             m.qemu.run(load=None, extra_args=extra_args)
-            m.console.expect('Installation complete')
+            m.console.expect('Complete!')
             m.qemu.wait()
 
         # first boot
