@@ -52,6 +52,7 @@ def upgrade(m=None, releasever=None):
         m = m.apply(prepare_upgrade, releasever)
 
     with m:
+        m('sudo systemctl enable getty@ttyS0')  # IDK why
         m.console.sendline(' dnf system-upgrade reboot')
         m.login()
         m('systemctl is-system-running --wait || true')
