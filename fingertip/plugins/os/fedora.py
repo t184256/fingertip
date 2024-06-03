@@ -87,6 +87,23 @@ def upgrade(m=None, releasever=None):
               | grep f{prev_release} | xargs dnf -y remove
           dnf -y clean all; dnf -y makecache; fstrim -va
         ''')
+
+        hostname = f'fedora-{m.dist_git_branch}'
+        m(f'hostnamectl set-hostname {hostname}')
+
+        def login(username='root', password='fingertip'):
+            if username == 'root':
+                m.prompt = f'[root@{hostname} ~]# '
+            else:
+                m.prompt = f'[{username}@{hostname} ~]$ '
+            m.console.expect(f'{hostname} login: ')
+            m.console.sendline(username)
+            m.console.expect('Password: ')
+            m.console.sendline(password)
+            m.console.expect_exact(m.prompt)
+
+        m.login = login
+
         m.console.sendline(' reboot')
         m.login()
         m('systemctl is-system-running --wait || true')
