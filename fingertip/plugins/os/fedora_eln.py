@@ -76,7 +76,7 @@ def install_in_qemu(m=None, extra_cmdline=''):
 
         m.ram.safeguard = m.ram.max  # fix to 1536M when virtio-ballon is fixed
         with m.ram('>=4G'):
-            m.expiration.cap('1d')  # non-immutable repositories
+            m.expiration.cap('2d')  # non-immutable repositories
             m.qemu.run(load=None, extra_args=extra_args)
             m.console.expect('Complete!')
             m.qemu.wait()
