@@ -21,6 +21,7 @@ sshkey --username root '{SSH_PUBKEY}'
 
 %packages --exclude-weakdeps --timeout 900
 @Core --nodefaults
+NetworkManager
 openssh-server
 glibc-langpack-en
 python3-libselinux
@@ -57,6 +58,10 @@ sed -i 's|^baseurl=https://|baseurl=http://|' /etc/yum.repos.d/*
 sed -i 's|^metalink=https://|metalink=http://|' /etc/yum.repos.d/*
 sed -i 's|^metalink=\(.*\)$|metalink=\1\&protocol=http|' /etc/yum.repos.d/*
 rm -f /etc/yum.repos.d/fedora-*
+
+# IDK why, that's a `systemctl enable getty@ttyS0`
+ln -s /usr/lib/systemd/system/getty@.service \
+      /etc/systemd/system/getty.target.wants/getty@ttyS0.service
 
 # don't download metadata for debuginfo / source repositories
 dnf -y config-manager --disable '*-debuginfo' '*-source'
