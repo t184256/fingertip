@@ -3,6 +3,7 @@
 
 import atexit
 import contextlib
+import datetime
 import json
 import logging
 import os
@@ -39,7 +40,7 @@ QEMU_COMMON_ARGS = ['-enable-kvm', '-cpu', 'host',
 
 
 def main(arch='x86_64', ram_min='1G', ram_size='1G', ram_max='4G',
-         disk_size='20G', cores=None, custom_args=[]):
+         disk_size='20G', cores=None, custom_args=[], base_time=None):
     assert arch == 'x86_64'
     m = fingertip.machine.Machine('qemu')
     m.arch = arch
@@ -48,6 +49,8 @@ def main(arch='x86_64', ram_min='1G', ram_size='1G', ram_max='4G',
     m.qemu = QEMUNamespacedFeatures(m, disk_size, cores, custom_args)
     m.snapshot = SnapshotNamespacedFeatures(m)
     m._backend_mode = 'pexpect'
+    m._born_time = datetime.datetime.now()
+    m._base_time = base_time and datetime.datetime.fromisoformat(base_time)
 
     # TODO: extract SSH into a separate plugin?
     m.ssh = SSH(m)
@@ -183,6 +186,11 @@ class QEMUNamespacedFeatures:
 
         run_args += ['-m', str(self.vm.ram.max // 2**20)]
         run_args += ['-smp', str(self.cores)]
+
+        if self.vm._base_time is not None:
+            vm_age = datetime.datetime.now() - self.vm._born_time
+            set_to = (self.vm._base_time + vm_age).isoformat().split('.', 1)[0]
+            run_args += ['-rtc', f'base={set_to},clock=vm']
 
         os.makedirs(path.SHARED, exist_ok=True)
 
