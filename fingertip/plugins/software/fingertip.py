@@ -54,16 +54,18 @@ def build(m, from_=None, preinstall=False):
     if tarbomb is None:
         if from_ is None:
             fingertip_sources = path.FINGERTIP
+            m.expiration.depend_on(fingertip_sources)
             assert os.path.exists(os.path.join(fingertip_sources, '.copr'))
         tarbomb = temp.disappearing_file()
         with tarfile.open(tarbomb, 'w') as tf:
             tf.add(fingertip_sources, arcname='/', filter=lambda ti:
                    ti if '/redhat/' not in ti.name else None)
+    else:
+        m.expiration.depend_on_a_file(tarbomb)
     if not hasattr(m, 'fingertip_prepared'):
         m = m.apply(prepare, preinstall)
     with m:
         m.ssh.upload(tarbomb, '/tmp/fingertip.tar')
-        m.expiration.depend_on_a_file(tarbomb)
         m(r'''
             set -uex
             mkdir -p /tmp/fingertip/builddir
