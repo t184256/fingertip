@@ -108,6 +108,7 @@ Requires:	systemd
 Requires:	/usr/sbin/losetup
 Requires:	/usr/sbin/semanage
 Requires:	/usr/sbin/restorecon
+Requires(post):	acl
 %description shared-cache
 Tools to set up a shared CoW-powered HTTP-exportable cache for fingertip.
 
