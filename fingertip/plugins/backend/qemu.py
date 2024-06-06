@@ -289,9 +289,11 @@ class Monitor:
     def connect(self, retries=12, timeout=1/32):
         if self._sock is None:
             with self._command_execution_lock:
+                if self._sock is not None:
+                    return
                 self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-                self.vm.log.debug(f'QMP connecting...')
+                self.vm.log.debug('QMP connecting...')
                 repeatedly.keep_trying(
                     lambda: self._sock.connect(('127.0.0.1', self.port)),
                     ConnectionRefusedError, retries=retries, timeout=timeout
@@ -304,7 +306,7 @@ class Monitor:
                 self._execute('query-version')
                 version = self._expect(None)
                 self.vm.qemu.major_version = version['return']['qemu']['major']
-                self.vm.log.debug(f'QMP is ready')
+                self.vm.log.debug('QMP is ready')
             threading.Thread(target=self._ballooning_thread,
                              daemon=True).start()
 
