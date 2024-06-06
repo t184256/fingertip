@@ -154,10 +154,10 @@ class QEMUNamespacedFeatures:
         run_args += self.usernet._netspec_cmd()
 
         self.image = os.path.join(self.vm.path, 'image.qcow2')
+        cloned_to_tmp = False
         if self._image_to_clone:
             # let's try to use /tmp (which is, hopefully, tmpfs) for transients
             # if it looks empty enough
-            cloned_to_tmp = False
             required_space = os.path.getsize(self._image_to_clone)
             if self.vm._transient:
                 # Would be ideal to have it global (and multiuser-ok)
@@ -166,7 +166,7 @@ class QEMUNamespacedFeatures:
                     if temp.has_space(required_space, where='/tmp',
                                       safety_constant='4G', target_free=.5):
                         self.image = temp.disappearing_file(
-                            '/tmp', hint='fingertip-qemu'
+                            '/tmp', hint='qemu'
                         )
                         self.vm.log.info('preloading image to /tmp...')
                         reflink.auto(self._image_to_clone, self.image)
@@ -211,6 +211,10 @@ class QEMUNamespacedFeatures:
             # FIXME: autoballooning won't start w/o the monitor connection!
             self.live = False
             self._go_down()
+        if cloned_to_tmp:
+            self.monitor.connect()
+            self.vm.log.info('unlinking image from /tmp...')
+            os.unlink(self.image)  # can't forget to cleanup if we unlink =)
 
     def wait(self):
         self.vm.console.expect(pexpect.EOF)
