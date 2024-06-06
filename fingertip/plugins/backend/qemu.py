@@ -285,15 +285,17 @@ class Monitor:
         self.port = port or free_port.find()
         self.vm.log.debug(f'monitor port {self.port}')
         self._sock = None
+        self._connected = False
         self._queue = queue.Queue()
         self._ram_actual_changed = threading.Event()
         self._ram_target_changed = threading.Event()
         self._command_execution_lock = threading.RLock()
 
     def connect(self, retries=12, timeout=1/32):
-        if self._sock is None:
+        if not self._connected:
             with self._command_execution_lock:
-                if self._sock is not None:
+                if self._connected:
+                    self.vm.log.debug('QMP already connected')
                     return
                 self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -302,15 +304,16 @@ class Monitor:
                     lambda: self._sock.connect(('127.0.0.1', self.port)),
                     ConnectionRefusedError, retries=retries, timeout=timeout
                 )
-                self._execute('qmp_capabilities')
+                self._execute('qmp_capabilities', connect=False)
                 threading.Thread(target=self._recv_thread, daemon=True).start()
                 server_greeting = self._expect()
                 assert set(server_greeting.keys()) == {'QMP'}
                 self._expect({'return': {}})  # from qmp_capabilities
-                self._execute('query-version')
+                self._execute('query-version', connect=False)
                 version = self._expect(None)
                 self.vm.qemu.major_version = version['return']['qemu']['major']
                 self.vm.log.debug('QMP is ready')
+                self._connected = True
             threading.Thread(target=self._ballooning_thread,
                              daemon=True).start()
 
@@ -355,9 +358,10 @@ class Monitor:
 
     def _disconnect(self):
         with self._command_execution_lock:
-            if self._sock:
+            if self._connected:
                 self._sock.close()
                 self._sock = None
+                self._connected = False
                 self.vm.log.debug('qemu monitor disconnected')
 
     def _send(self, dictionary):
@@ -376,8 +380,9 @@ class Monitor:
         except OSError:
             self._disconnect()
 
-    def _execute(self, cmd, retries=12, timeout=1/32, **kwargs):
-        self.connect(retries, timeout)
+    def _execute(self, cmd, retries=12, timeout=1/32, connect=True, **kwargs):
+        if connect:
+            self.connect(retries, timeout)
         self.vm.log.debug(f'executing: {cmd} {kwargs}')
         if not kwargs:
             self._send({'execute': cmd})
