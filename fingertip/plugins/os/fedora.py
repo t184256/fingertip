@@ -132,10 +132,13 @@ def determine_mirror(mirror, version, releases_development):
             return mirror
     # we can query a georedirector for a local Fedora mirror and use just
     # that one, consistently. problem is, it also yields really broken ones.
-    # let's check that a mirror has at least a repomd.xml and a kernel:
+    # let's check that a mirror has at least a repomd.xml,
+    # a kernel and an initrd:
     updates_repomd = f'updates/{version}/Everything/x86_64/repodata/repomd.xml'
     kernel = (f'{releases_development}/{version}'
               '/Everything/x86_64/os/images/pxeboot/vmlinuz')
+    initrd = (f'{releases_development}/{version}'
+              '/Everything/x86_64/os/images/pxeboot/initrd.img')
 
     h = requests.head(mirror + '/' + updates_repomd, allow_redirects=False)
     if h.status_code in (301, 302, 303, 307, 308) and 'Location' in h.headers:
@@ -143,9 +146,11 @@ def determine_mirror(mirror, version, releases_development):
         assert r.endswith('/' + updates_repomd)
         base = r[:-len('/' + updates_repomd)]
         # good, now now ensure it also has a kernel
-        h = requests.head(base + '/' + kernel)
-        if h.status_code != 200:
-            log.warning(f'{base + "/" + kernel} -> {h.status_code}')
+        heads = [requests.head(base + '/' + kernel),
+                 requests.head(base + '/' + initrd)]
+        if not all(h.status_code == 200 for h in heads):
+            log.warning(f'{base}/{{kernel,initrd.img}} '
+                        f'-> {[h.status_code for h in heads]}')
             log.warning(f'mirror {base} is broken, trying another one')
             return determine_mirror(mirror, version, releases_development)
         else:
