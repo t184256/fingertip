@@ -27,6 +27,10 @@ def main(m=None):
             m('apk add python3')
         m.hooks.ansible_prepare.append(prepare)
         #m.hooks.ansible_prepare.append(lambda: m('apk add python3'))
+
+        m.hooks.wait_for_running.append(
+            lambda: m('while [ "$(rc-status --runlevel)" != "default" ]; do sleep 1; done')
+        )
     return m
 
 

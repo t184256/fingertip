@@ -2,6 +2,7 @@ import os
 
 import fingertip.machine
 from fingertip.util import path
+from fingertip.plugins.os.common import red_hat_based
 
 URL = 'http://mirror.centos.org/centos/8-stream/BaseOS/x86_64/os'
 
@@ -79,10 +80,9 @@ def install_in_qemu(m=None):
 
         m.hooks.disable_proxy.append(disable_proxy)
 
-        m.hooks.unseal += [lambda: m('systemctl restart NetworkManager'),
-                           lambda: m('nm-online')]
-
-        m.hooks.timesync.append(lambda: m('hwclock -s'))
+        m.hooks.unseal += red_hat_based.unseal_networkmanager(m)
+        m.hooks.timesync += red_hat_based.timesync(m)
+        m.hooks.wait_for_running += red_hat_based.wait_for_running_systemd(m)
 
         m.centos = 8
         m.dist_git_branch = 'c8s'

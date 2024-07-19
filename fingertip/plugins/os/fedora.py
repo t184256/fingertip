@@ -58,7 +58,7 @@ def upgrade(m=None, releasever=None):
     with m, m.ram('>=2G'):
         m.console.sendline(' dnf -y system-upgrade reboot')
         m.login()
-        m('systemctl is-system-running --wait || true')
+        m.hooks.wait_for_running()
         rel = m('cat /etc/fedora-release').out
         if releasever == 'rawhide':
             assert 'Rawhide' in rel
@@ -109,7 +109,7 @@ def upgrade(m=None, releasever=None):
 
         m.console.sendline(' reboot')
         m.login()
-        m('systemctl is-system-running --wait || true')
+        m.hooks.wait_for_running()
     return m
 
 
@@ -251,10 +251,9 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
         os.unlink(kernel)
         os.unlink(initrd)
 
-        m.hooks.unseal += [lambda: m('systemctl restart NetworkManager'),
-                           lambda: m('nm-online')]
-
-        m.hooks.timesync.append(lambda: m('hwclock -s'))
+        m.hooks.unseal += red_hat_based.unseal_networkmanager(m)
+        m.hooks.timesync += red_hat_based.timesync(m)
+        m.hooks.wait_for_running += red_hat_based.wait_for_running_systemd(m)
 
         m.fedora = version
         m.dist_git_branch = (f'f{version}'
