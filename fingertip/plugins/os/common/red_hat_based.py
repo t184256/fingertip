@@ -189,3 +189,27 @@ def proxy_yum(m):
         m('touch /etc/yum/proxyall')
         m._package_manager_proxied = True
         return m
+
+
+def wait_for_running_systemd(m):
+    """
+    Return a set of hooks that will wait for the system to be running on
+    distributions that use modern systemd.
+    """
+    return [lambda: m('systemctl is-system-running --wait || true')]
+
+def unseal_networkmanager(m):
+    """
+    Return a set of hooks that will restart NetworkManager and wait for network to be back.
+    """
+    return [
+        lambda: m('systemctl restart NetworkManager'),
+        lambda: m('nm-online')
+    ]
+
+def timesync(m):
+    """
+    Return a list of hooks that will set the system clock from the hardware
+    clock.
+    """
+    return [lambda: m('hwclock -s')]

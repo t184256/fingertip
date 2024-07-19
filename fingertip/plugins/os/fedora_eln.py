@@ -111,10 +111,9 @@ def install_in_qemu(m=None, extra_cmdline=''):
                 mv /etc/resolv.conf /etc/resolv.conf.hack
                 ln -sf /etc/resolv.conf.hack /etc/resolv.conf
             ''')
-        m.hooks.unseal += [lambda: m('systemctl restart NetworkManager'),
-                           lambda: m('nm-online'),
-                           hack_resolv_conf]
-        m.hooks.timesync.append(lambda: m('hwclock -s'))
+        m.hooks.unseal += red_hat_based.unseal_networkmanager(m) + [hack_resolv_conf]
+        m.hooks.timesync += red_hat_based.timesync(m)
+        m.hooks.wait_for_running += red_hat_based.wait_for_running_systemd(m)
 
         m = m.apply('ansible', 'yum_repository', enabled=False, gpgcheck=False,
                     name='eln-koji-buildroot',
