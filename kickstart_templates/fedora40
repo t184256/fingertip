@@ -41,10 +41,6 @@ sed -i 's|^metalink=|#metalink=|' /etc/yum.repos.d/*
 sed -i 's|^baseurl=http://download.example/pub/fedora/linux|baseurl={MIRROR}|' /etc/yum.repos.d/*
 sed -i 's|SRPMS|source/tree|' /etc/yum.repos.d/*updates*.repo
 
-# IDK why, that's a `systemctl enable getty@ttyS0`
-ln -s /usr/lib/systemd/system/getty@.service \
-      /etc/systemd/system/getty.target.wants/getty@ttyS0.service
-
 dnf -y makecache
 dnf -y update
 dnf -y remove linux-firmware
