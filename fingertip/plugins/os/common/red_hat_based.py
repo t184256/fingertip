@@ -10,7 +10,8 @@ if [ ! -e /etc/dnf/plugins/proxyall ]; then exit 0; fi
 # Override proxy on the fly if the file is present
 echo conf.proxy={PROXY}
 # Downgrade HTTPS to HTTP in repo configurations on-disk, see
-# https://github.com/rpm-software-management/dnf5/issues/1345
+# https://github.com/rpm-software-management/dnf5/issues/1538
+# for a potential better future solution
 sed -i 's|https://|http://|' /etc/yum.repos.d/*.repo
 # Change metalinks to baseurls while we are at it
 sed -i 's|^metalink|#metalink|' /etc/yum.repos.d/*.repo
@@ -36,15 +37,28 @@ def proxy_dnf_action(m):
             chmod +x /usr/sbin/_fingertip_dnfaction
             echo post_base_setup::::/usr/sbin/_fingertip_dnfaction \
                     > /etc/dnf/libdnf5-plugins/actions.d/fingertip.actions
+            mkdir -p /etc/dnf/plugins
             touch /etc/dnf/plugins/proxyall
         ''')
 
         # Also downgrade copr to http. no opt-out. --hub must be used
         m('''
             set -uexo pipefail
-            sed -i 's|protocol = https|protocol = http|g' \
-                    /etc/dnf/plugins/copr.conf
-            sed -i 's|port = 443|port = 80|g' /etc/dnf/plugins/copr.conf
+            if [[ -e /etc/dnf/plugins/copr.conf ]]; then
+                sed -i 's|protocol = https|protocol = http|g' \
+                        /etc/dnf/plugins/copr.conf
+                sed -i 's|port = 443|port = 80|g' /etc/dnf/plugins/copr.conf
+            else
+                mkdir -p /etc/dnf/plugins
+                cat > /etc/dnf/plugins/copr.conf <<EOF
+            # This actually doesn't work when hubspec is not specified:
+            # https://github.com/rpm-software-management/dnf5/issues/1654
+            [fedora]
+            hostname = copr.fedorainfracloud.org
+            protocol = http
+            port = 80
+            EOF
+            fi
         ''')
         m._package_manager_proxied = True
     return m

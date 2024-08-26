@@ -1,0 +1,56 @@
+{REPOS}
+
+authselect --passalgo=sha512 --useshadow
+autopart
+bootloader --timeout=0
+cmdline
+keyboard us
+lang en_US
+rootpw fingertip
+timezone UTC --utc
+timesource --ntp-disable
+zerombr
+
+firewall --disabled
+network --hostname={HOSTNAME}
+sshkey --username root '{SSH_PUBKEY}'
+
+%packages --exclude-weakdeps --timeout 900
+@Core --nodefaults
+openssh-server
+glibc-minimal-langpack
+glibc-langpack-en
+python3-libselinux
+patch
+libdnf5-plugin-actions
+dnf5-command(copr)
+python3-libdnf5
+-parted
+-dracut-config-rescue
+-plymouth*
+-langpacks-en
+-iwl*firmware
+-lshw
+-sssd-*
+%end
+
+%post --erroronfail
+sed -i 's|\blocalhost\b|{HOSTNAME} localhost|' /etc/hosts
+sed -i 's|^\[main\]$|[main]\ndeltarpm=0\nzchunk=0\ninstall_weak_deps=0\ntimeout=900\nproxy={PROXY}|' /etc/dnf/dnf.conf
+sed -i 's|^enabled=1|enabled=0|' /etc/yum.repos.d/fedora-cisco-openh264.repo
+sed -i 's|^#baseurl=|baseurl=|' /etc/yum.repos.d/*
+sed -i 's|^baseurl=https://|baseurl=http://|' /etc/yum.repos.d/*
+sed -i 's|^metalink=|#metalink=|' /etc/yum.repos.d/*
+sed -i 's|^baseurl=http://download.example/pub/fedora/linux|baseurl={MIRROR}|' /etc/yum.repos.d/*
+sed -i 's|SRPMS|source/tree|' /etc/yum.repos.d/*updates*.repo
+sed -i 's|/releases/|/development/|' /etc/yum.repos.d/*
+
+dnf -y makecache
+dnf -y update
+dnf -y remove linux-firmware
+dnf -y clean packages
+sed -i 's|proxy={PROXY}||' /etc/dnf/dnf.conf
+fstrim -av
+%end
+
+poweroff

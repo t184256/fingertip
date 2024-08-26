@@ -21,13 +21,16 @@ def prepare_upgrade(m, releasever=None):
 
     with m:
         m('dnf upgrade -y --refresh')
-        pkgs = ['dnf-plugin-system-upgrade']
+        pkgs = ['dnf-plugin-system-upgrade', 'distribution-gpg-keys']
+        m = m.apply('ansible', 'package', state='present', name=pkgs)
         if releasever == 'rawhide':
             # if we upgrade to unreleased version, we need to tweak repo files
             m('rm /etc/yum.repos.d/fedora-updates*.repo')
+        if releasever == 'rawhide' or int(releasever) > 40:
             # Fedora 40 -> Fedora 41 rawhide is now DNF4 -> DNF5, for proxy:
             pkgs += ['libdnf5-plugin-actions']
-        m = m.apply('ansible', 'package', state='present', name=pkgs)
+            m = m.apply('ansible', 'package', state='present',
+                        name='libdnf5-plugin-actions')
         if releasever in (RELEASED + 1, 'rawhide'):
             m(r'sed -i -e "s|\(baseurl=.*/\)releases/|\1development/|g" '
                '/etc/yum.repos.d/fedora.repo')
@@ -47,13 +50,13 @@ def upgrade(m=None, releasever=None):
     assert hasattr(m, 'qemu')
 
     releasever = releasever or m.fedora + 1
+    releasever = 'rawhide' if releasever == 'rawhide' else int(releasever)
 
     if not hasattr(m, 'fedora_upgrade_prepared'):
         m = m.apply(prepare_upgrade, releasever)
 
     with m, m.ram('>=2G'):
-        m('sudo systemctl enable getty@ttyS0')  # IDK why
-        m.console.sendline(' dnf system-upgrade reboot')
+        m.console.sendline(' dnf -y system-upgrade reboot')
         m.login()
         m('systemctl is-system-running --wait || true')
         rel = m('cat /etc/fedora-release').out
@@ -67,7 +70,7 @@ def upgrade(m=None, releasever=None):
                              if releasever != 'rawhide' else 'rawhide')
 
         m._package_manager_proxied = False
-        if releasever == 'rawhide':
+        if releasever == 'rawhide' or releasever > 40:
             # Fedora 40 -> Fedora 41 rawhide is now DNF4 -> DNF5
             red_hat_based.proxy_dnf_action(m)
         else:
@@ -88,7 +91,7 @@ def upgrade(m=None, releasever=None):
           dnf -y clean all; dnf -y makecache; fstrim -va
         ''')
 
-        hostname = f'fedora-{m.dist_git_branch}'
+        hostname = f'fedora-{releasever}'
         m(f'hostnamectl set-hostname {hostname}')
 
         def login(username='root', password='fingertip'):
@@ -257,6 +260,10 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
         m.dist_git_branch = (f'f{version}'
                              if version != 'rawhide' else 'rawhide')
 
-        red_hat_based.proxy_dnf(m)
+        if version == 'rawhide' or version > 40:
+            # Fedora 40 -> Fedora 41 rawhide is now DNF4 -> DNF5
+            red_hat_based.proxy_dnf_action(m)
+        else:
+            red_hat_based.proxy_dnf(m)
 
         return m
