@@ -13,20 +13,20 @@ license = "GPL-3.0"
 enable = true
 
 [tool.poetry.dependencies]
-python = "^3.6"
-CacheControl = "^0.12.6"
-pyxdg = "^0.26"
-colorama = "^0.4.3"
-paramiko = "^2.7.1"
-pexpect = "^4.8.0"
-requests = "^2.23.0"
-requests-mock = "^1.7.0"
-fasteners = "^0.15"
+python = "^3.8"
+CacheControl = {version="^0.14.0", extras=["filecache"]}
+pyxdg = "^0.28"
+colorama = "^0.4.6"
+paramiko = "^3.4.1"
+pexpect = "^4.9.0"
+requests = "^2.32.3"
+requests-mock = "^1.12.1"
+fasteners = "^0.19"
 lockfile = "^0.12.2"
-cloudpickle = "^1.3.0"
-rangehttpserver = "^1.2.0"
-inotify_simple = "^1.3"
-GitPython = "^3.1.0"
+cloudpickle = "^3.0.0"
+rangehttpserver = "^1.4.0"
+inotify_simple = "^1.3.5"
+GitPython = "^3.1.34"
 
 [tool.poetry.scripts]
 fingertip = "fingertip.main:main"
