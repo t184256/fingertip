@@ -8,12 +8,12 @@ from fingertip.util import path
 
 
 MIRROR = 'http://dl-cdn.alpinelinux.org/alpine'
-ISO = MIRROR + '/v3.14/releases/x86_64/alpine-virt-3.14.2-x86_64.iso'
-REPO = MIRROR + '/v3.14/main/'
+ISO = MIRROR + '/v3.20/releases/x86_64/alpine-virt-3.20.2-x86_64.iso'
+REPO = MIRROR + '/v3.20/main/'
 
 
 def main(m=None):
-    m = m or fingertip.build('backend.qemu', ram_min='256M', ram_size='512M')
+    m = m or fingertip.build('backend.qemu', ram_min='384M', ram_size='512M')
     if hasattr(m, 'qemu'):
         m = m.apply(install_in_qemu).apply(first_boot)
     elif hasattr(m, 'container'):
@@ -40,20 +40,20 @@ def install_in_qemu(m):
         ssh_pubkey = f.read().strip()
 
     with m, m.ram('512M'):
-        m.ram.safeguard = '256M'  # alpine is quite a slim distro
+        m.ram.safeguard = '384M'  # alpine is a relatively slim distro
         m.qemu.run(load=None, extra_args=['-cdrom', iso_file])
+
         m.console.expect_exact('localhost login: ')
         m.console.sendline('root')
-        m.console.expect_exact('localhost:~# ')
+        m.console.expect_exact('localhost:~# ')  # initially differs
+
+        m.console.sendline(f'export MIRRORS={MIRROR}')
+        m.console.expect_exact('localhost:~# ')  # initially differs
+        m.console.sendline('setup-alpine -q')
 
         m.hostname = 'alpine'
         m.prompt = f'{m.hostname}:~# '
 
-        m.console.sendline('setup-alpine -q')
-        m.console.expect_exact('Select keyboard layout: [none]')
-        m.console.sendline('us')
-        m.console.expect_exact("Select variant (or 'abort'):")
-        m.console.sendline('us')
         m.console.expect_exact(m.prompt)
 
         m.console.sendline(f'setup-proxy {m.http_cache.internal_url}')
