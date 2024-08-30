@@ -23,10 +23,7 @@ def main(m=None):
         raise NotImplementedError()
 
     with m:
-        def prepare():
-            m('apk add python3')
-        m.hooks.ansible_prepare.append(prepare)
-        #m.hooks.ansible_prepare.append(lambda: m('apk add python3'))
+        m.hooks.ansible_prepare.append(lambda: m('apk add python3'))
 
         m.hooks.wait_for_running.append(
             lambda: m('while [ "$(rc-status --runlevel)" != "default" ]; do sleep 1; done')
@@ -37,6 +34,10 @@ def main(m=None):
 def install_in_qemu(m):
     iso_file = os.path.join(m.path, os.path.basename(ISO))
     m.http_cache.fetch(ISO, iso_file)
+
+    ssh_key_fname = path.fingertip('ssh_key', 'fingertip.pub')
+    with open(ssh_key_fname) as f:
+        ssh_pubkey = f.read().strip()
 
     with m, m.ram('512M'):
         m.ram.safeguard = '256M'  # alpine is quite a slim distro
@@ -79,7 +80,23 @@ def install_in_qemu(m):
         m.console.sendline('y')
         m.console.expect_exact(m.prompt)
 
-        m.console.sendline('fstrim -v /')
+        m.console.sendline('mount /dev/vda3 /mnt')
+        m.console.expect_exact(m.prompt)
+
+        m.console.sendline('chroot /mnt apk add openssh')
+        m.console.expect_exact(m.prompt)
+        m.console.sendline('echo SetEnv'
+                           f' http_proxy={m.http_cache.internal_url} '
+                           '>> /mnt/etc/ssh/sshd_config')
+        m.console.expect_exact(m.prompt)
+        m.console.sendline('install -m 700 -d /mnt/root/.ssh')
+        m.console.expect_exact(m.prompt)
+        m.console.sendline(f'echo "{ssh_pubkey}" >> '
+                           '/mnt/root/.ssh/authorized_keys')
+        m.console.expect_exact(m.prompt)
+        m.expiration.depend_on_a_file(ssh_key_fname)
+
+        m.console.sendline('fstrim -v /mnt')
         m.console.expect_exact(m.prompt)
 
         m.console.sendline('poweroff')
@@ -88,31 +105,30 @@ def install_in_qemu(m):
         os.unlink(iso_file)
 
         def disable_proxy():
-            m('setup-proxy none', check=False)
-            m.console.sendline(f'unset http_proxy https_proxy ftp_proxy')
+            m('''
+              setup-proxy none || :
+              sed -i '/^SetEnv http_proxy=.*/d' /etc/ssh/sshd_config || :
+              service sshd restart
+            ''')
+            m.console.sendline(' unset http_proxy https_proxy ftp_proxy')
             m.console.expect_exact(m.prompt)
-        m.hooks.disable_cache.append(disable_proxy)
+        m.hooks.disable_proxy.append(disable_proxy)
+
+        def login():
+            m.console.expect_exact(f'{m.hostname} login: ')
+            m.console.sendline('root')
+            m.console.expect_exact(m.prompt)
+
+        m.login = login
+
+        m.hooks.unseal.append(lambda: m('/etc/init.d/networking restart'))
+        m.hooks.timesync.append(lambda: m('hwclock -s'))
 
         return m
 
 
 def first_boot(m):
-    ssh_key_fname = path.fingertip('ssh_key', 'fingertip.pub')
-    with open(ssh_key_fname) as f:
-        ssh_pubkey = f.read().strip()
-
     with m:
         m.qemu.run(load=None)
-        m.console.expect_exact(f'{m.hostname} login: ')
-        m.console.sendline('root')
-        m.console.expect_exact(m.prompt)
-
-        m.console.sendline(f'install -m 700 -d .ssh')
-        m.console.expect_exact(m.prompt)
-        m.console.sendline(f'echo "{ssh_pubkey}" >> .ssh/authorized_keys')
-        m.console.expect_exact(m.prompt)
-        m.expiration.depend_on_a_file(ssh_key_fname)
-
-        m.hooks.unseal.append(lambda: m('/etc/init.d/networking restart'))
-        m.hooks.timesync.append(lambda: m('hwclock -s'))
+        m.login()
     return m
