@@ -36,6 +36,10 @@ Requires:	qemu-img
 Requires:	rsync
 Requires:	util-linux
 Requires:	xfsprogs
+%ifarch aarch64
+# aarch64 VMs must be booted with UEFI; require the package that provides the UEFI firmware
+Requires:   edk2-aarch64
+%endif
 Recommends:	duperemove
 Recommends:	createrepo_c
 Recommends:	podman
