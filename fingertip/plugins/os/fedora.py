@@ -128,7 +128,7 @@ def main(m=None, version=RELEASED, mirror=None, specific_mirror=True,
     return m
 
 
-def determine_mirror(mirror, version, releases_development):
+def determine_mirror(mirror, version, releases_development, arch):
     # if you have a saviour mirror, let's assume it's a good one
     for source, _ in http_cache.saviour_sources():
         if source != 'direct' and http_cache.is_fetcheable(source, mirror):
@@ -137,11 +137,11 @@ def determine_mirror(mirror, version, releases_development):
     # that one, consistently. problem is, it also yields really broken ones.
     # let's check that a mirror has at least a repomd.xml,
     # a kernel and an initrd:
-    updates_repomd = f'updates/{version}/Everything/x86_64/repodata/repomd.xml'
+    updates_repomd = f'updates/{version}/Everything/{arch}/repodata/repomd.xml'
     kernel = (f'{releases_development}/{version}'
-              '/Everything/x86_64/os/images/pxeboot/vmlinuz')
+              f'/Everything/{arch}/os/images/pxeboot/vmlinuz')
     initrd = (f'{releases_development}/{version}'
-              '/Everything/x86_64/os/images/pxeboot/initrd.img')
+              f'/Everything/{arch}/os/images/pxeboot/initrd.img')
 
     h = requests.head(mirror + '/' + updates_repomd, allow_redirects=False)
     if h.status_code in (301, 302, 303, 307, 308) and 'Location' in h.headers:
@@ -155,7 +155,7 @@ def determine_mirror(mirror, version, releases_development):
             log.warning(f'{base}/{{kernel,initrd.img}} '
                         f'-> {[h.status_code for h in heads]}')
             log.warning(f'mirror {base} is broken, trying another one')
-            return determine_mirror(mirror, version, releases_development)
+            return determine_mirror(mirror, version, releases_development, arch)
         else:
             return base
     return mirror
@@ -171,10 +171,10 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
             mirror = FEDORA_GEOREDIRECTOR  # not consistent, not recommended!
         else:
             mirror = determine_mirror(FEDORA_GEOREDIRECTOR, version,
-                                      releases_development)
+                                      releases_development, m.arch)
             m.log.info(f'autoselected mirror {mirror}')
-    url = f'{mirror}/{releases_development}/{version}/Everything/x86_64/os'
-    upd = f'{mirror}/updates/{version}/Everything/x86_64'
+    url = f'{mirror}/{releases_development}/{version}/Everything/{m.arch}/os'
+    upd = f'{mirror}/updates/{version}/Everything/{m.arch}'
     repos = (f'url --url {url}\n' +
              f'repo --name fedora --baseurl {url}\n' +
              f'repo --name updates --baseurl {upd}')
