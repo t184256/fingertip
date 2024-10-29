@@ -7,13 +7,14 @@ import datetime
 import json
 import logging
 import os
+import platform
+import queue
 import selectors
 import socket
 import stat
 import subprocess
 import threading
 import time
-import queue
 
 import fasteners
 import pexpect
@@ -30,8 +31,7 @@ SNAPSHOT_BASE_NAME = 'tip'  # it has to have some name
 CACHE_INTERNAL_IP, CACHE_INTERNAL_PORT = '10.0.2.244', 8080
 CACHE_INTERNAL_URL = f'http://{CACHE_INTERNAL_IP}:{CACHE_INTERNAL_PORT}'
 DEFAULT_MAX_AUTO_CORES = 8
-QEMU_COMMON_ARGS = ['-enable-kvm', '-cpu', 'host',
-                    '-virtfs', f'local,id=shared9p,path={path.SHARED},'
+QEMU_COMMON_ARGS = ['-virtfs', f'local,id=shared9p,path={path.SHARED},'
                                'security_model=mapped-file,mount_tag=shared',
                     '-nographic',
                     '-object', 'rng-random,id=rng0,filename=/dev/urandom',
@@ -40,14 +40,27 @@ QEMU_COMMON_ARGS = ['-enable-kvm', '-cpu', 'host',
                     '-device', 'pcie-root-port,id=pcie-root,slot=0']
 
 
-def main(arch='x86_64', ram_min='1G', ram_size='1G', ram_max='4G',
-         disk_size='20G', cores=None, custom_args=[], base_time=None):
-    assert arch == 'x86_64'
+def _native_arch():
+    match platform.machine():
+        case "arm64" | "aarch64":
+            return "aarch64"
+        case x:
+            return x
+
+
+def main(arch=None, ram_min='1G', ram_size='1G', ram_max='4G',
+         disk_size='20G', cores=None, custom_args=[], base_time=None,
+         efi=None):
     m = fingertip.machine.Machine('qemu')
-    m.arch = arch
+    m.arch = arch or _native_arch()
+    assert m.arch in ('x86_64', 'aarch64')
+    if efi is None:
+        # Most operating systems expect aarch64 to boot using UEFI and may
+        # fail otherwise.
+        efi = m.arch == 'aarch64'
     m.ram = RAMNamespacedFeatures(m, ram_min, ram_size, ram_max)
     m.swap = SwapNamespacedFeatures(m)
-    m.qemu = QEMUNamespacedFeatures(m, disk_size, cores, custom_args)
+    m.qemu = QEMUNamespacedFeatures(m, disk_size, cores, efi, custom_args)
     m.snapshot = SnapshotNamespacedFeatures(m)
     m._backend_mode = 'pexpect'
     m._born_time = datetime.datetime.now()
@@ -96,6 +109,8 @@ def main(arch='x86_64', ram_min='1G', ram_size='1G', ram_max='4G',
             m.qemu._go_down()
         if m._transient and m.qemu.image and os.path.exists(m.qemu.image):
             os.unlink(m.qemu.image)
+        if m._transient and m.qemu.efivars and os.path.exists(m.qemu.efivars):
+            os.unlink(m.qemu.efivars)
     m.hooks.drop.append(drop)
 
     def save():
@@ -104,6 +119,9 @@ def main(arch='x86_64', ram_min='1G', ram_size='1G', ram_max='4G',
 
     def clone(to_path):
         m.qemu._image_to_clone = os.path.join(m.path, 'image.qcow2')
+        if m.qemu.efi:
+            reflink.auto(os.path.join(m.path, 'efivars.qcow2'),
+                         os.path.join(to_path, 'efivars.qcow2'))
     m.hooks.clone.append(clone)
 
     def disrupt():
@@ -116,13 +134,18 @@ def main(arch='x86_64', ram_min='1G', ram_size='1G', ram_max='4G',
     load()
     run = m.log.pipe_powered(subprocess.run,
                              stdout=logging.INFO, stderr=logging.ERROR)
-    run(['qemu-img', 'create', '-f', 'qcow2', '-o', 'lazy_refcounts=on',
-         os.path.join(m.path, 'image.qcow2'), disk_size], check=True)
+    disks = {
+        'image.qcow2': disk_size,
+        'efivars.qcow2': '64M' if m.arch == 'aarch64' else '4M'
+    }
+    for filename, size in disks.items():
+        run(['qemu-img', 'create', '-f', 'qcow2', '-o', 'lazy_refcounts=on',
+             os.path.join(m.path, filename), size], check=True)
     return m
 
 
 class QEMUNamespacedFeatures:
-    def __init__(self, vm, disk_size, cores, custom_args):
+    def __init__(self, vm, disk_size, cores, efi, custom_args):
         self.vm = vm
         self.live = False
         self.disk_size = disk_size
@@ -131,8 +154,10 @@ class QEMUNamespacedFeatures:
             MAX_AUTO_CORES = int(os.getenv('FINGERTIP_MAX_AUTO_CORES'))
         self.cores = (int(cores) if cores else
                       max(1, min(os.cpu_count() // 2, MAX_AUTO_CORES)))
+        self.efi = efi
         self.custom_args = custom_args
         self.image, self._image_to_clone = None, None
+        self.efivars = None
         self.virtio_scsi = False  # flip before OS install for TRIM on Linux<5
         self._qemu = f'qemu-system-{self.vm.arch}'
         self.usernet = UserNet(self.vm)
@@ -155,6 +180,7 @@ class QEMUNamespacedFeatures:
         run_args += self.usernet._netspec_cmd()
 
         self.image = os.path.join(self.vm.path, 'image.qcow2')
+        self.efivars = os.path.join(self.vm.path, 'efivars.qcow2')
         cloned_to_tmp = False
         if self._image_to_clone:
             # let's try to use /tmp (which is, hopefully, tmpfs) for transients
@@ -188,6 +214,15 @@ class QEMUNamespacedFeatures:
         run_args += ['-m', str(self.vm.ram.max // 2**20)]
         run_args += ['-smp', str(self.cores)]
 
+        if self.vm.arch == "aarch64":
+            # qemu-system-aarch64 does not have a default machine and requires
+            # specifying one
+            run_args += ['-machine', 'virt']
+
+        if self.vm.qemu.efi:
+            run_args += ['-drive', f'if=pflash,format=raw,file={self._guess_efi()},readonly=on']
+            run_args += ['-drive', f'if=pflash,format=qcow2,file={self.efivars!s}']
+
         if self.vm._base_time is not None:
             vm_age = datetime.datetime.now() - self.vm._born_time
             set_to = (self.vm._base_time + vm_age).isoformat().split('.', 1)[0]
@@ -196,6 +231,10 @@ class QEMUNamespacedFeatures:
         os.makedirs(path.SHARED, exist_ok=True)
 
         args = QEMU_COMMON_ARGS + self.custom_args + run_args + extra_args
+        if self.vm.arch == _native_arch():
+            args.extend(['-enable-kvm', '-cpu', 'host'])
+        else:
+            args.extend(['-cpu', 'max'])
         self.vm.log.debug(' '.join(args))
         if self.vm._backend_mode == 'pexpect':
             # start connecting/negotiating QMP, later starts auto-ballooning
@@ -216,6 +255,16 @@ class QEMUNamespacedFeatures:
             self.monitor.connect()
             self.vm.log.info('unlinking image from /tmp...')
             os.unlink(self.image)  # can't forget to cleanup if we unlink =)
+
+    def _guess_efi(self):
+        p = f'/usr/share/edk2/{self.vm.arch}/QEMU_EFI-silent-pflash.raw'
+        if os.path.exists(p):
+            return p
+        if self.vm.arch == 'x86_64':
+            p = '/usr/share/edk2/ovmf/OVMF_CODE.fd'
+            if os.path.exists(p):
+                return p
+        raise RuntimeError("Couldn't find EFI files to use in /usr/share/edk2")
 
     def wait(self):
         self.vm.console.expect(pexpect.EOF)
