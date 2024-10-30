@@ -16,7 +16,7 @@ import pexpect
 
 import fingertip
 import fingertip.util.log
-from fingertip.plugins.backend.qemu import NotEnoughSpaceForSnapshotException
+from fingertip.plugins.backend.qemu import VMSnapshotWritingException
 
 
 WATCHER_DEBOUNCE_TIMEOUT = .25  # seconds
@@ -175,7 +175,7 @@ def make_m_segment_aware(m):
                 m.log.debug(f'checkpointing after {checkpoint_name}')
                 with progress_show(f'... checkpointing {checkpoint_msg} ...'):
                     m.snapshot.checkpoint(checkpoint_name)
-            except NotEnoughSpaceForSnapshotException:
+            except VMSnapshotWritingException:
                 with progress_show('... cleaning up older checkpoints ...'):
                     checkpoint_cleanup()  # try to remove at least one
                 with progress_show(f'... checkpointing {checkpoint_msg} ...'):

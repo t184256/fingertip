@@ -275,7 +275,10 @@ class UnknownVMException(VMException):
     pass
 
 
-class NotEnoughSpaceForSnapshotException(VMException):
+class VMSnapshotWritingException(VMException):
+    pass
+
+class NotEnoughSpaceForSnapshotException(VMSnapshotWritingException):
     pass
 
 
@@ -400,6 +403,8 @@ class Monitor:
             r = r['return']
             if 'Error while writing VM state: No space left on device' in r:
                 raise NotEnoughSpaceForSnapshotException(r)
+            elif 'Error while writing VM state: Input/output error' in r:
+                raise VMSnapshotWritingException(r)
             elif r:
                 self.vm.log.error(r)
                 raise UnknownVMException(r)
