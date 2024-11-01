@@ -7,13 +7,14 @@ import datetime
 import json
 import logging
 import os
+import platform
+import queue
 import selectors
 import socket
 import stat
 import subprocess
 import threading
 import time
-import queue
 
 import fasteners
 import pexpect
@@ -30,8 +31,7 @@ SNAPSHOT_BASE_NAME = 'tip'  # it has to have some name
 CACHE_INTERNAL_IP, CACHE_INTERNAL_PORT = '10.0.2.244', 8080
 CACHE_INTERNAL_URL = f'http://{CACHE_INTERNAL_IP}:{CACHE_INTERNAL_PORT}'
 DEFAULT_MAX_AUTO_CORES = 8
-QEMU_COMMON_ARGS = ['-enable-kvm', '-cpu', 'host',
-                    '-virtfs', f'local,id=shared9p,path={path.SHARED},'
+QEMU_COMMON_ARGS = ['-virtfs', f'local,id=shared9p,path={path.SHARED},'
                                'security_model=mapped-file,mount_tag=shared',
                     '-nographic',
                     '-object', 'rng-random,id=rng0,filename=/dev/urandom',
@@ -39,11 +39,19 @@ QEMU_COMMON_ARGS = ['-enable-kvm', '-cpu', 'host',
                     '-device', 'virtio-rng-pci,rng=rng0']
 
 
-def main(arch='x86_64', ram_min='1G', ram_size='1G', ram_max='4G',
+def _native_arch():
+    match platform.machine():
+        case "arm64" | "aarch64":
+            return "aarch64"
+        case x:
+            return x
+
+
+def main(arch=None, ram_min='1G', ram_size='1G', ram_max='4G',
          disk_size='20G', cores=None, custom_args=[], base_time=None):
-    assert arch == 'x86_64'
     m = fingertip.machine.Machine('qemu')
-    m.arch = arch
+    m.arch = arch or _native_arch()
+    assert m.arch in ('x86_64', 'aarch64')
     m.ram = RAMNamespacedFeatures(m, ram_min, ram_size, ram_max)
     m.swap = SwapNamespacedFeatures(m)
     m.qemu = QEMUNamespacedFeatures(m, disk_size, cores, custom_args)
@@ -95,6 +103,8 @@ def main(arch='x86_64', ram_min='1G', ram_size='1G', ram_max='4G',
             m.qemu._go_down()
         if m._transient and m.qemu.image and os.path.exists(m.qemu.image):
             os.unlink(m.qemu.image)
+        if m._transient and m.qemu.efivars and os.path.exists(m.qemu.efivars):
+            os.unlink(m.qemu.efivars)
     m.hooks.drop.append(drop)
 
     def save():
@@ -103,6 +113,7 @@ def main(arch='x86_64', ram_min='1G', ram_size='1G', ram_max='4G',
 
     def clone(to_path):
         m.qemu._image_to_clone = os.path.join(m.path, 'image.qcow2')
+        m.qemu._efivars_to_clone = os.path.join(m.path, 'efivars.qcow2')
     m.hooks.clone.append(clone)
 
     def disrupt():
@@ -115,8 +126,13 @@ def main(arch='x86_64', ram_min='1G', ram_size='1G', ram_max='4G',
     load()
     run = m.log.pipe_powered(subprocess.run,
                              stdout=logging.INFO, stderr=logging.ERROR)
-    run(['qemu-img', 'create', '-f', 'qcow2', '-o', 'lazy_refcounts=on',
-         os.path.join(m.path, 'image.qcow2'), disk_size], check=True)
+    disks = {
+        'image.qcow2': disk_size,
+        'efivars.qcow2': '64M'
+    }
+    for filename, size in disks.items():
+        run(['qemu-img', 'create', '-f', 'qcow2', '-o', 'lazy_refcounts=on',
+             os.path.join(m.path, filename), size], check=True)
     return m
 
 
@@ -132,6 +148,7 @@ class QEMUNamespacedFeatures:
                       max(1, min(os.cpu_count() // 2, MAX_AUTO_CORES)))
         self.custom_args = custom_args
         self.image, self._image_to_clone = None, None
+        self.efivars, self._efivars_to_clone = None, None
         self.virtio_scsi = False  # flip before OS install for TRIM on Linux<5
         self._qemu = f'qemu-system-{self.vm.arch}'
         self.usernet = UserNet(self.vm)
@@ -154,27 +171,36 @@ class QEMUNamespacedFeatures:
         run_args += self.usernet._netspec_cmd()
 
         self.image = os.path.join(self.vm.path, 'image.qcow2')
-        cloned_to_tmp = False
-        if self._image_to_clone:
-            # let's try to use /tmp (which is, hopefully, tmpfs) for transients
-            # if it looks empty enough
-            required_space = os.path.getsize(self._image_to_clone)
-            if self.vm._transient:
-                # Would be ideal to have it global (and multiuser-ok)
-                tmp_free_lock = path.cache('.tmp-free-space-check-lock')
-                with fasteners.process_lock.InterProcessLock(tmp_free_lock):
-                    if temp.has_space(required_space, where='/tmp',
-                                      safety_constant='4G', target_free=.5):
-                        self.image = temp.disappearing_file(
-                            '/tmp', hint='qemu'
-                        )
-                        self.vm.log.info('preloading image to /tmp...')
-                        reflink.auto(self._image_to_clone, self.image)
-                        self.vm.log.info('preloading image to /tmp completed')
-                        cloned_to_tmp = True
-            if not cloned_to_tmp:
-                reflink.auto(self._image_to_clone, self.image)
+        self.efivars = os.path.join(self.vm.path, 'efivars.qcow2')
+        cloned_to_tmp = set()
+        if self._image_to_clone or self._efivars_to_clone:
+            pairs = []
+            if self._image_to_clone:
+                pairs.append((self._image_to_clone, self.image))
+            if self._efivars_to_clone:
+                pairs.append((self._efivars_to_clone, self.efivars))
+
+            for image_to_clone, image in pairs:
+                # let's try to use /tmp (which is, hopefully, tmpfs) for transients
+                # if it looks empty enough
+                required_space = os.path.getsize(image_to_clone)
+                if self.vm._transient:
+                    # Would be ideal to have it global (and multiuser-ok)
+                    tmp_free_lock = path.cache('.tmp-free-space-check-lock')
+                    with fasteners.process_lock.InterProcessLock(tmp_free_lock):
+                        if temp.has_space(required_space, where='/tmp',
+                                          safety_constant='4G', target_free=.5):
+                            self.image = temp.disappearing_file(
+                                '/tmp', hint='qemu'
+                            )
+                            self.vm.log.info(f'preloading image {image} to /tmp...')
+                            reflink.auto(image_to_clone, image)
+                            self.vm.log.info('preloading image to /tmp completed')
+                            cloned_to_tmp.add(image)
+                if image not in cloned_to_tmp:
+                    reflink.auto(image_to_clone, image)
             self._image_to_clone = None
+            self._efivars_to_clone = None
         if self.virtio_scsi:
             run_args += ['-device', 'virtio-scsi-pci',
                          '-device', 'scsi-hd,drive=hd',
@@ -187,6 +213,16 @@ class QEMUNamespacedFeatures:
         run_args += ['-m', str(self.vm.ram.max // 2**20)]
         run_args += ['-smp', str(self.cores)]
 
+        if self.vm.arch == "aarch64":
+            # qemu-system-aarch64 does not have a default machine and requires
+            # specifying one
+            run_args += ['-machine', 'virt']
+
+            # Most operating systems expect aarch64 to boot using UEFI and may
+            # fail otherwise.
+            run_args += ['-drive', f'if=pflash,format=raw,file=/usr/share/edk2/aarch64/QEMU_EFI-silent-pflash.raw,readonly=on']
+            run_args += ['-drive', f'if=pflash,format=qcow2,file={self.efivars!s}']
+
         if self.vm._base_time is not None:
             vm_age = datetime.datetime.now() - self.vm._born_time
             set_to = (self.vm._base_time + vm_age).isoformat().split('.', 1)[0]
@@ -195,6 +231,10 @@ class QEMUNamespacedFeatures:
         os.makedirs(path.SHARED, exist_ok=True)
 
         args = QEMU_COMMON_ARGS + self.custom_args + run_args + extra_args
+        if self.vm.arch == _native_arch():
+            args.extend(['-enable-kvm', '-cpu', 'host'])
+        else:
+            args.extend(['-cpu', 'max'])
         self.vm.log.debug(' '.join(args))
         if self.vm._backend_mode == 'pexpect':
             # start connecting/negotiating QMP, later starts auto-ballooning
@@ -213,8 +253,9 @@ class QEMUNamespacedFeatures:
             self._go_down()
         if cloned_to_tmp:
             self.monitor.connect()
-            self.vm.log.info('unlinking image from /tmp...')
-            os.unlink(self.image)  # can't forget to cleanup if we unlink =)
+            self.vm.log.info('unlinking image(s) from /tmp...')
+            for image in cloned_to_tmp:
+                os.unlink(image)
 
     def wait(self):
         self.vm.console.expect(pexpect.EOF)
