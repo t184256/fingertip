@@ -31,8 +31,7 @@ SNAPSHOT_BASE_NAME = 'tip'  # it has to have some name
 CACHE_INTERNAL_IP, CACHE_INTERNAL_PORT = '10.0.2.244', 8080
 CACHE_INTERNAL_URL = f'http://{CACHE_INTERNAL_IP}:{CACHE_INTERNAL_PORT}'
 DEFAULT_MAX_AUTO_CORES = 8
-QEMU_COMMON_ARGS = ['-enable-kvm', '-cpu', 'host',
-                    '-virtfs', f'local,id=shared9p,path={path.SHARED},'
+QEMU_COMMON_ARGS = ['-virtfs', f'local,id=shared9p,path={path.SHARED},'
                                'security_model=mapped-file,mount_tag=shared',
                     '-nographic',
                     '-object', 'rng-random,id=rng0,filename=/dev/urandom',
@@ -40,17 +39,19 @@ QEMU_COMMON_ARGS = ['-enable-kvm', '-cpu', 'host',
                     '-device', 'virtio-rng-pci,rng=rng0']
 
 
+def _native_arch():
+    match platform.machine():
+        case "arm64" | "aarch64":
+            return "aarch64"
+        case x:
+            return x
+
+
 def main(arch=None, ram_min='1G', ram_size='1G', ram_max='4G',
          disk_size='20G', cores=None, custom_args=[], base_time=None):
-    if arch is None:
-        match platform.machine():
-            case "arm64" | "aarch64":
-                arch = "aarch64"
-            case _:
-                arch = platform.machine()
-    assert arch in ('x86_64', 'aarch64')
     m = fingertip.machine.Machine('qemu')
-    m.arch = arch
+    m.arch = arch or _native_arch()
+    assert m.arch in ('x86_64', 'aarch64')
     m.ram = RAMNamespacedFeatures(m, ram_min, ram_size, ram_max)
     m.swap = SwapNamespacedFeatures(m)
     m.qemu = QEMUNamespacedFeatures(m, disk_size, cores, custom_args)
@@ -230,6 +231,10 @@ class QEMUNamespacedFeatures:
         os.makedirs(path.SHARED, exist_ok=True)
 
         args = QEMU_COMMON_ARGS + self.custom_args + run_args + extra_args
+        if self.vm.arch == _native_arch():
+            args.extend(['-enable-kvm', '-cpu', 'host'])
+        else:
+            args.extend(['-cpu', 'max'])
         self.vm.log.debug(' '.join(args))
         if self.vm._backend_mode == 'pexpect':
             # start connecting/negotiating QMP, later starts auto-ballooning
