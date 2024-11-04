@@ -31,7 +31,7 @@ Requires:	python3-rangehttpserver
 Requires:	python3-requests
 Requires:	python3-requests-mock
 Requires:	python3-ruamel-yaml
-Requires:	qemu-system-x86-core
+Requires:	qemu-kvm
 Requires:	qemu-img
 Requires:	rsync
 Requires:	util-linux
