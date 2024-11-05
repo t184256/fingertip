@@ -36,7 +36,8 @@ QEMU_COMMON_ARGS = ['-enable-kvm', '-cpu', 'host',
                     '-nographic',
                     '-object', 'rng-random,id=rng0,filename=/dev/urandom',
                     '-device', 'virtio-balloon',
-                    '-device', 'virtio-rng-pci,rng=rng0']
+                    '-device', 'virtio-rng-pci,rng=rng0',
+                    '-device', 'pcie-root-port,id=pcie-root,slot=0']
 
 
 def main(arch='x86_64', ram_min='1G', ram_size='1G', ram_max='4G',
@@ -503,7 +504,7 @@ class Monitor:
             self._expect({'return': {}})
         with self._command_execution_lock:
             self._execute('device_add',
-                          driver=driver, drive=drive_name, id=dev_name)
+                          driver=driver, drive=drive_name, id=dev_name, bus='pcie-root')
             self._expect({'return': {}})
 
     def detach_disk(self, drive_name, dev_name):
