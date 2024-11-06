@@ -8,7 +8,7 @@ from fingertip.util import path
 
 
 MIRROR = 'http://dl-cdn.alpinelinux.org/alpine'
-ISO = MIRROR + '/v3.20/releases/x86_64/alpine-virt-3.20.2-x86_64.iso'
+ISO = MIRROR + '/v3.20/releases/%ARCH%/alpine-virt-3.20.2-%ARCH%.iso'
 REPO = MIRROR + '/v3.20/main/'
 
 
@@ -32,8 +32,9 @@ def main(m=None):
 
 
 def install_in_qemu(m):
-    iso_file = os.path.join(m.path, os.path.basename(ISO))
-    m.http_cache.fetch(ISO, iso_file)
+    iso = ISO.replace('%ARCH%', m.arch)
+    iso_file = os.path.join(m.path, os.path.basename(iso))
+    m.http_cache.fetch(iso, iso_file)
 
     ssh_key_fname = path.fingertip('ssh_key', 'fingertip.pub')
     with open(ssh_key_fname) as f:
