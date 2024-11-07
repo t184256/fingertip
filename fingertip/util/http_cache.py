@@ -5,6 +5,7 @@ import hashlib
 import http
 import http.server
 import os
+import re
 import shutil
 import socketserver
 import stat
@@ -28,6 +29,12 @@ SAVIOUR_DEFAULTS = 'local,cached+direct'
 RETRIES_MAX = 7
 COOLDOWN = 20
 WARN_ON_DIRECT = os.getenv('FINGERTIP_SAVIOUR_WARN_ON_DIRECT', None) == '1'
+
+
+def demangle(uri):
+    # wget2 mangles http://10.0.2.224:8080/https://smth
+    # into a broken http://10.0.2.224:8080/https:/smth
+    return re.sub(r':/([^/])', r'://\1', uri)
 
 
 def is_cache_group_writeable():
@@ -84,7 +91,7 @@ class HTTPCache:
                 self.end_headers()
 
             def _serve(self, uri, headers, meth='GET'):
-                uri = uri.lstrip('/')
+                uri = demangle(uri.lstrip('/'))
                 if uri in http_cache._mocks:
                     return self._serve_http(uri, headers, meth, cache=False)
                 sources = saviour_sources()
