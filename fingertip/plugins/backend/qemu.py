@@ -543,6 +543,7 @@ class Monitor:
     def attach_disk(self, filename, drive_name, dev_name):
         driver = ('scsi-hd' if self.vm.qemu.virtio_scsi else
                   'virtio-blk-pci')
+        kwa = {} if self.vm.qemu.virtio_scsi else {'bus': 'pcie-root'}
         with self._command_execution_lock:
             self._execute('blockdev-add', **{
                 'driver': 'qcow2',
@@ -553,7 +554,7 @@ class Monitor:
             self._expect({'return': {}})
         with self._command_execution_lock:
             self._execute('device_add',
-                          driver=driver, drive=drive_name, id=dev_name, bus='pcie-root')
+                          driver=driver, drive=drive_name, id=dev_name, **kwa)
             self._expect({'return': {}})
 
     def detach_disk(self, drive_name, dev_name):
