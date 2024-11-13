@@ -219,7 +219,7 @@ class QEMUNamespacedFeatures:
             # specifying one
             run_args += ['-machine', 'virt']
 
-        if self.vm.qemu.efi:
+        if self.efi:
             run_args += ['-drive', f'if=pflash,format=raw,file={self._guess_efi()},readonly=on']
             run_args += ['-drive', f'if=pflash,format=qcow2,file={self.efivars!s}']
 
