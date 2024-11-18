@@ -262,6 +262,7 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
         if version == 'rawhide' or version > 40:
             # Fedora 40 -> Fedora 41 rawhide is now DNF4 -> DNF5
             red_hat_based.proxy_dnf_action(m)
+            m.hooks.ansible_prepare += red_hat_based.dnf5_ansible(m)
         else:
             red_hat_based.proxy_dnf(m)
 

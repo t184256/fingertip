@@ -213,3 +213,11 @@ def timesync(m):
     clock.
     """
     return [lambda: m('hwclock -s')]
+
+def dnf5_ansible(m):
+    """
+    Install enough packages for ansible to function.
+    """
+    return [
+        lambda: m('rpm -q python3-libdnf5 || dnf -y install python3-libdnf5')
+    ]
