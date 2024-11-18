@@ -19,16 +19,24 @@ sshkey --username root '{SSH_PUBKEY}'
 @Core --nodefaults
 openssh-server
 glibc-minimal-langpack
-glibc-langpack-en
-python3-libselinux
 patch
 libdnf5-plugin-actions
 dnf5-command(copr)
-python3-libdnf5
 -parted
 -dracut-config-rescue
 -plymouth*
+-dhcp-client
+-firewalld
+-fwupd
+-iproute
+-iputils
 -langpacks-en
+-langpacks-en_GB
+-linux-firmware
+-man-db
+-ncurses
+-python3-libdnf5
+-tpm2-tss
 -iwl*firmware
 -lshw
 -sssd-*
@@ -46,7 +54,6 @@ sed -i 's|SRPMS|source/tree|' /etc/yum.repos.d/*updates*.repo
 
 dnf -y makecache
 dnf -y update
-dnf -y remove linux-firmware
 dnf -y clean packages
 sed -i 's|proxy={PROXY}||' /etc/dnf/dnf.conf
 fstrim -av
