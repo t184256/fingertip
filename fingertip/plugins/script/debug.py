@@ -564,9 +564,15 @@ def main(m, scriptpath, language='bash', unseal=True,
     repl = repl()
     m = m.apply(repl.prepare, scriptpath, terse)
 
-    def reloader():
-        with open(scriptpath) as f:
-            code = script_reading_hook(m, f.read())
+    def reloader(retry=True):
+        try:
+            with open(scriptpath) as f:
+                code = script_reading_hook(m, f.read())
+        except FileNotFoundError:
+            # editors sometimes leave a window when file is not present
+            time.sleep(.25)
+            with open(scriptpath) as f:
+                code = script_reading_hook(m, f.read())
         return repl.segment(code)
 
     if halt_on == 'warning':
