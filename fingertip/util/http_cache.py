@@ -164,11 +164,12 @@ class HTTPCache:
                     r = m_func(uri if '://' in uri else 'http://self' + uri,
                                headers=headers, allow_redirects=False)
                     data = r.content
-                    if 'Content-Length' in r.headers:
-                        length = int(r.headers['Content-Length'])
-                        if len(data) != length:
-                            data = hack_around_unpacking(uri, headers, data)
-                        assert len(data) == length
+                    if meth == 'GET':
+                        if 'Content-Length' in r.headers:
+                            length = int(r.headers['Content-Length'])
+                            if len(data) != length:
+                                data = hack_around_unpacking(uri, headers, data)
+                            assert len(data) == length
                 except BrokenPipeError:
                     error = f'Upwards broken pipe for {meth} {uri}'
                 except ConnectionResetError:
