@@ -25,8 +25,6 @@ def prepare_upgrade(m, releasever=None):
         pkgs = ['dnf-plugin-system-upgrade', 'distribution-gpg-keys']
         if releasever == 'rawhide':
             m(f'''
-                # to upgrade to unreleased version, need to tweak repo files
-                rm /etc/yum.repos.d/fedora-updates*.repo
                 # trust a few more keys, needed several times a year
                 for v in '{m.fedora + 1}' '{m.fedora + 2}'; do
                   for k in 'primary' '{m.arch}'; do
@@ -42,6 +40,8 @@ def prepare_upgrade(m, releasever=None):
                         name='libdnf5-plugin-actions')
         m = m.apply('ansible', 'package', state='present', name=pkgs)
         if releasever in (RELEASED + 1, 'rawhide'):
+            # to upgrade to unreleased version, need to tweak repo files
+            m('rm /etc/yum.repos.d/fedora-updates*.repo')
             m(r'sed -i -e "s|\(baseurl=.*/\)releases/|\1development/|g" '
                '/etc/yum.repos.d/fedora.repo')
             m('cat /etc/yum.repos.d/fedora.repo')
