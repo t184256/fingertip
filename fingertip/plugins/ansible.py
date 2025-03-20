@@ -65,9 +65,12 @@ def main(m, module, *args, **kwargs):
     return m
 
 
-def playbook(m, playbook_path):
+def playbook(m, playbook_path, variables={}):
+    args = []
+    for k, v in variables.items():
+        args.extend(['-e', f'{k}={v}'])
     with m.apply(prepare) as m:
-        _ansible(m, playbook_path, cmd=('ansible-playbook',))
+        _ansible(m, *args, playbook_path, cmd=('ansible-playbook',))
         # not comprehensive; best-effort
         m.expiration.depend_on_a_file(playbook_path)
     return m
