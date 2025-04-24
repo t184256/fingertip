@@ -266,6 +266,31 @@ class QEMUNamespacedFeatures:
                 return p
         raise RuntimeError("Couldn't find EFI files to use in /usr/share/edk2")
 
+    def image_repack(self, keep_smaller=True):
+        """
+        Save space by repacking the disk image.
+        Use only on the initial (base) one right after install
+        in order to not break reflinking!
+        """
+        run = self.vm.log.pipe_powered(subprocess.run, stdout=logging.INFO,
+                                       stderr=logging.ERROR)
+        was = os.path.getsize(self.image)
+        self.vm.log.debug(f're-packing an {units.binary(was)} image file...')
+        tmp = self.image + '.tmp'
+        os.rename(self.image, tmp)
+        run(['qemu-img', 'convert', '-O', 'qcow2', '-o', 'lazy_refcounts=on',
+             tmp, self.image], check=True)
+        became = os.path.getsize(self.image)
+        self.vm.log.debug('size after re-packing: '
+                          f'{units.binary(became)}, {100 * became / was:.1f}%')
+        if keep_smaller and became > was:
+            # undo
+            self.vm.log.debug('re-packing result discarded, using old image')
+            os.unlink(self.image)
+            os.rename(tmp, self.image)
+        else:
+            os.unlink(tmp)
+
     def wait(self):
         self.vm.console.expect(pexpect.EOF)
         self.vm.console.close()
