@@ -103,6 +103,7 @@ def install_in_qemu(m):
         m.console.sendline('poweroff')
 
         m.qemu.wait()
+        m.qemu.image_repack()
         os.unlink(iso_file)
 
         def disable_proxy():

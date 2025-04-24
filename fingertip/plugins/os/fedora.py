@@ -241,6 +241,7 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
             assert i == 0, 'Installation failed'
             m.qemu.wait()
 
+        m.qemu.image_repack()
         m.qemu.run(load=None)  # cold boot
 
         def login(username='root', password='fingertip'):
