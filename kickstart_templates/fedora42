@@ -1,0 +1,83 @@
+{REPOS}
+
+authselect --passalgo=sha512 --useshadow
+autopart
+bootloader --timeout=0
+cmdline
+keyboard us
+lang en_US
+rootpw fingertip
+timezone UTC --utc
+timesource --ntp-disable
+zerombr
+
+firewall --disabled
+network --hostname={HOSTNAME}
+sshkey --username root '{SSH_PUBKEY}'
+
+%packages --exclude-weakdeps --timeout 900
+@Core --nodefaults
+openssh-server
+glibc-minimal-langpack
+patch
+libdnf5-plugin-actions
+dnf5-command(copr)
+-parted
+-dhcp-client
+-dracut-config-rescue
+-firewalld
+-fwupd
+-glibc-gconv-extra
+-iproute
+-iputils
+-langpacks-en
+-libbpf
+-man-db
+-ncurses
+-plymouth*
+-prefixdevname
+-sssd-*
+-tpm2-tss
+%end
+
+%post --interpreter /bin/bash --erroronfail
+(
+set -xEeuo pipefail; shopt -s inherit_errexit
+# DNF
+sed -i 's|\blocalhost\b|{HOSTNAME} localhost|' /etc/hosts
+sed -i 's|^\[main\]$|[main]\ndeltarpm=0\nzchunk=0\ninstall_weak_deps=0\ntimeout=900\nproxy={PROXY}|' /etc/dnf/dnf.conf
+sed -i 's|^enabled=1|enabled=0|' /etc/yum.repos.d/fedora-cisco-openh264.repo
+sed -i 's|^#baseurl=|baseurl=|' /etc/yum.repos.d/*
+sed -i 's|^baseurl=https://|baseurl=http://|' /etc/yum.repos.d/*
+sed -i 's|^metalink=|#metalink=|' /etc/yum.repos.d/*
+sed -i 's|^baseurl=http://download.example/pub/fedora/linux|baseurl={MIRROR}|' /etc/yum.repos.d/*
+sed -i 's|SRPMS|source/tree|' /etc/yum.repos.d/*updates*.repo
+dnf -y makecache 2>/dev/null
+dnf -y update
+dnf -y clean packages
+sed -i 's|proxy={PROXY}||' /etc/dnf/dnf.conf
+# Compacting disk usage. -dusage/-musage/lax tuned to go to ~1G in ~15 sec
+btrfs filesystem defrag -czstd -r /  # -L15 is broken for some reason
+# resizing btrfs down makes it pack up better
+dev=$(df --output=source / | tail -n1)
+new_min=$(blockdev --getsize64 $dev)
+lax=$((64 * 1024 * 1024))
+for i in {{1..5}}; do
+  min=$new_min
+  btrfs filesystem sync /
+  new_min=$(btrfs inspect-internal min-dev-size / | cut -d ' ' -f1)
+  if ((new_min + 2 * lax > min)); then break; fi
+  btrfs filesystem resize $((new_min + lax)) / || break
+  btrfs filesystem usage / | grep -E '(Device.*allocated|Used)'
+  usage=$((i * 12))
+  btrfs balance start -dusage=$usage -musage=$usage / || break
+  btrfs filesystem usage / | grep -E '(Device.*allocated|Used)'
+done
+blkdiscard --verbose --force --offset $((new_min + lax)) $dev
+btrfs filesystem resize max /
+btrfs filesystem usage / | grep -E '(Device.*allocated|Used)'
+fstrim -av
+) &> /dev/ttyS0
+%end
+
+poweroff
