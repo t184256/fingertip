@@ -109,7 +109,7 @@ Summary:	Shared CoW-enabled cache for fingertip
 Requires:	fingertip
 Requires:	procps-ng
 Requires:	systemd
-Requires:	/usr/sbin/losetup
+Requires:	/usr/bin/losetup
 Requires:	/usr/sbin/semanage
 Requires:	/usr/sbin/restorecon
 Requires(post):	acl
