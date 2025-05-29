@@ -11,6 +11,7 @@ BuildArch:	noarch
 BuildRequires:	python3
 BuildRequires:	python3-devel
 BuildRequires:	systemd-rpm-macros
+%{?sysusers_requires_compat}
 
 Requires:	ansible-core
 Requires:	git-core
@@ -94,6 +95,9 @@ install -d -m 755 %{buildroot}%{statedir}
 install -d -m 2755 %{buildroot}%{statedir}/shared_cache
 install -d -m 2755 %{buildroot}%{statedir}/shared_cache/saviour
 
+echo 'g fingertip' > fingertip.conf
+install -D -m 0644 fingertip.conf %{buildroot}%{_sysusersdir}/fingertip.conf
+
 %files
 %license COPYING
 %doc README.md
@@ -109,7 +113,11 @@ Summary:	Shared CoW-enabled cache for fingertip
 Requires:	fingertip
 Requires:	procps-ng
 Requires:	systemd
+%if 0%{?fedora} < 42
+Requires:	/usr/sbin/losetup
+%else
 Requires:	/usr/bin/losetup
+%endif
 Requires:	/usr/sbin/semanage
 Requires:	/usr/sbin/restorecon
 Requires(post):	acl
@@ -123,6 +131,7 @@ After installing, you'll have to
 and, lastly, `fingertip-shared-cache-use $YOUR_USERNAME`.
 
 %pre shared-cache
+%sysusers_create_compat %{SOURCE3}
 getent group fingertip >/dev/null || groupadd -r fingertip
 
 %files shared-cache
@@ -134,6 +143,7 @@ getent group fingertip >/dev/null || groupadd -r fingertip
 %{_sbindir}/fingertip-shared-cache-demolish
 %{_sbindir}/fingertip-shared-cache-grow
 %{_sbindir}/fingertip-shared-cache-use
+%{_sysusersdir}/fingertip.conf
 
 %post shared-cache
 if [[ $1 == 1 ]]; then
