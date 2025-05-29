@@ -154,8 +154,10 @@ def determine_mirror(mirror, version, releases_development, arch):
               f'/Everything/{arch}/os/images/pxeboot/initrd.img')
 
     h = requests.head(mirror + '/' + updates_repomd, allow_redirects=False)
-    if h.status_code in (301, 302, 303, 307, 308) and 'Location' in h.headers:
-        r = h.headers['Location'].rstrip('/').replace('https://', 'http://')
+    if (h.status_code in (301, 302, 303, 307, 308)
+            and ('Location' in h.headers or 'location' in h.headers)):
+        r = h.headers['Location' if 'Location' in h.headers else 'location']
+        r = r.rstrip('/').replace('https://', 'http://')
         assert r.endswith('/' + updates_repomd)
         base = r[:-len('/' + updates_repomd)]
         # good, now now ensure it also has a kernel
