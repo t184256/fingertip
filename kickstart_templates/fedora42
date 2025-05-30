@@ -26,7 +26,7 @@ dnf5-command(copr)
 -dhcp-client
 -dracut-config-rescue
 -firewalld
--fwupd.x86_64
+-fwupd
 -glibc-gconv-extra.x86_64
 -iproute
 -iputils
@@ -37,7 +37,7 @@ dnf5-command(copr)
 -plymouth*
 -prefixdevname
 -sssd-*
--tpm2-tss.x86_64
+-tpm2-tss
 %end
 
 %post --interpreter /bin/bash --erroronfail
