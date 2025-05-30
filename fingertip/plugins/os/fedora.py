@@ -139,10 +139,6 @@ def main(m=None, version=RELEASED, mirror=None, specific_mirror=True,
 
 
 def determine_mirror(mirror, version, releases_development, arch):
-    # if you have a saviour mirror, let's assume it's a good one
-    for source, _ in http_cache.saviour_sources():
-        if source != 'direct' and http_cache.is_fetcheable(source, mirror):
-            return mirror
     # we can query a georedirector for a local Fedora mirror and use just
     # that one, consistently. problem is, it also yields really broken ones.
     # let's check that a mirror has at least a repomd.xml,
@@ -152,6 +148,12 @@ def determine_mirror(mirror, version, releases_development, arch):
               f'/Everything/{arch}/os/images/pxeboot/vmlinuz')
     initrd = (f'{releases_development}/{version}'
               f'/Everything/{arch}/os/images/pxeboot/initrd.img')
+
+    # if you have a saviour mirror, let's pretty much assume it's a good one
+    for source, _ in http_cache.saviour_sources():
+        if source != 'direct':
+            if http_cache.is_fetcheable(source, mirror + '/' + updates_repomd):
+                return mirror
 
     h = requests.head(mirror + '/' + updates_repomd, allow_redirects=False)
     if (h.status_code in (301, 302, 303, 307, 308)
