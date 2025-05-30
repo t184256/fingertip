@@ -26,8 +26,8 @@ dnf5-command(copr)
 -dhcp-client
 -dracut-config-rescue
 -firewalld
--fwupd
--glibc-gconv-extra
+-fwupd.x86_64
+-glibc-gconv-extra.x86_64
 -iproute
 -iputils
 -langpacks-en
@@ -37,10 +37,12 @@ dnf5-command(copr)
 -plymouth*
 -prefixdevname
 -sssd-*
--tpm2-tss
+-tpm2-tss.x86_64
 %end
 
 %post --interpreter /bin/bash --erroronfail
+CONSOLE=/dev/ttyS0
+[[ -e /dev/ttyAMA0 ]] && CONSOLE=/dev/ttyAMA0
 (
 set -xEeuo pipefail; shopt -s inherit_errexit
 # DNF
@@ -77,7 +79,7 @@ blkdiscard --verbose --force --offset $((new_min + lax)) $dev
 btrfs filesystem resize max /
 btrfs filesystem usage / | grep -E '(Device.*allocated|Used)'
 fstrim -av
-) &> /dev/ttyS0
+) &> $CONSOLE
 %end
 
 poweroff
