@@ -24,13 +24,14 @@ def main(what=None, *args, **kwargs):
         return everything()
     if what == 'periodic':
         return periodic()
-    elif what in ('downloads', 'logs', 'machines', 'tempfiles'):
+    elif what in ('downloads', 'logs', 'machines', 'tempfiles', 'saviour'):
         return globals()[what](*args, **kwargs)
     log.error('usage: ')
     log.error('    fingertip cleanup downloads [<older-than>]')
     log.error('    fingertip cleanup logs [<older-than>]')
     log.error('    fingertip cleanup machines [<expired-for>|all]')
     log.error('    fingertip cleanup tempfiles [<older-than> [<location]]')
+    log.error('    fingertip cleanup saviour [<expired-for>|all]')
     log.error('    fingertip cleanup everything')
     log.error('    fingertip cleanup periodic')
     raise SystemExit()
@@ -98,6 +99,43 @@ def tempfiles(older_than='4h', location=None):
     cutoff_time = time.time() - units.parse_time_interval(older_than)
     _cleanup_dir(location, lambda f: (_time(f) >= cutoff_time or
                                       temp.AUTOREMOVE_PREFIX not in f))
+
+
+def saviour(expired_for='1h'):
+    if expired_for != 'all':
+        adjusted_time = time.time() - units.parse_time_interval(expired_for)
+    else:
+        adjusted_time = 0
+    print([a for a in os.listdir(path.SAVIOUR + '/_') if os.path.isdir(a)])
+    # for root, dirs, files in os.walk(path.SAVIOUR, topdown=False):
+    for root, dirs, files in os.walk(path.SAVIOUR):
+        # print(root)
+        for d in (os.path.join(root, x) for x in dirs):
+            lock_path = os.path.join(root, '.' + os.path.basename(d) + '-lock')
+            lock = fasteners.process_lock.InterProcessLock(lock_path)
+            lock.acquire()
+            time_file_path = os.path.join(d, ".last_mirrored")
+            data_path = os.path.join(d, "data")
+            if os.path.exists(time_file_path):
+                remove = _time(time_file_path) >= adjusted_time
+            elif os.path.exists(data_path):
+                remove = _time(data_path) >= adjusted_time
+            else:
+                remove = True
+            if (expired_for == 'all' or remove):
+                assert os.path.realpath(d).startswith(
+                    os.path.realpath(path.SAVIOUR)
+                )
+                # print(os.path.realpath(d))
+                # log.info(f'removing {os.path.realpath(d)}')
+                # if not os.path.islink(d):
+                #     shutil.rmtree(d)
+                # else:
+                #     os.unlink(d)
+            else:
+                log.debug(f'keeping {os.path.realpath(d)}')
+            os.unlink(lock_path)
+            lock.release()
 
 
 def periodic():

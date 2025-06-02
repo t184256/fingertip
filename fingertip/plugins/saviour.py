@@ -32,6 +32,7 @@ import shutil
 import subprocess
 import textwrap
 import traceback
+import time
 
 import git
 import ruamel.yaml
@@ -308,6 +309,14 @@ def mirror(config, *what_to_mirror, deduplicate=None):
             except lock.LockTimeout:
                 log.warning(f'skipped deduplication of {resource_name}, '
                             f'db {db_name} was locked')
+
+
+        time_file = os.path.realpath(path.saviour('_', resource_name, '.last_mirrored'))
+        if not time_file.exists():
+            time_file.open('w').close()
+        else:
+            current_time = time.time()
+            os.utime(time_file, (current_time, current_time))
     if total_failures:
         fingertip.util.log.error(f'failed: {", ".join(total_failures)}')
         raise FailureToMirrorError(", ".join(total_failures))
