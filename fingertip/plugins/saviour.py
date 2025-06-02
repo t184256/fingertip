@@ -308,6 +308,10 @@ def mirror(config, *what_to_mirror, deduplicate=None):
             except lock.LockTimeout:
                 log.warning(f'skipped deduplication of {resource_name}, '
                             f'db {db_name} was locked')
+
+
+        time_file = path.saviour('_', resource_name, '.last_mirrored')
+        open(time_file, 'w').close()
     if total_failures:
         fingertip.util.log.error(f'failed: {", ".join(total_failures)}')
         raise FailureToMirrorError(", ".join(total_failures))
