@@ -45,6 +45,7 @@ CONSOLE=/dev/ttyS0
 [[ -e /dev/ttyAMA0 ]] && CONSOLE=/dev/ttyAMA0
 (
 set -xEeuo pipefail; shopt -s inherit_errexit
+restorecon /usr/libexec/openssh/sshd-session
 # DNF
 sed -i 's|\blocalhost\b|{HOSTNAME} localhost|' /etc/hosts
 sed -i 's|^\[main\]$|[main]\ndeltarpm=0\nzchunk=0\ninstall_weak_deps=0\ntimeout=900\nproxy={PROXY}|' /etc/dnf/dnf.conf
