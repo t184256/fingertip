@@ -27,6 +27,7 @@ cloudpickle = "^3.0.0"
 rangehttpserver = "^1.4.0"
 inotify_simple = "^1.3.5"
 GitPython = "^3.1.34"
+ruamel-yaml = "^0.18.16"
 
 [tool.poetry.scripts]
 fingertip = "fingertip.main:main"
