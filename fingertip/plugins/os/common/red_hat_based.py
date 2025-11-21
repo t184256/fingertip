@@ -212,7 +212,8 @@ def timesync(m):
     Return a list of hooks that will set the system clock from the hardware
     clock.
     """
-    return [lambda: m('hwclock -s')]
+    # https://gitlab.com/qemu-project/qemu/-/issues/1762
+    return [lambda: m('hwclock --directisa || hwclock -s')]
 
 def dnf5_ansible(m):
     """
