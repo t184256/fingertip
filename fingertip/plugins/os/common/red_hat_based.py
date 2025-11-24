@@ -213,7 +213,7 @@ def timesync(m):
     clock.
     """
     # https://gitlab.com/qemu-project/qemu/-/issues/1762
-    return [lambda: m('hwclock --directisa || hwclock -s')]
+    return [lambda: m('hwclock --s || hwclock --directisa -s')]
 
 def dnf5_ansible(m):
     """
