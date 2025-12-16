@@ -129,7 +129,10 @@ def saviour(expired_for='10d'):
             log.debug(f'keeping {os.path.realpath(d)}')
         os.unlink(lock_path)
         lock.release()
-    _, top_dirs, __ = next(os.walk(path.SAVIOUR))
+    top_dirs = []
+    if (os.path.exists(path.SAVIOUR)):
+        top_dirs = [d for d in os.listdir(path.SAVIOUR)
+                    if os.path.isdir(os.path.join(path.SAVIOUR, d))]
     for top_dir in top_dirs:
         if top_dir == "_" or top_dir.startswith('.'):
             continue
