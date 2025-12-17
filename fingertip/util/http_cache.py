@@ -44,10 +44,12 @@ def is_cache_group_writeable():
 
 
 def saviour_sources():
-    return [(t[len('cached+'):] if t.startswith('cached+') else t,
-             t.startswith('cached+'))
-            for t in
-            os.getenv('FINGERTIP_SAVIOUR', SAVIOUR_DEFAULTS).split(',')]
+    s = os.getenv('FINGERTIP_SAVIOUR', SAVIOUR_DEFAULTS) or SAVIOUR_DEFAULTS
+    sources = [(t[len('cached+'):] if t.startswith('cached+') else t,
+                t.startswith('cached+'))
+               for t in s.split(',')]
+    assert sources, 'FINGERTIP_SAVIOUR must define at least one source'
+    return sources
 
 
 def is_fetcheable(source, url, allow_redirects=False, timeout=2):
