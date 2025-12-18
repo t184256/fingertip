@@ -24,8 +24,6 @@ import requests
 import requests_mock
 import urllib3
 
-from fingertip.util import log
-
 
 # HTTPCache attempts caching of requests it performs using cachecontrol.
 # In order to be an even better netizen, one could mirror stuff in advance
@@ -115,7 +113,7 @@ def _saviour_sources():
     return sources
 
 
-def _how_do_I_fetch(fetch_sources, url, allow_redirects=False, timeout=2,
+def _how_do_I_fetch(log, fetch_sources, url, allow_redirects=False, timeout=2,
                     fallback_to_last=False):
     UPGRADABLE_ERRORS = (urllib3.exceptions.ConnectionError,
                          requests.exceptions.ConnectionError)
@@ -185,12 +183,13 @@ class _HTTPCache:
                                      f'{local_path} and {s.local_path}')
         return local_path or '/var/empty'
 
-    def __init__(self, host='127.0.0.1', port=0, sources=None,
+    def __init__(self, log, host='127.0.0.1', port=0, sources=None,
                  cache_dir=None, fixups_dir=None):
         if sources is None:
             #sources = [FetchSourceDirect(cached=True)]
             sources = _saviour_sources()
         local_path = self._validate_sources_get_local_path(sources)
+        self.log = log
         self.sources = tuple(sources)
         self.cache_dir = cache_dir
         self.fixups_dir = fixups_dir
@@ -221,7 +220,8 @@ class _HTTPCache:
                 uri = self._demangle(uri.lstrip('/'))
                 if uri in http_cache._mocks:
                     return self._serve_http(uri, headers, meth, cache=False)
-                fetch_source, url = _how_do_I_fetch(http_cache.sources, uri,
+                fetch_source, url = _how_do_I_fetch(http_cache.log,
+                                                    http_cache.sources, uri,
                                                     fallback_to_last=True)
                 if isinstance(fetch_source, FetchSourceLocal):
                     if meth == 'GET':
@@ -242,9 +242,9 @@ class _HTTPCache:
                 headers = {k: v for k, v in headers.items() if
                            not (k in STRIP_HEADERS or k.startswith('Proxy-'))}
                 headers['Accept-Encoding'] = 'identity'
-                log.debug(f'{meth} {basename} ({uri})')
+                http_cache.log.debug(f'{meth} {basename} ({uri})')
                 for k, v in headers.items():
-                    log.debug(f'{k}: {v}')
+                    http_cache.log.debug(f'{k}: {v}')
 
                 error = None
                 try:
@@ -258,7 +258,8 @@ class _HTTPCache:
                             if nu.startswith('https://'):
                                 # no point in serving that, we have to pretend
                                 # that never happened
-                                log.debug(f'suppressing HTTPS redirect {nu}')
+                                http_cache.log.debug('suppressing '
+                                                     f'HTTPS redirect {nu}')
                                 return self._serve_http(nu, headers, meth=meth,
                                                         cache=cache,
                                                         retries=retries)
@@ -274,8 +275,9 @@ class _HTTPCache:
                             direct.append('ranged request, playing safe')
                         if direct:
                             # Don't cache, don't reencode, stream it as is
-                            log.debug(f'streaming {basename} directly '
-                                      f'from {uri} ({", ".join(direct)})')
+                            http_cache.log.debug(f'streaming {basename} '
+                                                 f'directly from {uri} '
+                                                 f'({", ".join(direct)})')
                             r = sess_dir.get(uri, headers=headers, stream=True)
                             self._status_and_headers(r.status_code, r.headers)
                             shutil.copyfileobj(r.raw, self.wfile)
@@ -295,8 +297,10 @@ class _HTTPCache:
                                             uri, headers, data
                                     )
                                 else:
-                                    log.error('cannot correct Content-Length '
-                                              'mismatch, fixups_dir not set')
+                                    http_cache.log.error('cannot correct '
+                                                         'Content-Length '
+                                                         'mismatch, '
+                                                         'fixups_dir not set')
                             assert len(data) == length
                 except BrokenPipeError:
                     error = f'Upwards broken pipe for {meth} {uri}'
@@ -309,28 +313,33 @@ class _HTTPCache:
                 if error:
                     # delay a re-request
                     if retries:
-                        log.warning(f'{error} (will retry x{retries})')
+                        http_cache.log.warning(f'{error} '
+                                               f'(will retry x{retries})')
                         t = (RETRIES_MAX - retries) / RETRIES_MAX * COOLDOWN
                         time.sleep(t)
                         return self._serve_http(uri, headers, meth=meth,
                                                 cache=cache,
                                                 retries=retries-1)
                     else:
-                        log.error(f'{error} (out of retries)')
+                        http_cache.log.error(f'{error} (out of retries)')
                         self.send_error(http.HTTPStatus.SERVICE_UNAVAILABLE)
                         return
-                log.debug(f'{meth} {basename} fetched {r.status_code} ({uri})')
+                http_cache.log.debug(f'{meth} {basename} fetched '
+                                     f'{r.status_code} ({uri})')
                 try:
                     self._status_and_headers(r.status_code, r.headers)
                     if meth == 'GET':
                         self.wfile.write(data)
                 except BrokenPipeError:
-                    log.warning(f'Downwards broken pipe for {meth} {uri}')
+                    http_cache.log.warning('Downwards broken pipe for '
+                                           f'{meth} {uri}')
                 except ConnectionResetError:
-                    log.warning(f'Downwards connection reset for {meth} {uri}')
+                    http_cache.log.warning('Downwards connection reset for '
+                                           f'{meth} {uri}')
                 except requests.exceptions.ConnectionError:
-                    log.warning(f'Downwards connection error for {meth} {uri}')
-                log.debug(f'{meth} {basename} served ({uri})')
+                    http_cache.log.warning(f'Downwards connection error for '
+                                           f'{meth} {uri}')
+                http_cache.log.debug(f'{meth} {basename} served ({uri})')
 
             def do_HEAD(self):
                 if self.path in http_cache._local_files_to_serve:
@@ -350,8 +359,8 @@ class _HTTPCache:
                     local_path = http_cache._local_files_to_serve[http_path]
                 else:
                     local_path = super().translate_path(http_path)
-                log.debug(f'serving {os.path.basename(http_path)} '
-                          f'directly from {local_path}')
+                http_cache.log.debug(f'serving {os.path.basename(http_path)} '
+                                     f'directly from {local_path}')
                 return local_path
 
         class ThreadingHTTPServer(socketserver.ThreadingMixIn,
@@ -388,20 +397,21 @@ class _HTTPCache:
     def is_fetcheable(self, url, allow_redirects=False, timeout=2,
                       sources=None):
         sources = self.sources if sources is None else sources
-        return _how_do_I_fetch(sources, url, allow_redirects=allow_redirects,
+        return _how_do_I_fetch(self.log, sources, url,
+                               allow_redirects=allow_redirects,
                                timeout=timeout) != (None, None)
 
     def fetch(self, url, out_path):
-        fetch_source, url = _how_do_I_fetch(self.sources, url,
+        fetch_source, url = _how_do_I_fetch(self.log, self.sources, url,
                                             fallback_to_last=True)
         if isinstance(fetch_source, FetchSourceLocal):
-            _reflink_auto(url, out_path)
+            _reflink_copy(url, out_path)
             return
         sess = self._get_requests_session(direct=not fetch_source.cached)
         if isinstance(fetch_source, FetchSourceSaviour):
             url = fetch_source._url_on_saviour(url)
-        log.debug(f'fetching{"/caching" if fetch_source.cached else ""} '
-                  f'{os.path.basename(url)} from {url}')
+        self.log.debug(f'fetching{"/caching" if fetch_source.cached else ""} '
+                       f'{os.path.basename(url)} from {url}')
         r = sess.get(url)  # not raw because that punctures cache
         with open(out_path, 'wb') as f:
             f.write(r.content)
@@ -437,7 +447,7 @@ class _HTTPCache:
 
     def _hack_around_unpacking(self, uri, headers, wrong_content):
         """Hack around requests uncompressing Content-Encoding: gzip"""
-        log.warning(f're-fetching correct content for {uri}')
+        self.log.warning(f're-fetching correct content for {uri}')
         r = requests.get(uri, headers=headers, stream=True,
                          allow_redirects=False)
         h = hashlib.sha256(wrong_content).hexdigest()
@@ -454,7 +464,10 @@ class _HTTPCache:
 
 
 def HTTPCache(**kwargs):
+    import fingertip.util.log
     import fingertip.util.path
+    if 'log' not in kwargs:
+        kwargs['log'] = fingertip.util.log
     if 'cache_dir' not in kwargs:
         kwargs['cache_dir'] = fingertip.util.path.downloads('cache')
     if 'fixups_dir' not in kwargs:
