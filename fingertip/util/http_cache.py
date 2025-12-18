@@ -45,12 +45,6 @@ COOLDOWN = 20
 WARN_ON_DIRECT = os.getenv('FINGERTIP_SAVIOUR_WARN_ON_DIRECT', None) == '1'
 
 
-def demangle(uri):
-    # wget2 mangles http://10.0.2.224:8080/https://smth
-    # into a broken http://10.0.2.224:8080/https:/smth
-    return re.sub(r':/([^/])', r'://\1', uri)
-
-
 def is_cache_group_writeable():
     if os.path.exists(path.CACHE):
         mode = stat.S_IMODE(os.stat(path.CACHE).st_mode)
@@ -148,8 +142,14 @@ class HTTPCache:
                     self.send_header(k, v)
                 self.end_headers()
 
+            @staticmethod
+            def _demangle(uri):
+                # wget2 mangles http://10.0.2.224:8080/https://smth
+                # into a broken http://10.0.2.224:8080/https:/smth
+                return re.sub(r':/([^/])', r'://\1', uri)
+
             def _serve(self, uri, headers, meth='GET'):
-                uri = demangle(uri.lstrip('/'))
+                uri = self._demangle(uri.lstrip('/'))
                 if uri in http_cache._mocks:
                     return self._serve_http(uri, headers, meth, cache=False)
                 source, cache, url = _how_do_I_fetch(saviour_sources(), uri,
