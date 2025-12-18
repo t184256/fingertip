@@ -11,6 +11,7 @@ import re
 import shutil
 import socketserver
 import stat
+import subprocess
 import tempfile
 import threading
 import time
@@ -23,7 +24,7 @@ import requests
 import requests_mock
 import urllib3
 
-from fingertip.util import log, reflink
+from fingertip.util import log
 
 
 # HTTPCache attempts caching of requests it performs using cachecontrol.
@@ -47,6 +48,10 @@ SAVIOUR_DEFAULTS = 'local,cached+direct'
 RETRIES_MAX = 7
 COOLDOWN = 20
 WARN_ON_DIRECT = os.getenv('FINGERTIP_SAVIOUR_WARN_ON_DIRECT', None) == '1'
+
+
+def _reflink_auto(src, dst):
+    subprocess.run(['cp', '-rT', '--reflink=auto', src, dst], check=True)
 
 
 class FetchSource(abc.ABC):
@@ -390,7 +395,7 @@ class _HTTPCache:
         fetch_source, url = _how_do_I_fetch(self.sources, url,
                                             fallback_to_last=True)
         if isinstance(fetch_source, FetchSourceLocal):
-            reflink.auto(url, out_path)
+            _reflink_auto(url, out_path)
             return
         sess = self._get_requests_session(direct=not fetch_source.cached)
         if isinstance(fetch_source, FetchSourceSaviour):
