@@ -212,9 +212,11 @@ class HTTPCache:
                 except BrokenPipeError:
                     error = f'Upwards broken pipe for {meth} {uri}'
                 except ConnectionResetError as connreseterr:
-                    error = f'Upwards connection reset for {meth} {uri} ({connreseterr})'
+                    error = (f'Upwards connection reset for {meth} {uri} '
+                             f'({connreseterr})')
                 except requests.exceptions.ConnectionError as connerr:
-                    error = f'Upwards connection error for {meth} {uri} ({connerr})'
+                    error = (f'Upwards connection error for {meth} {uri} '
+                             f'({connerr})')
                 if error:
                     # delay a re-request
                     if retries:
