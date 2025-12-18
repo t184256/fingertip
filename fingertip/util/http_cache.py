@@ -207,7 +207,9 @@ class HTTPCache:
                         if 'Content-Length' in r.headers:
                             length = int(r.headers['Content-Length'])
                             if len(data) != length:
-                                data = hack_around_unpacking(uri, headers, data)
+                                data = http_cache._hack_around_unpacking(
+                                        uri, headers, data
+                                )
                             assert len(data) == length
                 except BrokenPipeError:
                     error = f'Upwards broken pipe for {meth} {uri}'
@@ -334,18 +336,16 @@ class HTTPCache:
         """
         self._local_files_to_serve[http_path] = local_path
 
-
-# Hack around requests uncompressing Content-Encoding: gzip
-
-
-def hack_around_unpacking(uri, headers, wrong_content):
-    log.warning(f're-fetching correct content for {uri}')
-    r = requests.get(uri, headers=headers, stream=True, allow_redirects=False)
-    h = hashlib.sha256(wrong_content).hexdigest()
-    cachefile = path.downloads('fixups', h, makedirs=True)
-    if not os.path.exists(cachefile):
-        with path.wip(cachefile) as wip:
-            with open(wip, 'wb') as f:
-                shutil.copyfileobj(r.raw, f)
-    with open(cachefile, 'rb') as f:
-        return f.read()
+    def _hack_around_unpacking(self, uri, headers, wrong_content):
+        """Hack around requests uncompressing Content-Encoding: gzip"""
+        log.warning(f're-fetching correct content for {uri}')
+        r = requests.get(uri, headers=headers, stream=True,
+                         allow_redirects=False)
+        h = hashlib.sha256(wrong_content).hexdigest()
+        cachefile = path.downloads('fixups', h, makedirs=True)
+        if not os.path.exists(cachefile):
+            with path.wip(cachefile) as wip:
+                with open(wip, 'wb') as f:
+                    shutil.copyfileobj(r.raw, f)
+        with open(cachefile, 'rb') as f:
+            return f.read()
