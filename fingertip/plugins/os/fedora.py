@@ -150,9 +150,10 @@ def determine_mirror(mirror, version, releases_development, arch):
               f'/Everything/{arch}/os/images/pxeboot/initrd.img')
 
     # if you have a saviour mirror, let's pretty much assume it's a good one
-    for source, _ in http_cache.saviour_sources():
-        if source != 'direct':
-            if http_cache.is_fetcheable(source, mirror + '/' + updates_repomd):
+    for fetch_source in http_cache.saviour_sources():
+        if isinstance(fetch_source, http_cache.FetchSourceDirect):
+            if http_cache.is_fetcheable(fetch_source,
+                                        mirror + '/' + updates_repomd):
                 return mirror
 
     h = requests.head(mirror + '/' + updates_repomd, allow_redirects=False)

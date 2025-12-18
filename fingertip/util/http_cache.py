@@ -11,13 +11,14 @@ import socketserver
 import stat
 import threading
 import time
-import urllib3
+from pathlib import Path
 
-import requests
-import requests_mock
 import cachecontrol
 import cachecontrol.caches
 import RangeHTTPServer
+import requests
+import requests_mock
+import urllib3
 
 from fingertip.util import log, path, reflink
 
@@ -45,17 +46,61 @@ COOLDOWN = 20
 WARN_ON_DIRECT = os.getenv('FINGERTIP_SAVIOUR_WARN_ON_DIRECT', None) == '1'
 
 
+class FetchSource:
+    """Base class for fetch sources."""
+    pass
+
+
+class FetchSourceLocal(FetchSource):
+    """Try local_dir/http://serv.er/file first. Cannot be cached."""
+    def __init__(self, local_path: Path):
+        self.cached, self.local_path = False, local_path
+
+
+class FetchSourceSaviour(FetchSource):
+    """Try http://saviour/url/http://serv.er/file.
+
+    Saviours are simplistic mirrors that should offer files at urls
+    concatenated with saviour urls. The default protocol is HTTP.
+    A saviour_url = 'saviour/url' would be expanded to 'http://saviour/url',
+    and a query to https://serv.er/file will first go to
+    http://saviour/url/https://serve.er/file
+    This is also useful for mounting HTTP downgrade attacks,
+    in the name of better caching and netiquette, of course.
+    """
+    def __init__(self, saviour_url: str, cached: bool = True):
+        self.cached = cached
+        if '://' not in saviour_url:
+            saviour_url = 'http://' + saviour_url
+        self.saviour_url = saviour_url
+
+
+class FetchSourceDirect(FetchSource):
+    """Try http://serv.er/file; https://serv.er/file if port 80 is closed."""
+    def __init__(self, cached: bool = True):
+        self.cached = cached
+
+
 def saviour_sources():
     s = os.getenv('FINGERTIP_SAVIOUR', SAVIOUR_DEFAULTS) or SAVIOUR_DEFAULTS
-    sources = [(t[len('cached+'):] if t.startswith('cached+') else t,
-                t.startswith('cached+'))
-               for t in s.split(',')]
+    sources = []
+    for t in s.split(','):
+        cached = t.startswith('cached+')
+        source_name = t[len('cached+'):] if cached else t
+
+        if source_name == 'local':
+            sources.append(FetchSourceLocal(Path(path.SAVIOUR)))
+        elif source_name == 'direct':
+            sources.append(FetchSourceDirect(cached=cached))
+        else:  # saviour URL
+            sources.append(FetchSourceSaviour(source_name, cached=cached))
+
     assert sources, 'FINGERTIP_SAVIOUR must define at least one source'
     return sources
 
 
-def _how_do_I_fetch(sources_w_opts, url, allow_redirects=False, timeout=2,
-                    fallback_to_last=False):  # -> source, source_opts, url
+def _how_do_I_fetch(fetch_sources, url, allow_redirects=False, timeout=2,
+                    fallback_to_last=False):
     UPGRADABLE_ERRORS = (urllib3.exceptions.ConnectionError,
                          requests.exceptions.ConnectionError)
     NON_UPGRADABLE_ERRORS = (requests.exceptions.BaseHTTPError,
@@ -67,50 +112,53 @@ def _how_do_I_fetch(sources_w_opts, url, allow_redirects=False, timeout=2,
                           allow_redirects=allow_redirects, timeout=timeout)
         return r.status_code < (300 if allow_redirects else 400)
 
-    for source, cache in sources_w_opts:
-        if source == 'local':
-            u = url  # only matters for local only + fallback_to_last
-            if os.path.exists(path.saviour(url)):
-                return 'local', None, path.saviour(url)
+    ret_url = url  # set here for local only + fallback_to_last case
+    for fetch_source in fetch_sources:
+        if isinstance(fetch_source, FetchSourceLocal):
+            local_path = str(fetch_source.local_path / url)
+            if os.path.exists(local_path):
+                return fetch_source, local_path
             continue
-        elif source == 'direct':
-            u = url
-        else:  # one of the saviours
-            src = 'http://' + source if '://' not in source else source
-            u = src + '/' + url
-        # now for both direct and remote saviours case
+        elif isinstance(fetch_source, FetchSourceDirect):
+            try_url = url
+        else:
+            assert isinstance(fetch_source, FetchSourceSaviour)
+            try_url = fetch_source.saviour_url + '/' + url
+        # now for both FetchSourceSaviour and FetchSourceDirect cases
         try:
-            if _head(u):
-                if source == 'direct' and WARN_ON_DIRECT:
+            if _head(try_url):
+                if (isinstance(fetch_source, FetchSourceDirect)
+                        and WARN_ON_DIRECT):
                     log.warning('FINGERTIP_SAVIOUR_WARN_ON_DIRECT: '
                                 f'{url} not found on any mirror')
-                return source, cache, url
+                return fetch_source, ret_url
         except UPGRADABLE_ERRORS as ex:
-            if source == 'direct' and url.startswith('http://'):
+            if (isinstance(fetch_source, FetchSourceDirect)
+                    and url.startswith('http://')):
                 # one other thing we can do is try upgrading from HTTP to HTTPS
-                u = url.replace('http://', 'https://', 1)
-                log.debug(f'we can still try upgrading to HTTPS: {u}')
+                try_url = ret_url = url.replace('http://', 'https://', 1)
+                log.debug(f'we can still try upgrading to HTTPS: {try_url}')
                 try:
-                    if _head(u):
-                        if source == 'direct' and WARN_ON_DIRECT:
+                    if _head(try_url):
+                        if WARN_ON_DIRECT:
                             log.warning('FINGERTIP_SAVIOUR_WARN_ON_DIRECT: '
                                         f'{url} not found on any mirror')
-                        return 'direct', cache, u   # https-upgraded
+                        return fetch_source, ret_url  # https-upgraded
                 except UPGRADABLE_ERRORS + NON_UPGRADABLE_ERRORS:
                     pass
             log.warning(f'{ex}')
         except NON_UPGRADABLE_ERRORS as ex:
             log.warning(f'{ex}')
     if fallback_to_last:
-        source, cache = sources_w_opts[-1]
-        return source, cache, u  # could be https-upgraded (last direct 404s)
-    return (None, None, None)
+        return fetch_sources[-1], ret_url  # could be https-upgraded (consider
+                                           # last FetchSourceDirect 404ing)
+    return None, None
 
 
-def is_fetcheable(source, url, allow_redirects=False, timeout=2):
-    return _how_do_I_fetch([(source, False)], url,
+def is_fetcheable(fetch_source, url, allow_redirects=False, timeout=2):
+    return _how_do_I_fetch([fetch_source], url,
                            allow_redirects=allow_redirects,
-                           timeout=timeout) != (None, None, None)
+                           timeout=timeout) != (None, None)
 
 
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
@@ -146,17 +194,17 @@ class HTTPCache:
                 uri = self._demangle(uri.lstrip('/'))
                 if uri in http_cache._mocks:
                     return self._serve_http(uri, headers, meth, cache=False)
-                source, cache, url = _how_do_I_fetch(saviour_sources(), uri,
-                                                     fallback_to_last=True)
-                if source == 'local':
+                fetch_source, url = _how_do_I_fetch(saviour_sources(), uri,
+                                                    fallback_to_last=True)
+                if isinstance(fetch_source, FetchSourceLocal):
                     if meth == 'GET':
                         return super().do_GET()
                     elif meth == 'HEAD':
                         return super().do_HEAD()
-                elif source != 'direct':
-                    src = 'http://' + source if '://' not in source else source
-                    url = src + '/' + url
-                return self._serve_http(url, headers, meth, cache=cache)
+                elif isinstance(fetch_source, FetchSourceSaviour):
+                    url = fetch_source.saviour_url + '/' + url
+                return self._serve_http(url, headers, meth,
+                                        cache=fetch_source.cached)
 
             def _serve_http(self, uri, headers, meth='GET', cache=True,
                             retries=RETRIES_MAX):
@@ -306,16 +354,15 @@ class HTTPCache:
                    for src, _ in saviour_sources()))
 
     def fetch(self, url, out_path):
-        source, cache, url = _how_do_I_fetch(saviour_sources(), url,
-                                             fallback_to_last=True)
-        if source == 'local':
-            reflink.auto(path.saviour(url), out_path)
+        fetch_source, url = _how_do_I_fetch(saviour_sources(), url,
+                                            fallback_to_last=True)
+        if isinstance(fetch_source, FetchSourceLocal):
+            reflink.auto(url, out_path)
             return
-        sess = self._get_requests_session(direct=not cache)
-        if source != 'direct':
-            src = 'http://' + source if '://' not in source else source
-            url = src + '/' + url
-        log.debug(f'fetching{"/caching" if cache else ""} '
+        sess = self._get_requests_session(direct=not fetch_source.cached)
+        if isinstance(fetch_source, FetchSourceSaviour):
+            url = fetch_source.saviour_url + '/' + url
+        log.debug(f'fetching{"/caching" if fetch_source.cached else ""} '
                   f'{os.path.basename(url)} from {url}')
         r = sess.get(url)  # not raw because that punctures cache
         with open(out_path, 'wb') as f:
