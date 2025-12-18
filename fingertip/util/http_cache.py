@@ -1,6 +1,8 @@
 # Licensed under GNU General Public License v3 or later, see COPYING.
 # Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
 
+import abc
+import dataclasses
 import hashlib
 import http
 import http.server
@@ -46,17 +48,21 @@ COOLDOWN = 20
 WARN_ON_DIRECT = os.getenv('FINGERTIP_SAVIOUR_WARN_ON_DIRECT', None) == '1'
 
 
-class FetchSource:
-    """Base class for fetch sources."""
-    pass
+class FetchSource(abc.ABC):
+    """Base class for fetch sources. Cannot be instantiated directly."""
+
+    @abc.abstractmethod
+    def __init__(self):
+        pass
 
 
+@dataclasses.dataclass(frozen=True)
 class FetchSourceLocal(FetchSource):
-    """Try local_dir/http://serv.er/file first. Cannot be cached."""
-    def __init__(self, local_path: Path):
-        self.cached, self.local_path = False, local_path
+    """Try local_path/http://serv.er/file first. Cannot be cached."""
+    local_path: Path
 
 
+@dataclasses.dataclass(frozen=True)
 class FetchSourceSaviour(FetchSource):
     """Try http://saviour/url/http://serv.er/file.
 
@@ -68,17 +74,20 @@ class FetchSourceSaviour(FetchSource):
     This is also useful for mounting HTTP downgrade attacks,
     in the name of better caching and netiquette, of course.
     """
-    def __init__(self, saviour_url: str, cached: bool = True):
-        self.cached = cached
+    saviour_url: str
+    cached: bool = True
+
+    def _url_on_saviour(self, url):
+        saviour_url = self.saviour_url
         if '://' not in saviour_url:
             saviour_url = 'http://' + saviour_url
-        self.saviour_url = saviour_url
+        return saviour_url + '/' + url
 
 
+@dataclasses.dataclass(frozen=True)
 class FetchSourceDirect(FetchSource):
     """Try http://serv.er/file; https://serv.er/file if port 80 is closed."""
-    def __init__(self, cached: bool = True):
-        self.cached = cached
+    cached: bool = True
 
 
 def saviour_sources():
@@ -123,7 +132,7 @@ def _how_do_I_fetch(fetch_sources, url, allow_redirects=False, timeout=2,
             try_url = url
         else:
             assert isinstance(fetch_source, FetchSourceSaviour)
-            try_url = fetch_source.saviour_url + '/' + url
+            try_url = fetch_source._url_on_saviour(url)
         # now for both FetchSourceSaviour and FetchSourceDirect cases
         try:
             if _head(try_url):
@@ -202,7 +211,7 @@ class HTTPCache:
                     elif meth == 'HEAD':
                         return super().do_HEAD()
                 elif isinstance(fetch_source, FetchSourceSaviour):
-                    url = fetch_source.saviour_url + '/' + url
+                    url = fetch_source._url_on_saviour(url)
                 return self._serve_http(url, headers, meth,
                                         cache=fetch_source.cached)
 
@@ -351,7 +360,7 @@ class HTTPCache:
 
     def is_fetcheable(self, url, allow_redirects=False):
         return any((is_fetcheable(src, url, allow_redirects=allow_redirects)
-                   for src, _ in saviour_sources()))
+                   for src in saviour_sources()))
 
     def fetch(self, url, out_path):
         fetch_source, url = _how_do_I_fetch(saviour_sources(), url,
@@ -361,7 +370,7 @@ class HTTPCache:
             return
         sess = self._get_requests_session(direct=not fetch_source.cached)
         if isinstance(fetch_source, FetchSourceSaviour):
-            url = fetch_source.saviour_url + '/' + url
+            url = fetch_source._url_on_saviour(url)
         log.debug(f'fetching{"/caching" if fetch_source.cached else ""} '
                   f'{os.path.basename(url)} from {url}')
         r = sess.get(url)  # not raw because that punctures cache
