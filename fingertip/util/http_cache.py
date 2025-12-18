@@ -11,6 +11,7 @@ import re
 import shutil
 import socketserver
 import stat
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -22,7 +23,7 @@ import requests
 import requests_mock
 import urllib3
 
-from fingertip.util import log, path, reflink
+from fingertip.util import log, reflink
 
 
 # HTTPCache attempts caching of requests it performs using cachecontrol.
@@ -91,6 +92,7 @@ class FetchSourceDirect(FetchSource):
 
 
 def _saviour_sources():
+    import fingertip.util.path
     s = os.getenv('FINGERTIP_SAVIOUR', SAVIOUR_DEFAULTS) or SAVIOUR_DEFAULTS
     sources = []
     for t in s.split(','):
@@ -98,7 +100,7 @@ def _saviour_sources():
         source_name = t[len('cached+'):] if cached else t
 
         if source_name == 'local':
-            sources.append(FetchSourceLocal(Path(path.SAVIOUR)))
+            sources.append(FetchSourceLocal(Path(fingertip.util.path.SAVIOUR)))
         elif source_name == 'direct':
             sources.append(FetchSourceDirect(cached=cached))
         else:  # saviour URL
@@ -164,7 +166,7 @@ def _how_do_I_fetch(fetch_sources, url, allow_redirects=False, timeout=2,
     return None, None
 
 
-class HTTPCache:
+class _HTTPCache:
     @staticmethod
     def _validate_sources_get_local_path(sources):
         """Validate that there is at most one FetchSourceLocal in sources."""
@@ -178,12 +180,15 @@ class HTTPCache:
                                      f'{local_path} and {s.local_path}')
         return local_path or '/var/empty'
 
-    def __init__(self, host='127.0.0.1', port=0, sources=None):
+    def __init__(self, host='127.0.0.1', port=0, sources=None,
+                 cache_dir=None, fixups_dir=None):
         if sources is None:
             #sources = [FetchSourceDirect(cached=True)]
             sources = _saviour_sources()
         local_path = self._validate_sources_get_local_path(sources)
         self.sources = tuple(sources)
+        self.cache_dir = cache_dir
+        self.fixups_dir = fixups_dir
         self.host = host
         self._mocks = {}
         self._local_files_to_serve = {}
@@ -280,9 +285,13 @@ class HTTPCache:
                         if 'Content-Length' in r.headers:
                             length = int(r.headers['Content-Length'])
                             if len(data) != length:
-                                data = http_cache._hack_around_unpacking(
-                                        uri, headers, data
-                                )
+                                if http_cache.fixups_dir:
+                                    data = http_cache._hack_around_unpacking(
+                                            uri, headers, data
+                                    )
+                                else:
+                                    log.error('cannot correct Content-Length '
+                                              'mismatch, fixups_dir not set')
                             assert len(data) == length
                 except BrokenPipeError:
                     error = f'Upwards broken pipe for {meth} {uri}'
@@ -349,17 +358,18 @@ class HTTPCache:
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
 
     @staticmethod
-    def _is_cache_group_writeable():
-        if os.path.exists(path.CACHE):
-            mode = stat.S_IMODE(os.stat(path.CACHE).st_mode)
+    def _is_cache_group_writeable(cache_dir):
+        if cache_dir and os.path.exists(cache_dir):
+            mode = stat.S_IMODE(os.stat(cache_dir).st_mode)
             return bool(mode & 0o020)
+        return False
 
     def _get_requests_session(self, direct=False):
-        if not direct:
+        if not direct and self.cache_dir:
             kwargs = ({'filemode': 0o0660, 'dirmode': 0o0770}
-                      if self._is_cache_group_writeable() else {})
-            cache = cachecontrol.caches.FileCache(path.downloads('cache'),
-                                                  **kwargs)
+                      if self._is_cache_group_writeable(self.cache_dir) else
+                      {})
+            cache = cachecontrol.caches.FileCache(self.cache_dir, **kwargs)
             sess = cachecontrol.CacheControl(requests.Session(), cache=cache)
         else:
             sess = requests.Session()
@@ -426,10 +436,22 @@ class HTTPCache:
         r = requests.get(uri, headers=headers, stream=True,
                          allow_redirects=False)
         h = hashlib.sha256(wrong_content).hexdigest()
-        cachefile = path.downloads('fixups', h, makedirs=True)
+        os.makedirs(self.fixups_dir, exist_ok=True)
+        cachefile = os.path.join(self.fixups_dir, h)
         if not os.path.exists(cachefile):
-            with path.wip(cachefile) as wip:
-                with open(wip, 'wb') as f:
-                    shutil.copyfileobj(r.raw, f)
+            with tempfile.NamedTemporaryFile(mode='wb',
+                                             dir=self.fixups_dir) as f:
+                shutil.copyfileobj(r.raw, f)
+                f.close()
+                os.rename(f.name, cachefile)
         with open(cachefile, 'rb') as f:
             return f.read()
+
+
+def HTTPCache(**kwargs):
+    import fingertip.util.path
+    if 'cache_dir' not in kwargs:
+        kwargs['cache_dir'] = fingertip.util.path.downloads('cache')
+    if 'fixups_dir' not in kwargs:
+        kwargs['fixups_dir'] = fingertip.util.path.downloads('fixups')
+    return _HTTPCache(**kwargs)
