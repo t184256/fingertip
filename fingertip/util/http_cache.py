@@ -45,12 +45,6 @@ COOLDOWN = 20
 WARN_ON_DIRECT = os.getenv('FINGERTIP_SAVIOUR_WARN_ON_DIRECT', None) == '1'
 
 
-def is_cache_group_writeable():
-    if os.path.exists(path.CACHE):
-        mode = stat.S_IMODE(os.stat(path.CACHE).st_mode)
-        return bool(mode & 0o020)
-
-
 def saviour_sources():
     s = os.getenv('FINGERTIP_SAVIOUR', SAVIOUR_DEFAULTS) or SAVIOUR_DEFAULTS
     sources = [(t[len('cached+'):] if t.startswith('cached+') else t,
@@ -285,10 +279,16 @@ class HTTPCache:
         _, self.port = httpd.socket.getsockname()
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
 
+    @staticmethod
+    def _is_cache_group_writeable():
+        if os.path.exists(path.CACHE):
+            mode = stat.S_IMODE(os.stat(path.CACHE).st_mode)
+            return bool(mode & 0o020)
+
     def _get_requests_session(self, direct=False):
         if not direct:
             kwargs = ({'filemode': 0o0660, 'dirmode': 0o0770}
-                      if is_cache_group_writeable() else {})
+                      if self._is_cache_group_writeable() else {})
             cache = cachecontrol.caches.FileCache(path.downloads('cache'),
                                                   **kwargs)
             sess = cachecontrol.CacheControl(requests.Session(), cache=cache)
