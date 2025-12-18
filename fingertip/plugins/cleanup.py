@@ -130,13 +130,13 @@ def saviour(expired_for='10d'):
         os.unlink(lock_path)
         lock.release()
     top_dirs = []
-    if (os.path.exists(path.SAVIOUR)):
+    if os.path.exists(path.SAVIOUR):
         top_dirs = [d for d in os.listdir(path.SAVIOUR)
-                    if os.path.isdir(os.path.join(path.SAVIOUR, d))]
+                    if os.path.isdir(path.saviour(d))]
     for top_dir in top_dirs:
         if top_dir == "_" or top_dir.startswith('.'):
             continue
-        for root, dirs, files in os.walk(os.path.join(path.SAVIOUR, top_dir)):
+        for root, dirs, files in os.walk(path.saviour(top_dir)):
             for f in (os.path.join(root, x) for x in files):
                 if not os.path.exists(os.readlink(f)):
                     os.unlink(f)
