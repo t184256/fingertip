@@ -22,6 +22,20 @@ import RangeHTTPServer
 from fingertip.util import log, path, reflink
 
 
+# HTTPCache attempts caching of requests it performs using cachecontrol.
+# In order to be an even better netizen, one could mirror stuff in advance
+# and point HTTPCache at the alternative sources.
+# The natural logical order of sources to try would be
+# a local mirror, then your own HTTP mirrors (with or without local caching),
+# and only then falling back to direct fetches.
+# Using a mirror comes with the responsibility of ensuring it doesn't go stale.
+# Negative results will never get cached.
+#
+# See also:
+# https://github.com/t184256/fingertip/blob/master/fingertip/plugins/saviour.py
+# https://github.com/t184256/fingertip/blob/master/saviour.example.yml
+
+
 BIG = 2**30  # too big for caching
 STRIP_HEADERS = ('TE', 'Transfer-Encoding', 'Keep-Alive', 'Trailer', 'Upgrade',
                  'Connection', 'Host', 'Accept')
