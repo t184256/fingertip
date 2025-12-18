@@ -39,11 +39,11 @@ import urllib3
 # https://github.com/t184256/fingertip/blob/master/saviour.example.yml
 
 
-BIG = 2**30  # too big for caching
-STRIP_HEADERS = ('TE', 'Transfer-Encoding', 'Keep-Alive', 'Trailer', 'Upgrade',
-                 'Connection', 'Host', 'Accept')
-RETRIES_MAX = 7
-COOLDOWN = 20
+_BIG = 2**30  # too big for caching
+_STRIP_HEADERS = ('TE', 'Transfer-Encoding', 'Keep-Alive', 'Trailer',
+                  'Upgrade', 'Connection', 'Host', 'Accept')
+_RETRIES_MAX = 7
+_COOLDOWN = 20
 
 
 def _reflink_auto(src, dst):
@@ -216,13 +216,13 @@ class HTTPCache:
                                         cache=fetch_source.cached)
 
             def _serve_http(self, uri, headers, meth='GET', cache=True,
-                            retries=RETRIES_MAX):
+                            retries=_RETRIES_MAX):
                 sess = http_cache._get_requests_session(direct=not cache)
                 sess_dir = http_cache._get_requests_session(direct=True)
                 basename = os.path.basename(uri)
 
                 headers = {k: v for k, v in headers.items() if
-                           not (k in STRIP_HEADERS or k.startswith('Proxy-'))}
+                           not (k in _STRIP_HEADERS or k.startswith('Proxy-'))}
                 headers['Accept-Encoding'] = 'identity'
                 http_cache.log.debug(f'{meth} {basename} ({uri})')
                 for k, v in headers.items():
@@ -248,8 +248,8 @@ class HTTPCache:
                         direct = []
                         if not cache:
                             direct.append('caching disabled for this source')
-                        if int(preview.headers.get('Content-Length', 0)) > BIG:
-                            direct.append(f'file bigger than {BIG}')
+                        if int(preview.headers.get('Content-Length', 0)) > _BIG:
+                            direct.append(f'file bigger than {_BIG}')
                         if 'Range' in headers:
                             # There seems to be a bug in CacheControl
                             # that serves contents in full if a range request
@@ -297,7 +297,7 @@ class HTTPCache:
                     if retries:
                         http_cache.log.warning(f'{error} '
                                                f'(will retry x{retries})')
-                        t = (RETRIES_MAX - retries) / RETRIES_MAX * COOLDOWN
+                        t = (_RETRIES_MAX - retries) / _RETRIES_MAX * _COOLDOWN
                         time.sleep(t)
                         return self._serve_http(uri, headers, meth=meth,
                                                 cache=cache,
