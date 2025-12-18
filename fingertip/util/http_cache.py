@@ -90,7 +90,7 @@ class FetchSourceDirect(FetchSource):
     cached: bool = True
 
 
-def saviour_sources():
+def _saviour_sources():
     s = os.getenv('FINGERTIP_SAVIOUR', SAVIOUR_DEFAULTS) or SAVIOUR_DEFAULTS
     sources = []
     for t in s.split(','):
@@ -164,18 +164,26 @@ def _how_do_I_fetch(fetch_sources, url, allow_redirects=False, timeout=2,
     return None, None
 
 
-def is_fetcheable(fetch_source, url, allow_redirects=False, timeout=2):
-    return _how_do_I_fetch([fetch_source], url,
-                           allow_redirects=allow_redirects,
-                           timeout=timeout) != (None, None)
-
-
-class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
-    daemon_threads = True
-
-
 class HTTPCache:
-    def __init__(self, host='127.0.0.1', port=0):
+    @staticmethod
+    def _validate_sources_get_local_path(sources):
+        """Validate that there is at most one FetchSourceLocal in sources."""
+        local_path = None
+        for s in sources:
+            if isinstance(s, FetchSourceLocal):
+                if local_path is None:
+                    local_path = s.local_path
+                else:
+                    raise ValueError('Only one FetchSourceLocal allowed, got '
+                                     f'{local_path} and {s.local_path}')
+        return local_path or '/var/empty'
+
+    def __init__(self, host='127.0.0.1', port=0, sources=None):
+        if sources is None:
+            #sources = [FetchSourceDirect(cached=True)]
+            sources = _saviour_sources()
+        local_path = self._validate_sources_get_local_path(sources)
+        self.sources = tuple(sources)
         self.host = host
         self._mocks = {}
         self._local_files_to_serve = {}
@@ -185,7 +193,7 @@ class HTTPCache:
             protocol_version = 'HTTP/1.1'
 
             def __init__(self, *args, directory=None, **kwargs):
-                super().__init__(*args, directory=path.SAVIOUR, **kwargs)
+                super().__init__(*args, directory=local_path, **kwargs)
 
             def _status_and_headers(self, status_code, headers):
                 self.send_response(status_code)
@@ -203,7 +211,7 @@ class HTTPCache:
                 uri = self._demangle(uri.lstrip('/'))
                 if uri in http_cache._mocks:
                     return self._serve_http(uri, headers, meth, cache=False)
-                fetch_source, url = _how_do_I_fetch(saviour_sources(), uri,
+                fetch_source, url = _how_do_I_fetch(http_cache.sources, uri,
                                                     fallback_to_last=True)
                 if isinstance(fetch_source, FetchSourceLocal):
                     if meth == 'GET':
@@ -332,6 +340,10 @@ class HTTPCache:
                           f'directly from {local_path}')
                 return local_path
 
+        class ThreadingHTTPServer(socketserver.ThreadingMixIn,
+                                  http.server.HTTPServer):
+            daemon_threads = True
+
         httpd = ThreadingHTTPServer((host, port), Handler)
         _, self.port = httpd.socket.getsockname()
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
@@ -358,12 +370,14 @@ class HTTPCache:
             sess.mount(uri, adapter)
         return sess
 
-    def is_fetcheable(self, url, allow_redirects=False):
-        return any((is_fetcheable(src, url, allow_redirects=allow_redirects)
-                   for src in saviour_sources()))
+    def is_fetcheable(self, url, allow_redirects=False, timeout=2,
+                      sources=None):
+        sources = self.sources if sources is None else sources
+        return _how_do_I_fetch(sources, url, allow_redirects=allow_redirects,
+                               timeout=timeout) != (None, None)
 
     def fetch(self, url, out_path):
-        fetch_source, url = _how_do_I_fetch(saviour_sources(), url,
+        fetch_source, url = _how_do_I_fetch(self.sources, url,
                                             fallback_to_last=True)
         if isinstance(fetch_source, FetchSourceLocal):
             reflink.auto(url, out_path)

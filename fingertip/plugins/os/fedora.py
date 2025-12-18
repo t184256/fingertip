@@ -138,7 +138,7 @@ def main(m=None, version=RELEASED, mirror=None, specific_mirror=True,
     return m
 
 
-def determine_mirror(mirror, version, releases_development, arch):
+def determine_mirror(m, mirror, version, releases_development, arch):
     # we can query a georedirector for a local Fedora mirror and use just
     # that one, consistently. problem is, it also yields really broken ones.
     # let's check that a mirror has at least a repomd.xml,
@@ -150,10 +150,10 @@ def determine_mirror(mirror, version, releases_development, arch):
               f'/Everything/{arch}/os/images/pxeboot/initrd.img')
 
     # if you have a saviour mirror, let's pretty much assume it's a good one
-    for fetch_source in http_cache.saviour_sources():
+    for fetch_source in m.http_cache.sources:
         if isinstance(fetch_source, http_cache.FetchSourceDirect):
-            if http_cache.is_fetcheable(fetch_source,
-                                        mirror + '/' + updates_repomd):
+            if m.http_cache.is_fetcheable(mirror + '/' + updates_repomd,
+                                          sources=[fetch_source]):
                 return mirror
 
     h = requests.head(mirror + '/' + updates_repomd, allow_redirects=False)
@@ -170,7 +170,8 @@ def determine_mirror(mirror, version, releases_development, arch):
             log.warning(f'{base}/{{kernel,initrd.img}} '
                         f'-> {[h.status_code for h in heads]}')
             log.warning(f'mirror {base} is broken, trying another one')
-            return determine_mirror(mirror, version, releases_development, arch)
+            return determine_mirror(m, mirror,
+                                    version, releases_development, arch)
         else:
             return base
     return mirror
@@ -181,19 +182,6 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
     releases_development = ('development'
                             if version in (RELEASED + 1, 'rawhide')
                             else 'releases')
-    if mirror is None:
-        if not specific_mirror:
-            mirror = FEDORA_GEOREDIRECTOR  # not consistent, not recommended!
-        else:
-            mirror = determine_mirror(FEDORA_GEOREDIRECTOR, version,
-                                      releases_development, m.arch)
-            m.log.info(f'autoselected mirror {mirror}')
-    url = f'{mirror}/{releases_development}/{version}/Everything/{m.arch}/os'
-    upd = f'{mirror}/updates/{version}/Everything/{m.arch}'
-    repos = (f'url --url {url}\n' +
-             f'repo --name fedora --baseurl {url}\n' +
-             f'repo --name updates --baseurl {upd}')
-
     with m:
         m.ram.safeguard = '768M'
         # RAM size accommodates `dnf clean all && dnf install something`
@@ -201,6 +189,20 @@ def install_in_qemu(m, version, mirror=None, specific_mirror=True, fips=False):
         if m.ram.size < units.parse_binary('1536M'):
             m.ram.size = '1536M'
         m.expiration.cap('2d')  # non-immutable repositories
+
+        if mirror is None:
+            if not specific_mirror:
+                mirror = FEDORA_GEOREDIRECTOR  # inconsistent, not recommended!
+            else:
+                mirror = determine_mirror(m, FEDORA_GEOREDIRECTOR, version,
+                                          releases_development, m.arch)
+                m.log.info(f'autoselected mirror {mirror}')
+        url = (f'{mirror}/{releases_development}/{version}/Everything/'
+               f'{m.arch}/os')
+        upd = f'{mirror}/updates/{version}/Everything/{m.arch}'
+        repos = (f'url --url {url}\n' +
+                 f'repo --name fedora --baseurl {url}\n' +
+                 f'repo --name updates --baseurl {upd}')
 
         hostname = f'fedora{version}' + ('-fips' if fips else '')
         fqdn = hostname + '.fingertip.local'
