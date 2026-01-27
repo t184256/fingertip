@@ -12,7 +12,9 @@ echo conf.proxy={PROXY}
 # Downgrade HTTPS to HTTP in repo configurations on-disk, see
 # https://github.com/rpm-software-management/dnf5/issues/1538
 # for a potential better future solution
+sed -i 's|https://localhost|%localhost-placeholder%|' /etc/yum.repos.d/*.repo
 sed -i 's|https://|http://|' /etc/yum.repos.d/*.repo
+sed -i 's|%localhost-placeholder%|https://localhost|' /etc/yum.repos.d/*.repo
 # Change metalinks to baseurls while we are at it
 sed -i 's|^metalink|#metalink|' /etc/yum.repos.d/*.repo
 sed -i 's|^#baseurl|baseurl|' /etc/yum.repos.d/*.repo
@@ -100,6 +102,7 @@ class ProxyAll(dnf.Plugin):
         for name, repo in self.base.repos.items():
             if any('://localhost' in url for url in repo.baseurl):
                 repo.proxy = ''
+                continue
             if repo.baseurl:
                 repo.baseurl = [b.replace('https:', 'http:')
                                 for b in repo.baseurl]
