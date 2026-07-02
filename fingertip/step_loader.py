@@ -2,8 +2,54 @@
 # Copyright (c) 2019 Red Hat, Inc., see CONTRIBUTORS.
 
 import importlib
+import importlib.util
+import os
 
 from fingertip.util import log, weak_hash
+from fingertip.util import path as util_path
+
+
+def _resolve_user_plugin(name):
+    """Resolve a plugin name to a file in the user plugins directory."""
+    user_dir = util_path.USER_PLUGINS
+    parts = name.split('.')
+    path = os.path.join(user_dir, *parts) + '.py'
+    if os.path.isfile(path):
+        return path
+
+
+def _load_user_plugin(name):
+    """Load a user plugin module by name, or raise ModuleNotFoundError."""
+    user_plugin_path = _resolve_user_plugin(name)
+    if not user_plugin_path:
+        raise ModuleNotFoundError(name)
+    mod_name = 'fingertip.user_plugins.' + name
+    spec = importlib.util.spec_from_file_location(mod_name, user_plugin_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_builtin_plugin(name):
+    """Load a built-in fingertip plugin module by name."""
+    return importlib.import_module('fingertip.plugins.' + name)
+
+
+def _load_plugin(name):
+    """Import a plugin, trying user plugins first, then built-in."""
+    for load in _load_user_plugin, _load_builtin_plugin:
+        try:
+            module = load(name)
+            return module.main
+        except (ModuleNotFoundError, AttributeError):
+            if '.' in name:
+                modname, funcname = name.rsplit('.', 1)
+                try:
+                    module = load(modname)
+                    return getattr(module, funcname)
+                except (ModuleNotFoundError, AttributeError):
+                    pass
+    raise ModuleNotFoundError(name)
 
 
 def func_and_autotag(smth, *args, **kwargs):
@@ -21,15 +67,7 @@ def load_step(smth):
         elif smth.startswith('.'):  #
             # this is for calling methods on objects, e.g. ... + .hooks.smth
             return make_method_caller(smth.split('.')[1:])
-        try:
-            # try to import abc.xyz as (import fingertip.plugins.abc.xyz).main
-            module = importlib.import_module('fingertip.plugins.' + smth)
-            return module.main
-        except (ModuleNotFoundError, AttributeError):
-            # try to import abc.xyz as (import fingertip.plugins.abc).xyz
-            modname, funcname = smth.rsplit('.', 1)
-            module = importlib.import_module('fingertip.plugins.' + modname)
-            smth = getattr(module, funcname)
+        smth = _load_plugin(smth)
     return smth
 
 
@@ -39,8 +77,6 @@ def autotag(something, *args, **kwargs):
         name = something if not something.startswith('.') else '_' + something
     else:
         name = something.__module__ + '.' + something.__qualname__
-        assert name.startswith('fingertip.plugins.')
-        name = name[len('fingertip.plugins.'):]
         if name.endswith('.__main__'):
             name = name[:len('__main__')]
     args_str = ':'.join([f'{a}' for a in args] +
