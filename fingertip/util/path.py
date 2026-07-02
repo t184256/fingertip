@@ -22,6 +22,10 @@ SAVIOUR = os.path.join(CACHE, 'saviour')
 MACHINES = os.path.join(CACHE, 'machines')
 SHARED = os.path.join(CACHE, 'shared')
 LOGS = os.path.join(CACHE, 'logs')
+USER_PLUGINS = os.environ.get(
+    'FINGERTIP_USER_PLUGINS',
+    os.path.join(xdg.BaseDirectory.xdg_config_home, 'fingertip', 'plugins')
+)
 
 
 def easy_accessor(root_path):
