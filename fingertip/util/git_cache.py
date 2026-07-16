@@ -158,18 +158,29 @@ def upload_clone(m, url, path_in_m, rev=None, rev_is_enough=True):
     return m
 
 
-def upload_contents(m, url, path_in_m, rev=None, rev_is_enough=True):
+def upload_contents(m, url, path_in_m, rev=None, subpath=None,
+                    rev_is_enough=True):
     assert hasattr(m, 'ssh')
+    if subpath and subpath.startswith("/"):
+        subpath = subpath[1:]
     with m:
         kwa = {} if not rev_is_enough else {'enough_to_have': rev}
-        with Repo(url, url.replace('/', '__'), **kwa) as repo:
-            tar = temp.disappearing_file()
-            log.info(f'packing {url} contents at rev {rev}...')
-            tar_in_m = f'/.tmp-{os.path.basename(tar)}'
-            with open(tar, 'wb') as tf:
-                repo.archive(tf, treeish=rev, prefix=path_in_m + '/')
-            log.info(f'uploading {url} contents at rev {rev}...')
-            m.ssh.upload(tar, tar_in_m)
+        tar = temp.disappearing_file()
+        log.info(f'packing {url} contents at rev {rev}...')
+        tar_in_m = f'/.tmp-{os.path.basename(tar)}'
+        if subpath:
+            with Checkout(url, url.replace('/', '__'), **kwa) as checkout:
+                source_path = os.path.join(checkout.path, subpath)
+                if rev:
+                    checkout.git.checkout(rev)
+                with tarfile.open(tar, "w:gz") as tf:
+                    tf.add(source_path, path_in_m)
+        else:
+            with Repo(url, url.replace('/', '__'), **kwa) as repo:
+                with open(tar, 'wb') as tf:
+                    repo.archive(tf, treeish=rev, prefix=path_in_m + '/')
+        log.info(f'uploading {url} contents at rev {rev}...')
+        m.ssh.upload(tar, tar_in_m)
         log.info(f'unpacking {url} contents at rev {rev}...')
         m(f'''
             set -uex
