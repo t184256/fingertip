@@ -6,6 +6,7 @@ Helper functions for fingertip: logging.
 """
 
 import atexit
+import contextlib
 import datetime
 import logging
 import os
@@ -77,46 +78,91 @@ class ErasingStreamHandler(logging.StreamHandler):
     def __init__(self, stream=None, erasing=True, shorten_name=True):
         super().__init__(stream)
         stream = stream or sys.stderr
-        self.erasing = stream.isatty() and not DEBUG and erasing
-        self.setFormatter(ErasingFormatter(erasing=self.erasing,
+        self.erasing_configured = stream.isatty() and not DEBUG and erasing
+        self.erasing_started = self.erasing_configured
+        self.setFormatter(ErasingFormatter(erasing=self.erasing_started,
                                            shorten_name=shorten_name))
-        if self.erasing:
+        if self.erasing_started:
             self.terminator = ''
 
     def stop_erasing(self):
-        if self.erasing:
+        if self.erasing_configured and self.erasing_started:
             sys.stderr.write(_REWIND + _ERASE)
             sys.stderr.flush()
             self.terminator = '\n'
-            self.erasing = False
+            self.erasing_started = False
+
+    def start_erasing(self):
+        if self.erasing_configured and not self.erasing_started:
+            self.terminator = ''
+            self.erasing_started = True
 
 
 logger = logging.getLogger('fingertip')
 critical, error, warning = logger.critical, logger.error, logger.warning
 debug, info = logger.debug, logger.info
 current_handler = None
+_handler_swapped = 0
+
+
+def _remove_handler(handler):
+    if handler:
+        if isinstance(handler, ErasingStreamHandler):
+            handler.stop_erasing()
+        logger.removeHandler(handler)
+
+
+def _add_handler(handler):
+    if handler:
+        logger.addHandler(handler)
+        if isinstance(handler, ErasingStreamHandler):
+            handler.start_erasing()
 
 
 def nicer():
     # global logger
     # logger = logging.getLogger('fingertip')
     global current_handler
+    if _handler_swapped:
+        raise RuntimeError('Do not use nicer() within swap_handler() context')
     logger.setLevel(logging.DEBUG if DEBUG else logging.INFO)
-    if current_handler:
-        logger.removeHandler(current_handler)
+    _remove_handler(current_handler)
     current_handler = ErasingStreamHandler(shorten_name=True)
-    logger.addHandler(current_handler)
+    _add_handler(current_handler)
 
 
 def plain():
     global current_handler
+    if _handler_swapped:
+        raise RuntimeError('Do not use plain() within swap_handler() context')
     logger.setLevel(logging.DEBUG if DEBUG else logging.INFO)
-    if current_handler:
-        if isinstance(current_handler, ErasingStreamHandler):
-            current_handler.stop_erasing()
-        logger.removeHandler(current_handler)
+    _remove_handler(current_handler)
     current_handler = logging.StreamHandler()
-    logger.addHandler(current_handler)
+    _add_handler(current_handler)
+
+
+@contextlib.contextmanager
+def swap_handler(handler):
+    # usage:
+    # my_handler = logging.StreamHandler()  # modified if needed
+    # with swap_handler(my_handler):
+    #     ...  # custom handler is active
+    # # original handler restored
+    global current_handler, _handler_swapped
+    _handler_swapped += 1
+    if handler:
+        old_handler = current_handler
+        _remove_handler(current_handler)
+        _add_handler(handler)
+        current_handler = handler
+    try:
+        yield handler
+    finally:
+        if handler:
+            _remove_handler(handler)
+            _add_handler(old_handler)
+            current_handler = old_handler
+        _handler_swapped -= 1
 
 
 class LogPipeThread(threading.Thread):

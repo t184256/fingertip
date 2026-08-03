@@ -584,9 +584,9 @@ def main(m, scriptpath, language='bash', unseal=True,
         def halt(line):
             return False
 
-    fingertip.util.log.plain()
-
+    custom_log_handler = None
     if os.getenv('FINGERTIP_DEBUG') != '1':
+        custom_log_handler = logging.StreamHandler()
         if color and hasattr(repl, 'format'):
             class Formatter(logging.Formatter):
                 def format(self, record):
@@ -594,14 +594,14 @@ def main(m, scriptpath, language='bash', unseal=True,
                     if hasattr(m, 'in_fast_forward') and m.in_fast_forward:
                         formatted = dim(formatted)
                     return formatted + colorama.Style.RESET_ALL
-            fingertip.util.log.current_handler.setFormatter(Formatter())
+            custom_log_handler.setFormatter(Formatter())
         if terse and hasattr(repl, 'filter'):
             class Filter(logging.Filter):
                 def filter(self, record):
                     return repl.filter(record.msg, terse)
-            fingertip.util.log.current_handler.addFilter(Filter())
+            custom_log_handler.addFilter(Filter())
 
-    with m:
+    with m, fingertip.util.log.swap_handler(custom_log_handler):
         make_m_segment_aware(m)
 
         # FIXME: changes aren't reuploaded!
