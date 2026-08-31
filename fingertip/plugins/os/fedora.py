@@ -41,10 +41,14 @@ def prepare_upgrade(m, releasever=None):
         m = m.apply('ansible', 'package', state='present', name=pkgs)
         if releasever in (RELEASED + 1, 'rawhide'):
             # to upgrade to unreleased version, need to tweak repo files
-            m('rm /etc/yum.repos.d/fedora-updates*.repo')
-            m(r'sed -i -e "s|\(baseurl=.*/\)releases/|\1development/|g" '
-               '/etc/yum.repos.d/fedora.repo')
-            m('cat /etc/yum.repos.d/fedora.repo')
+            m(r'''
+                rm -f /etc/yum.repos.d/fedora-updates*.repo \
+                      /usr/share/dnf5/repos.d/fedora-updates*.repo
+                sed -i -e "s|\(baseurl=.*/\)releases/|\1development/|g" \
+                    /etc/yum.repos.d/fedora.repo
+                sed -i -e "s|\(baseurl=.*/\)releases/|\1development/|g" \
+                    /usr/share/dnf5/repos.d/fedora.repo || true
+            ''')
         m(f'dnf -y system-upgrade download --releasever={releasever}')
         m.fedora_upgrade_prepared = True
     return m
@@ -87,7 +91,10 @@ def upgrade(m=None, releasever=None):
             red_hat_based.proxy_dnf(m)
 
         if releasever == 'rawhide':
-            m('rm -f /etc/yum.repos.d/fedora-updates*.repo')
+            m('''
+                rm -f /etc/yum.repos.d/fedora-updates*.repo \
+                      /usr/share/dnf5/repos.d/fedora-updates*.repo
+            ''')
 
         m(f'''
           rm -f /usr/share/dnf5/repos.d/*cisco*.repo
@@ -123,6 +130,17 @@ def upgrade(m=None, releasever=None):
         m.console.sendline(' reboot')
         m.login()
         m.hooks.wait_for_running()
+
+        if releasever == 'rawhide':
+            m(r'''
+                rm -f /usr/share/dnf5/repos.d/*cisco*.repo
+                rm -f /etc/yum.repos.d/fedora-updates*.repo \
+                      /usr/share/dnf5/repos.d/fedora-updates*.repo
+                sed -i -e "s|\(baseurl=.*/\)releases/|\1development/|g" \
+                    /etc/yum.repos.d/fedora.repo \
+                    /usr/share/dnf5/repos.d/fedora.repo
+            ''')
+
     return m
 
 
