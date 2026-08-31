@@ -90,6 +90,7 @@ def upgrade(m=None, releasever=None):
             m('rm -f /etc/yum.repos.d/fedora-updates*.repo')
 
         m(f'''
+          rm -f /usr/share/dnf5/repos.d/*cisco*.repo
           cp /usr/share/dnf5/repos.d/* /etc/yum.repos.d/ ||:
           sed -i 's|^#baseurl=|baseurl=|' /etc/yum.repos.d/*
           sed -i 's|^baseurl=https://|baseurl=http://|' /etc/yum.repos.d/*
