@@ -94,6 +94,7 @@ def upgrade(m=None, releasever=None):
           sed -i 's|^#baseurl=|baseurl=|' /etc/yum.repos.d/*
           sed -i 's|^baseurl=https://|baseurl=http://|' /etc/yum.repos.d/*
           sed -i 's|^metalink=|#metalink=|' /etc/yum.repos.d/*
+          sed -i 's|^enabled=1$|enabled=0|' /etc/yum.repos.d/*cisco*.repo
           sed -i 's|download\\.example|download.fedoraproject.org|' \
                   /etc/yum.repos.d/*
           dnf -y autoremove
