@@ -23,8 +23,10 @@ from fingertip.util import log, path, reflink
 
 
 BIG = 2**30  # too big for caching
-STRIP_HEADERS = ('TE', 'Transfer-Encoding', 'Keep-Alive', 'Trailer', 'Upgrade',
-                 'Connection', 'Host', 'Accept')
+_STRIP_HEADERS = ('te', 'transfer-encoding', 'keep-alive', 'trailer',
+                  'upgrade', 'connection')
+REQUEST_STRIP_HEADERS = _STRIP_HEADERS + ('host', 'accept')
+RESPONSE_STRIP_HEADERS = _STRIP_HEADERS + ('date', 'server')
 SAVIOUR_DEFAULTS = 'local,cached+direct'
 RETRIES_MAX = 7
 COOLDOWN = 20
@@ -128,10 +130,20 @@ class HTTPCache:
             def __init__(self, *args, directory=None, **kwargs):
                 super().__init__(*args, directory=path.SAVIOUR, **kwargs)
 
-            def _status_and_headers(self, status_code, headers):
+            def _status_and_headers(self, status_code, headers,
+                                    content_length=None):
                 self.send_response(status_code)
                 for k, v in headers.items():
+                    if (k.lower() in RESPONSE_STRIP_HEADERS or
+                            k.lower().startswith('proxy-') or
+                            k.lower() == 'content-length'):  # handled below
+                        continue
                     self.send_header(k, v)
+                if content_length is not None:
+                    self.send_header('Content-Length', str(content_length))
+                else:  # chunked upstream, delimit by closing
+                    self.send_header('Connection', 'close')
+                    self.close_connection = True
                 self.end_headers()
 
             def _serve(self, uri, headers, meth='GET'):
@@ -156,8 +168,9 @@ class HTTPCache:
                 sess_dir = http_cache._get_requests_session(direct=True)
                 basename = os.path.basename(uri)
 
-                headers = {k: v for k, v in headers.items() if
-                           not (k in STRIP_HEADERS or k.startswith('Proxy-'))}
+                headers = {k: v for k, v in headers.items()
+                           if not (k.lower() in REQUEST_STRIP_HEADERS or
+                                    k.lower().startswith('proxy-'))}
                 headers['Accept-Encoding'] = 'identity'
                 log.debug(f'{meth} {basename} ({uri})')
                 for k, v in headers.items():
@@ -194,7 +207,9 @@ class HTTPCache:
                             log.debug(f'streaming {basename} directly '
                                       f'from {uri} ({", ".join(direct)})')
                             r = sess_dir.get(uri, headers=headers, stream=True)
-                            self._status_and_headers(r.status_code, r.headers)
+                            self._status_and_headers(
+                                r.status_code, r.headers,
+                                content_length=r.headers.get('Content-Length'))
                             shutil.copyfileobj(r.raw, self.wfile)
                             return
 
@@ -230,7 +245,10 @@ class HTTPCache:
                         return
                 log.debug(f'{meth} {basename} fetched {r.status_code} ({uri})')
                 try:
-                    self._status_and_headers(r.status_code, r.headers)
+                    self._status_and_headers(
+                        r.status_code, r.headers,
+                        content_length=(len(data) if meth == 'GET' else
+                                        r.headers.get('Content-Length')))
                     if meth == 'GET':
                         self.wfile.write(data)
                 except BrokenPipeError:
