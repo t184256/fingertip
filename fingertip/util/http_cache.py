@@ -27,6 +27,10 @@ _STRIP_HEADERS = ('te', 'transfer-encoding', 'keep-alive', 'trailer',
                   'upgrade', 'connection')
 REQUEST_STRIP_HEADERS = _STRIP_HEADERS + ('host', 'accept')
 RESPONSE_STRIP_HEADERS = _STRIP_HEADERS + ('date', 'server')
+BREAKING_HEAD_MARKERS = ('AWSAccessKeyId=', 'X-Amz-Signature=',  # shame
+                         'X-Amz-Credential=')  # shame
+
+
 SAVIOUR_DEFAULTS = 'local,cached+direct'
 RETRIES_MAX = 7
 COOLDOWN = 20
@@ -43,6 +47,12 @@ def is_cache_group_writeable():
     if os.path.exists(path.CACHE):
         mode = stat.S_IMODE(os.stat(path.CACHE).st_mode)
         return bool(mode & 0o020)
+
+
+def location_breaks_head(location):
+    # Sure, let's make HEAD redirect to URLs that aren't GETtable later.
+    # What can go wrong.
+    return any(m in location for m in BREAKING_HEAD_MARKERS)
 
 
 def saviour_sources():
@@ -146,6 +156,25 @@ class HTTPCache:
                     self.close_connection = True
                 self.end_headers()
 
+            def _pseudohead(self, sess, uri, headers):
+                # emulate HEAD with a streaming GET + immediate close
+                r = sess.get(uri, headers=headers, stream=True,
+                             allow_redirects=False)
+                try:
+                    return r.status_code, r.headers
+                finally:
+                    r.close()
+
+            def _preview(self, sess, uri, headers):
+                # HEAD, but if there are BREAKING_HEAD_MARKERS, pseudoHEAD
+                r = sess.head(uri, headers=headers, allow_redirects=False)
+                if (300 <= r.status_code < 400 and 'Location' in r.headers
+                        and location_breaks_head(r.headers['Location'])):
+                    log.debug(f'{r.headers["Location"]} looks method-bound, '
+                              're-following with GET')
+                    return self._pseudohead(sess, uri, headers)
+                return r.status_code, r.headers
+
             def _serve(self, uri, headers, meth='GET'):
                 uri = demangle(uri.lstrip('/'))
                 if uri in http_cache._mocks:
@@ -178,13 +207,14 @@ class HTTPCache:
 
                 error = None
                 try:
+                    full_uri = uri if '://' in uri else 'http://self' + uri
                     if meth == 'GET':
                         # direct streaming or trickery might be required...
-                        preview = sess.head(uri, headers=headers,
-                                            allow_redirects=False)
-                        if (300 <= preview.status_code < 400 and
-                                'Location' in preview.headers):
-                            nu = preview.headers['Location']
+                        preview = self._preview(sess, full_uri, headers)
+                        preview_status, preview_headers = preview
+                        if (300 <= preview_status < 400 and
+                                'Location' in preview_headers):
+                            nu = preview_headers['Location']
                             if nu.startswith('https://'):
                                 # no point in serving that, we have to pretend
                                 # that never happened
@@ -195,7 +225,7 @@ class HTTPCache:
                         direct = []
                         if not cache:
                             direct.append('caching disabled for this source')
-                        if int(preview.headers.get('Content-Length', 0)) > BIG:
+                        if int(preview_headers.get('Content-Length', 0)) > BIG:
                             direct.append(f'file bigger than {BIG}')
                         if 'Range' in headers:
                             # There seems to be a bug in CacheControl
@@ -206,7 +236,8 @@ class HTTPCache:
                             # Don't cache, don't reencode, stream it as is
                             log.debug(f'streaming {basename} directly '
                                       f'from {uri} ({", ".join(direct)})')
-                            r = sess_dir.get(uri, headers=headers, stream=True)
+                            r = sess_dir.get(full_uri, headers=headers,
+                                              stream=True)
                             self._status_and_headers(
                                 r.status_code, r.headers,
                                 content_length=r.headers.get('Content-Length'))
@@ -215,8 +246,7 @@ class HTTPCache:
 
                     # fetch with caching
                     m_func = getattr(sess, meth.lower())
-                    r = m_func(uri if '://' in uri else 'http://self' + uri,
-                               headers=headers, allow_redirects=False)
+                    r = m_func(full_uri, headers=headers, allow_redirects=False)
                     data = r.content
                     if meth == 'GET':
                         if 'Content-Length' in r.headers:
